@@ -1,0 +1,14 @@
+#Fat Jar Configuration File
+#Sat Jul 17 18:05:25 CST 2010
+onejar.license.required=true
+manifest.classpath=
+manifest.removesigners=true
+onejar.checkbox=false
+jarname=hk.ust.cse.YicesWrapper.jar
+manifest.mergeall=true
+manifest.mainclass=
+manifest.file=<createnew>
+jarname.isextern=false
+onejar.expand=
+excludes=
+includes=
