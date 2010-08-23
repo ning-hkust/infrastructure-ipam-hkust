@@ -1,0 +1,14 @@
+#Fat Jar Configuration File
+#Wed Aug 11 15:25:29 KST 2010
+onejar.license.required=true
+manifest.classpath=
+manifest.removesigners=true
+onejar.checkbox=false
+jarname=hk.ust.cse.AbstractInterpretation.jar
+manifest.mergeall=true
+manifest.mainclass=
+manifest.file=<createnew>
+jarname.isextern=false
+onejar.expand=
+excludes=
+includes=
