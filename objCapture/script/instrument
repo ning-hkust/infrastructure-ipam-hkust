@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+# Find fix hunks after marking fix revisions
+
+reldir="`dirname $0`"
+libdir=$reldir/../lib
+bindir=$reldir/../bin
+jarfiles=`find $libdir -name "*.jar"` 
+classpath=$bindir
+
+for file in $jarfiles ; do
+	classpath=$classpath:$file
+done
+if [ -n $CLASSPATH ] ; then
+	classpath=$classpath:$CLASSPATH
+fi
+
+java -Xmx800m -Xms400m -classpath $classpath edu.mit.csail.pag.objcap.instrumentation.Instrumentation $*
