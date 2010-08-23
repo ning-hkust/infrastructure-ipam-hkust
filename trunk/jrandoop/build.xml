@@ -1,0 +1,72 @@
+<project name="jrandoop" default="compile" basedir=".">
+	<description>Recrash</description>
+
+	<!-- version -->
+	<property name="version" value="2.2" />
+	<!-- Directories -->
+	<property name="src.dir" value="src" />
+	<property name="lib.dir" value="lib" />
+	<property name="dist.dir" value="dist" />
+	<property name="bin.dir" value="bin" />
+	<property name="tests.dir" value="tests" />
+	<property name="bin.dir" value="bin" />
+	<property name="version" value="1.2" />
+
+
+
+	<!-- ClassPath -->
+	<path id="classpath">
+		<fileset dir="${lib.dir}">
+			<include name="**/*.jar" />
+		</fileset>
+		<pathelement path="${bin.dir}" />
+	</path>
+
+	<target name="init">
+		<mkdir dir="${bin.dir}" />
+	</target>
+
+
+	<target name="clean" depends="init" description="Clean up all temporary build files">
+		<delete dir="${build.dir}" />
+		<delete dir="./bak" />
+		<delete file="log.txt" />
+	</target>
+
+	<target name="compile" depends="init" description="compile the code">
+		<javac destdir="${bin.dir}" deprecation="on">
+			<compilerarg value="-Xlint" />
+			<src path="${src.dir}" />
+			<classpath refid="classpath" />
+		</javac>
+	</target>
+
+
+	<target name="dist" depends="compile" description="generate the distribution .jar file in the dist/ directory">
+		<mkdir dir="${dist.dir}" />
+		<jar jarfile="${dist.dir}/randoop-${version}.jar" basedir="${bin.dir}"
+		includes="randoop/main/**,randoop/util/**,randoop/**,utilMDE/**, cov/**">
+
+			<manifest>
+				<attribute name="Revision" value="$Rev: 542 $" />
+				<attribute name="Build-By" value="$Author: hojun $" />
+				<attribute name="Main-Class" value="randoop.main.Main" />
+				<!--attribute name="Premain-Class" value="edu.mit.csail.pag.objcap.Agent" /-->
+			</manifest>
+			<zipfileset src="${lib.dir}/jakarta-oro-2.0.8.jar" />
+			<zipfileset src="${lib.dir}/junit-4.3.1.jar" />
+		</jar>
+	</target>
+
+	<target name="etags" depends="tags">
+	</target>
+	<target name="tags" description="Create Emacs TAGS table">
+		<exec executable="/bin/sh">
+			<arg value="-c" />
+			<arg value="etags `find src -name '*.java' | sort-directory-order.pl`" />
+		</exec>
+	</target>
+
+</project>
+
+
