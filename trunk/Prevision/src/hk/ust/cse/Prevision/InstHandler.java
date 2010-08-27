@@ -1,5 +1,6 @@
 package hk.ust.cse.Prevision;
 
+import hk.ust.cse.Prevision.Wala.MethodMetaData;
 import hk.ust.cse.Prevision.WeakestPrecondition.BBorInstInfo;
 import hk.ust.cse.Prevision.WeakestPrecondition.GlobalOptionsAndStates;
 

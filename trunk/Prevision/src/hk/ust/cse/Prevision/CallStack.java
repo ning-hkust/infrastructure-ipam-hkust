@@ -3,7 +3,7 @@ package hk.ust.cse.Prevision;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CallStack {
+public class CallStack implements Cloneable {
   class StackTrace {
     public StackTrace(String methodNameOrSign, int nLineNo) {
       m_methodNameOrSign  = methodNameOrSign;

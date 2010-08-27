@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAInstruction;
 
+// Predicate instances are immutable
 public class Predicate {
   public enum SMT_RESULT {SAT, UNSAT, ERROR, TIMEOUT, STACK_OVERFLOW}
   
@@ -29,7 +30,14 @@ public class Predicate {
   private static final String s_regExpInstStr = "(?:v[\\d]+ = )*([\\p{Alpha}]+[ ]*[\\p{Alpha}]+)(?:\\([\\w]+\\))*(?: <[ \\S]+)*";
   private static final Pattern s_instPattern  = Pattern.compile(s_regExpInstStr);
   
-  // Predicate instances are immutable
+  // a TRUE predicate
+  public Predicate() {
+    m_SMTStatements = new ArrayList<List<String>>();
+    m_varMap        = new Hashtable<String, List<String>>();
+    m_phiMap        = new Hashtable<String, String>();
+    m_defMap        = new Hashtable<String, Integer>();
+  }
+  
   public Predicate(List<List<String>> SMTStatements,
       Hashtable<String, List<String>> varMap, Hashtable<String, String> phiMap, 
       Hashtable<String, Integer> defMap) {
