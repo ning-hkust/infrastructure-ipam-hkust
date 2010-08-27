@@ -1,4 +1,4 @@
-package hk.ust.cse.Prevision;
+package hk.ust.cse.Prevision.Wala;
 
 import java.io.IOException;
 

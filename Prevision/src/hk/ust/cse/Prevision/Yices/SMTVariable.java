@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class SMTVariable {
+public class SMTVariable implements Cloneable {
   public enum VarCategory {
     VAR_FIELD, VAR_ARG, VAR_CONST, VAR_OTHER // don't care about other categories
   }

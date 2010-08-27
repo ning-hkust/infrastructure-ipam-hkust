@@ -1,5 +1,8 @@
 package hk.ust.cse.Prevision;
 
+import hk.ust.cse.Prevision.Wala.Jar2IR;
+import hk.ust.cse.Prevision.Wala.MethodMetaData;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -136,6 +139,7 @@ public class WeakestPrecondition {
       String methodNameOrSign, int nStartLine, boolean bInclLine, 
       CallStack callStack, int nCurInvokeDepth, String valPrefix,
       Predicate postCond, IR ir) throws InvalidStackTraceException {
+    
     // start timing
     long start = System.currentTimeMillis();
 
@@ -193,14 +197,9 @@ public class WeakestPrecondition {
         throw new InvalidStackTraceException(msg);
       }
 
-      // create a "true" Predicate if postCond is null
+      // create a "TRUE" Predicate if postCond is null
       if (postCond == null) {
-        List<List<String>> smtStatements       = new ArrayList<List<String>>();
-        Hashtable<String, List<String>> varMap = new Hashtable<String, List<String>>();
-        Hashtable<String, String> phiMap       = new Hashtable<String, String>();
-        Hashtable<String, Integer> defCountMap = new Hashtable<String, Integer>();
-
-        postCond = new Predicate(smtStatements, varMap, phiMap, defCountMap);
+        postCond = new Predicate();
       }
 
       // push in the first block
@@ -260,6 +259,7 @@ public class WeakestPrecondition {
   private WeakestPreconditionResult computeMethod(GlobalOptionsAndStates optionsAndStates,
       MethodMetaData methData, Stack<BBorInstInfo> dfsStack, int nStartLine, boolean bInclLine, 
       CallStack callStack, int nCurInvokeDepth, String valPrefix) throws InvalidStackTraceException {
+    
     // start timing
     long start = System.currentTimeMillis();
 
