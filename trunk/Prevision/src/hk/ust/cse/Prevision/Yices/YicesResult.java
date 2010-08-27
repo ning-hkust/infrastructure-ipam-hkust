@@ -10,7 +10,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class YicesResult {
-
+  
+  private static final Pattern s_pattern = Pattern.compile("^\\(= ([\\S]+) ([\\S]+)\\)$");
+  
   public void parseOutput(String output, Hashtable<String, SMTVariable> defFinalVarMap) {
     // save output first
     m_output = output;
@@ -55,9 +57,8 @@ public class YicesResult {
   }
 
   private SMTTerm toSMTTerm(String str, Hashtable<String, SMTVariable> defFinalVarMap) {
-    Pattern pattern = Pattern.compile("^\\(= ([\\S]+) ([\\S]+)\\)$");
     Matcher matcher = null;
-    if ((matcher = pattern.matcher(str)).find()) {
+    if ((matcher = s_pattern.matcher(str)).find()) {
       SMTVariable var1 = defFinalVarMap.get(matcher.group(1));
       SMTVariable var2 = defFinalVarMap.get(matcher.group(2));
       

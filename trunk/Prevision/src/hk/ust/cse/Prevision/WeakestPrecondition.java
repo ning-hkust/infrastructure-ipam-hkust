@@ -726,10 +726,11 @@ public class WeakestPrecondition {
     }
   }
 
-  private JarFile                   m_jarFile;
-  private AnalysisCache             m_IRCache;
+  private final JarFile             m_jarFile;
+  private final AnalysisCache       m_IRCache;
   private MethodMetaData            m_methMetaData;
   private WeakestPreconditionResult m_wpResult;
+  
   private Hashtable<BBorInstInfo, SSAInstruction>                        m_callStackInvokes;
   private Hashtable<SimpleEntry<String, Predicate>, Stack<BBorInstInfo>> m_dfsStacks;
 }

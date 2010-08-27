@@ -56,7 +56,7 @@ public class Jar2IR {
           Assertions.UNREACHABLE("Null IR for " + m);
         }
   
-        System.err.println(ir.toString());
+        //System.err.println(ir.toString());
       }
       return ir;
     } catch (WalaException e) {
@@ -101,7 +101,7 @@ public class Jar2IR {
           Assertions.UNREACHABLE("Null IR for " + m);
         }
 
-        System.err.println(ir.toString());
+        //System.err.println(ir.toString());
       }
       return ir;
     } catch (WalaException e) {

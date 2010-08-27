@@ -30,5 +30,5 @@ public class Summary {
     return m_summary.get(key);
   }
 
-  private Hashtable<List<Object>, Predicate> m_summary;
+  private final Hashtable<List<Object>, Predicate> m_summary;
 }

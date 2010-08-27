@@ -56,5 +56,5 @@ public class SMTStatement {
     return yicesStr.toString();
   }
 
-  private List<SMTTerm> m_terms;
+  private final List<SMTTerm> m_terms;
 }
