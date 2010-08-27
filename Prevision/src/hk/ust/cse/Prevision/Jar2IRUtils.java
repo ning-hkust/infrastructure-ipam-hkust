@@ -16,6 +16,7 @@ import com.ibm.wala.shrikeBT.IInstruction;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.util.config.AnalysisScopeReader;
 import com.ibm.wala.util.io.FileProvider;
+import com.ibm.wala.util.strings.Atom;
 import com.ibm.wala.util.warnings.WalaException;
 
 public class Jar2IRUtils {
@@ -66,10 +67,28 @@ public class Jar2IRUtils {
    */
   public static MethodReference getMethodReference(ClassHierarchy cha, String methodName, int nLine) {
     MethodReference mr = null;
+    
+    // get class name
+    String clsName = methodName.replace('.', '/');
+    int index1 = clsName.lastIndexOf('/');
+    int index2 = clsName.lastIndexOf('/', index1 - 1) + 1;
+    clsName = clsName.substring(index2, index1);
+    int clsLength = clsName.length();
+    
+    // find class
     Iterator<IClass> classes = cha.iterator();
     while (classes.hasNext() && mr == null) {
       IClass aClass = (IClass) classes.next();
 
+      // filter
+      Atom clsAtom = aClass.getName().getClassName();
+      if (clsAtom.length() != clsLength || 
+          clsAtom.getVal(clsLength-1) != clsName.charAt(clsLength-1) || 
+          clsAtom.getVal(0) != clsName.charAt(0) || 
+          !clsAtom.toString().equals(clsName)) {
+        continue;
+      }
+      
       // class name matches?
       String declaringClass = aClass.getName().toString();
       declaringClass = Utils.getClassTypeJavaStr(declaringClass);

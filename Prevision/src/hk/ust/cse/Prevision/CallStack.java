@@ -147,6 +147,6 @@ public class CallStack {
     return hashCode;
   }
 
-  private List<StackTrace> m_callStack;
-  private boolean          m_isOutMostCall;
+  private final List<StackTrace> m_callStack;
+  private final boolean          m_isOutMostCall;
 }

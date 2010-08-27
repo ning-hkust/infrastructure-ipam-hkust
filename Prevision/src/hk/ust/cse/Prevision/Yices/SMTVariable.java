@@ -11,6 +11,13 @@ public class SMTVariable {
     VAR_FIELD, VAR_ARG, VAR_CONST, VAR_OTHER // don't care about other categories
   }
   
+  private static final Pattern s_pattern;
+  static {
+    String regName     = "[\\w_\\[/$#<>\\.]+";
+    String regBinaryOp = "[+-/&|^%\\*]";
+    s_pattern = Pattern.compile("^(" + regName + ") (" + regBinaryOp + ") (" + regName + ")$");
+  }
+
   public SMTVariable(String varName, String varType, VarCategory category,
       List<SMTVariable> extraVars) {
     m_varName     = varName;
@@ -53,12 +60,8 @@ public class SMTVariable {
     }
     
     if (m_varType.equals("#BinaryOp")) {
-      String regName     = "[\\w_\\[/$#<>\\.]+";
-      String regBinaryOp = "[+-/&|^%\\*]";
-      Pattern pattern    = Pattern.compile("^(" + regName + ") (" + regBinaryOp + ") (" + regName + ")$");
-
       StringBuilder str = new StringBuilder();
-      Matcher matcher = pattern.matcher(m_varName);
+      Matcher matcher = s_pattern.matcher(m_varName);
       if (matcher.find()) {
         String[] varNames = new String[2];
         varNames[0]       = matcher.group(1);
@@ -192,6 +195,10 @@ public class SMTVariable {
 
   // we need to find it from hashtable
   public int hashCode() {
+    if (m_hashCode >= 0) {
+      return m_hashCode;
+    }
+    
     // if is constant, add the prefix
     String yicesExprStr = toYicesExprString(0);
     if (m_varType.equals("#ConstantNumber")) {
@@ -201,7 +208,8 @@ public class SMTVariable {
       yicesExprStr = "#" + yicesExprStr;
     }
 
-    return yicesExprStr.hashCode();
+    m_hashCode = yicesExprStr.hashCode();
+    return m_hashCode;
   }
 
   public SMTVariable clone() {
@@ -333,12 +341,16 @@ public class SMTVariable {
     return binaryOp;
   }
 
-  private String            m_varName;
-  private String            m_varType;
-  private VarCategory       m_varCategory;
-  private List<SMTVariable> m_extraVars;
-  private String            m_yicesExprStr;
-  private String            m_javaExprStr;
-  private String            m_toString;
+  private final String            m_varName;
+  private final String            m_varType;
+  private final VarCategory      m_varCategory;
+  private final List<SMTVariable> m_extraVars;
+  
+  // cache results
+  private String m_yicesExprStr;
+  private String m_javaExprStr;
+  private String m_toString;
+  private int    m_hashCode = -1;
+  
   private static int s_maxRecDepth = Integer.MAX_VALUE;
 }

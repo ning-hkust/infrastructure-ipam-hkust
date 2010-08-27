@@ -12,6 +12,30 @@ import java.util.regex.Pattern;
 
 public class SMTVariableMap {
 
+  private static final Pattern s_pattern1, s_pattern2, s_pattern3, s_pattern4, 
+                               s_pattern5, s_pattern6, s_pattern7, s_pattern8, 
+                               s_pattern9, s_pattern10, s_pattern11;
+  
+  static {
+    String regSimple      = "v[\\d@]+";                 // v5, v5@2
+    String regConstant    = "(?:(?:##.*)|(?:#!-*(?:(?:[\\d\\.]+[\\d\\.E-]*)|Infinity))|(?:null))"; // #!11 or #!2.3 or 1.0E-6 or ##str1 or -Infinity
+    String regVarType     = "[\\w_\\[/$,]+";            // [Ljava/lang/String, etc
+    String regName        = "[\\w_\\[/$#@]+";           // args
+    String regMethodArgs  = "(?:[\\S]+[, ]*)*";         // might have problem if it's a str constant with ', ' in it, but good enough anyway!
+    String regBinaryOp    = "[+-/&|^%\\*]";             // binaryOps
+    s_pattern1 = Pattern.compile("^" + regSimple + "$");
+    s_pattern2 = Pattern.compile("^" + regConstant + "$");
+    s_pattern3 = Pattern.compile("^\\((" + regVarType + ")\\)(" + regName + ")$");
+    s_pattern4 = Pattern.compile("^\\((" + regVarType + ")\\)(" + regName + ")\\.(" + regName + ")$");
+    s_pattern5 = Pattern.compile("^FreshInstanceOf\\((" + regVarType + ")\\)$");
+    s_pattern6 = Pattern.compile("^(" + regSimple + ").length$");
+    s_pattern7 = Pattern.compile("^\\((" + regVarType + ")\\)(" + regName + "|" + regConstant + ")\\.(" + regName + ")\\((" + regMethodArgs + ")\\);$");  // (I)##}.length();
+    s_pattern8 = Pattern.compile("^(" + regSimple + ")( isInstanceOf\\((?:" + regVarType + ")\\))$");
+    s_pattern9 = Pattern.compile("^subType\\(typeOf\\((" + regName + ")\\),(" + regVarType + ")\\)$");
+    s_pattern10 = Pattern.compile("^(" + regName + "|" + regConstant + ")( " + regBinaryOp + " )(" + regName + "|" + regConstant + ")$");
+    s_pattern11 = Pattern.compile("^\\((" + regVarType + ")\\)(" + regName + ")\\[(" + regName + "|" + regConstant + ")\\]$");
+  }
+  
   public SMTVariableMap(Hashtable<String, List<String>> plainVarMap, int maxRecDepth) {
     // create SMTVariableMap object from plain varMap
     buildSMTVarMap(plainVarMap);
@@ -164,30 +188,12 @@ public class SMTVariableMap {
     }
   }
 
-  private SMTVariable translateSMTVar(String finalVarStr) {
-    String regSimple      = "v[\\d@]+";                 // v5, v5@2
-    String regConstant    = "(?:(?:##.*)|(?:#!-*(?:(?:[\\d\\.]+[\\d\\.E-]*)|Infinity))|(?:null))"; // #!11 or #!2.3 or 1.0E-6 or ##str1 or -Infinity
-    String regVarType     = "[\\w_\\[/$,]+";            // [Ljava/lang/String, etc
-    String regName        = "[\\w_\\[/$#@]+";           // args
-    String regMethodArgs  = "(?:[\\S]+[, ]*)*";         // might have problem if it's a str constant with ', ' in it, but good enough anyway!
-    String regBinaryOp    = "[+-/&|^%\\*]";             // binaryOps
-    Pattern pattern1 = Pattern.compile("^" + regSimple + "$");
-    Pattern pattern2 = Pattern.compile("^" + regConstant + "$");
-    Pattern pattern3 = Pattern.compile("^\\((" + regVarType + ")\\)(" + regName + ")$");
-    Pattern pattern4 = Pattern.compile("^\\((" + regVarType + ")\\)(" + regName + ")\\.(" + regName + ")$");
-    Pattern pattern5 = Pattern.compile("^FreshInstanceOf\\((" + regVarType + ")\\)$");
-    Pattern pattern6 = Pattern.compile("^(" + regSimple + ").length$");
-    Pattern pattern7 = Pattern.compile("^\\((" + regVarType + ")\\)(" + regName + "|" + regConstant + ")\\.(" + regName + ")\\((" + regMethodArgs + ")\\);$");  // (I)##}.length();
-    Pattern pattern8 = Pattern.compile("^(" + regSimple + ")( isInstanceOf\\((?:" + regVarType + ")\\))$");
-    Pattern pattern9 = Pattern.compile("^subType\\(typeOf\\((" + regName + ")\\),(" + regVarType + ")\\)$");
-    Pattern pattern10 = Pattern.compile("^(" + regName + "|" + regConstant + ")( " + regBinaryOp + " )(" + regName + "|" + regConstant + ")$");
-    Pattern pattern11 = Pattern.compile("^\\((" + regVarType + ")\\)(" + regName + ")\\[(" + regName + "|" + regConstant + ")\\]$");
-    
+  private SMTVariable translateSMTVar(String finalVarStr) { 
     Matcher matcher = null;
-    if ((matcher = pattern1.matcher(finalVarStr)).find()) {
+    if ((matcher = s_pattern1.matcher(finalVarStr)).find()) {
       return new SMTVariable(finalVarStr, "Unknown-Type", null);
     }
-    else if ((matcher = pattern2.matcher(finalVarStr)).find()) {
+    else if ((matcher = s_pattern2.matcher(finalVarStr)).find()) {
       // if is number constant
       if (finalVarStr.startsWith("#!")) {
         String num = translateJavaNumber(finalVarStr);
@@ -208,12 +214,12 @@ public class SMTVariableMap {
         return null;
       }
     }
-    else if ((matcher = pattern3.matcher(finalVarStr)).find()) {
+    else if ((matcher = s_pattern3.matcher(finalVarStr)).find()) {
       String varType = matcher.group(1);
       String varName = matcher.group(2);
       return new SMTVariable(varName, varType, VarCategory.VAR_ARG, null);
     }
-    else if ((matcher = pattern4.matcher(finalVarStr)).find()) {
+    else if ((matcher = s_pattern4.matcher(finalVarStr)).find()) {
       String fieldType = matcher.group(1);
       String refName   = matcher.group(2);
       String fieldName = matcher.group(3);
@@ -232,12 +238,12 @@ public class SMTVariableMap {
       
       return new SMTVariable(getStr.toString(), fieldType, VarCategory.VAR_FIELD, extraVars);
     }
-    else if ((matcher = pattern5.matcher(finalVarStr)).find()) {
+    else if ((matcher = s_pattern5.matcher(finalVarStr)).find()) {
       String varType = matcher.group(1);
       String varName = "Fresh_" + m_nFreshInstance++ + "_(" + varType + ")";
       return new SMTVariable(varName, "FreshInstanceOf", null);
     }
-    else if ((matcher = pattern6.matcher(finalVarStr)).find()) {
+    else if ((matcher = s_pattern6.matcher(finalVarStr)).find()) {
       String varName = matcher.group(1);
 
       String lengthOfStr = "($extraVar1).length";
@@ -246,7 +252,7 @@ public class SMTVariableMap {
 
       return new SMTVariable(lengthOfStr, "I", VarCategory.VAR_FIELD, extraVars);
     }
-    else if ((matcher = pattern7.matcher(finalVarStr)).find()) {
+    else if ((matcher = s_pattern7.matcher(finalVarStr)).find()) {
       String retType    = matcher.group(1);
       String ref        = matcher.group(2);
       String methodName = matcher.group(3);
@@ -286,7 +292,7 @@ public class SMTVariableMap {
       methodStr.append(")");
       return new SMTVariable(methodStr.toString(), retType, extraVars);
     }
-    else if ((matcher = pattern8.matcher(finalVarStr)).find()) {
+    else if ((matcher = s_pattern8.matcher(finalVarStr)).find()) {
       String ref    = matcher.group(1);
       String instOf = matcher.group(2);
 
@@ -295,7 +301,7 @@ public class SMTVariableMap {
       extraVars.add(new SMTVariable(ref, "Unknown-Type", null));
       return new SMTVariable(instOf, "Z", extraVars);
     }
-    else if ((matcher = pattern9.matcher(finalVarStr)).find()) {
+    else if ((matcher = s_pattern9.matcher(finalVarStr)).find()) {
       String varName    = matcher.group(1);
       String superType  = matcher.group(2);
 
@@ -304,7 +310,7 @@ public class SMTVariableMap {
       extraVars.add(new SMTVariable(varName, "Unknown-Type", null));
       return new SMTVariable(subTypeStr, "Z", extraVars);
     }
-    else if ((matcher = pattern10.matcher(finalVarStr)).find()) {
+    else if ((matcher = s_pattern10.matcher(finalVarStr)).find()) {
       String varName1 = matcher.group(1);
       String varName2 = matcher.group(3);
       String binaryOp = matcher.group(2);
@@ -327,7 +333,7 @@ public class SMTVariableMap {
 
       return new SMTVariable(binaryOpStr.toString(), "#BinaryOp", extraVars);
     }
-    else if ((matcher = pattern11.matcher(finalVarStr)).find()) {
+    else if ((matcher = s_pattern11.matcher(finalVarStr)).find()) {
       String varType  = matcher.group(1);
       String varName  = matcher.group(2);
       String varIndex = matcher.group(3);

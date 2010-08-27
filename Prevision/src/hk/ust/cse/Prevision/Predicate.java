@@ -26,6 +26,9 @@ public class Predicate {
   public static final int OOB_SUCCESSOR    = 2;
   public static final int CCE_SUCCESSOR    = 3;
 
+  private static final String s_regExpInstStr = "(?:v[\\d]+ = )*([\\p{Alpha}]+[ ]*[\\p{Alpha}]+)(?:\\([\\w]+\\))*(?: <[ \\S]+)*";
+  private static final Pattern s_instPattern  = Pattern.compile(s_regExpInstStr);
+  
   // Predicate instances are immutable
   public Predicate(List<List<String>> SMTStatements,
       Hashtable<String, List<String>> varMap, Hashtable<String, String> phiMap, 
@@ -42,8 +45,7 @@ public class Predicate {
       SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, 
       int nCurInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     try {
-      Pattern pattern = Pattern.compile(s_regExpInstStr);
-      Matcher matcher = pattern.matcher(inst.toString());
+      Matcher matcher = s_instPattern.matcher(inst.toString());
       if (matcher.find()) {
         String instType = matcher.group(1).toString();
         if (instType != null && instType.length() > 0) {
@@ -280,5 +282,4 @@ public class Predicate {
   private SMTVariableMap                        m_SMTVariableMap;
   private Hashtable<ISSABasicBlock, Integer>    m_visitedRecord;
   private static YicesLoader                    s_yicesLoader;
-  private static final String s_regExpInstStr = "(?:v[\\d]+ = )*([\\p{Alpha}]+[ ]*[\\p{Alpha}]+)(?:\\([\\w]+\\))*(?: <[ \\S]+)*";
 }
