@@ -2030,10 +2030,8 @@ public class InstHandler {
       Predicate postCond, MethodMetaData methData,
       Hashtable<String, List<String>> varMap, List<String> newVars) {
     
-    int len = newVars.size();
     boolean isNewClone = false;
-    for (int i = 0; i < len; i++) {
-      String var = newVars.get(i);
+    for (String var : newVars) {
       if (var != null/* && 
           (var.startsWith("v") || var.startsWith("#"))*/) {
         if (!isNewClone) {
@@ -2139,14 +2137,14 @@ public class InstHandler {
       String key = (param == null) ? newKey : param;
       List<String> varList2 = varMaptoSub.get(key);
       if (varList2 != null) {
-        for (int i = 0; i < varList1.size(); i++) {
-          varList2.add(varList1.get(i));
+        for (String var1 : varList1) {
+          varList2.add(var1);
         }
       }
       else {
         varList2 = new ArrayList<String>();
-        for (int i = 0; i < varList1.size(); i++) {
-          varList2.add(varList1.get(i));
+        for (String var1 : varList1) {
+          varList2.add(var1);
         }
         varMaptoSub.put(key, varList2);
       }

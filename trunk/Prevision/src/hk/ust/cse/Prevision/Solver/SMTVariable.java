@@ -216,8 +216,8 @@ public class SMTVariable implements Cloneable {
     List<SMTVariable> extraVars = null;
     if (m_extraVars != null) {
       extraVars = new ArrayList<SMTVariable>();
-      for (int i = 0; i < m_extraVars.size(); i++) {
-        extraVars.add(m_extraVars.get(i));
+      for (SMTVariable extraVar : m_extraVars) {
+        extraVars.add(extraVar);
       }
     }
     return new SMTVariable(m_varName, m_varType, m_varCategory, extraVars);
@@ -321,8 +321,8 @@ public class SMTVariable implements Cloneable {
   private String strToBinaryStr(String str) {
     char[] strChar = str.toCharArray();
     StringBuilder result = new StringBuilder();
-    for (int i = 0; i < strChar.length; i++) {
-      result.append(Integer.toBinaryString(strChar[i]));
+    for (char aChar : strChar) {
+      result.append(Integer.toBinaryString(aChar));
     }
     return result.toString();
   }

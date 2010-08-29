@@ -11,8 +11,7 @@ public class SMTStatement {
   }
   
   public void finalizeSMTStatement(Hashtable<SMTVariable, SMTVariable> finalVarMap) {
-    for (int i = 0; i < m_terms.size(); i++) {
-      SMTTerm term      = m_terms.get(i);
+    for (SMTTerm term : m_terms) {
       SMTVariable var1  = finalVarMap.get(term.getVar1());
       SMTVariable var2  = finalVarMap.get(term.getVar2());
 
@@ -46,9 +45,9 @@ public class SMTStatement {
     else {
       // SMTTerms are arranged with 'or'
       yicesStr.append("(or");
-      for (int i = 0; i < m_terms.size(); i++) {
+      for (SMTTerm term : m_terms) {
         yicesStr.append(" ");
-        yicesStr.append(m_terms.get(i).toYicesExprString());
+        yicesStr.append(term.toYicesExprString());
       }
       yicesStr.append(")");
     }
