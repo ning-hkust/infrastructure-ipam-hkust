@@ -63,8 +63,8 @@ public class SMTVariableMap {
     def_types.put("Unknown-Type", "int");
     
     // add other define-type statements
-    for (int i = 0; i < m_finalVars.size(); i++) {
-      String typeName = m_finalVars.get(i).getVarType();
+    for (SMTVariable finalVar : m_finalVars) {
+      String typeName = finalVar.getVarType();
       if (!def_types.containsKey(typeName)) {
         def_types.put(typeName, "");
       }
@@ -113,8 +113,7 @@ public class SMTVariableMap {
     
     // defines
     HashSet<String> m_defined = new HashSet<String>();
-    for (int i = 0; i < m_finalVars.size(); i++) {
-      SMTVariable finalVar = m_finalVars.get(i);
+    for (SMTVariable finalVar : m_finalVars) {
       String toYicesDefStr = finalVar.toYicesDefString();
       if (toYicesDefStr.length() > 0 && !m_defined.contains(toYicesDefStr)) {
         yicesStr.append(toYicesDefStr + "\n");
@@ -167,16 +166,16 @@ public class SMTVariableMap {
       SMTVariable smtFinalVar = translateSMTVar(finalVar);
       if (smtFinalVar != null) {
         List<String> midVars = plainVarMap.get(finalVar);
-        for (int i = 0; i < midVars.size(); i++) {
+        for (String midVar : midVars) {
           // build a mapping from mid vars (always in the form of v#)
           // to the actual concrete SMTVariable form smtFinalVar
-          SMTVariable midVar = translateSMTVar(midVars.get(i));
-          if (midVar != null) {
-            m_finalVarMap.put(midVar, smtFinalVar);
-            m_allVarMap.put(midVars.get(i), midVar);
+          SMTVariable smtMidVar = translateSMTVar(midVar);
+          if (smtMidVar != null) {
+            m_finalVarMap.put(smtMidVar, smtFinalVar);
+            m_allVarMap.put(midVar, smtMidVar);
           }
           else {
-            System.err.println("Unable to analyze mid-variable: " + midVars.get(i));
+            System.err.println("Unable to analyze mid-variable: " + midVar);
           }
         }
         m_finalVars.add(smtFinalVar);
@@ -363,8 +362,7 @@ public class SMTVariableMap {
 
   private void finalizeAllSMTVariables() {
     // finalize extraVars in every finalVar
-    for (int i = 0; i < m_finalVars.size(); i++) {
-      SMTVariable finalVar = m_finalVars.get(i);
+    for (SMTVariable finalVar : m_finalVars) {
       finalVar.finalizeExtraVars(m_finalVarMap, 0);
     }
   }

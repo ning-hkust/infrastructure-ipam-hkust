@@ -330,8 +330,8 @@ public class WeakestPrecondition {
 
         // decide whether or not we can pop the basic block
         boolean canPop = true;
-        for (int i = 0; i < usedPredicates.size(); i++) {
-          Stack<BBorInstInfo> stack = m_dfsStacks.get(usedPredicates.get(i));
+        for (SimpleEntry<String, Predicate> usedPredicate : usedPredicates) {
+          Stack<BBorInstInfo> stack = m_dfsStacks.get(usedPredicate);
           if (stack != null && stack.size() > 0) {
             canPop = false;
             break;
@@ -579,16 +579,16 @@ public class WeakestPrecondition {
     }); 
     
     // push the visited ones into the beginning of the stack
-    for (int i = 0; i < visitedList.size(); i++) {
+    for (ISSABasicBlock visited : visitedList) {
       // we don't check precond at the moment
-      dfsStack.push(new BBorInstInfo(visitedList.get(i), precond, successorType, 
+      dfsStack.push(new BBorInstInfo(visited, precond, successorType, 
           currentInfo.currentBB, currentInfo, methData, valPrefix, this));
     }
     
     // push the non visited ones into the beginning of the stack
-    for (int i = 0; i < notvisitedList.size(); i++) {
+    for (ISSABasicBlock notvisited : notvisitedList) {
       // we don't check precond at the moment
-      dfsStack.push(new BBorInstInfo(notvisitedList.get(i), precond, successorType, 
+      dfsStack.push(new BBorInstInfo(notvisited, precond, successorType, 
           currentInfo.currentBB, currentInfo, methData, valPrefix, this));
     }
   }
@@ -683,8 +683,8 @@ public class WeakestPrecondition {
       while (keys.hasMoreElements()) {
         String key = (String) keys.nextElement();
         List<String> vars = gotVarMap.get(key);
-        for (int i = 0; i < vars.size(); i++) {
-          System.out.print(vars.get(i) + " = ");
+        for (String var : vars) {
+          System.out.print(var + " = ");
         }
         System.out.println(key);
         //int bcIndex = ((IBytecodeMethod) cfg.getMethod()).getBytecodeIndex(6);
@@ -707,8 +707,8 @@ public class WeakestPrecondition {
 
     // output Instructions
     SSAInstruction[] instructions = ir.getInstructions();
-    for (int i = 0; i < instructions.length; i++) {
-      System.out.println(instructions[i].toString());
+    for (SSAInstruction instruction : instructions) {
+      System.out.println(instruction.toString());
     }
   }
 

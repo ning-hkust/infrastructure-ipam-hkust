@@ -121,8 +121,8 @@ public class CallStack implements Cloneable {
   
   public CallStack clone() {
     CallStack callStack = new CallStack(m_isOutMostCall);
-    for (int i = 0, size = m_callStack.size(); i < size; i++) {
-      callStack.addStackTrace(m_callStack.get(i));
+    for (StackTrace st : m_callStack) {
+      callStack.addStackTrace(st);
     }
     return callStack;
   }
@@ -141,8 +141,8 @@ public class CallStack implements Cloneable {
   // we need to find it from hashtable
   public int hashCode() {
     int hashCode = 0;
-    for (int i = 0, size = m_callStack.size(); i < size; i++) {
-      hashCode += m_callStack.get(i).hashCode();
+    for (StackTrace st : m_callStack) {
+      hashCode += st.hashCode();
     }
     return hashCode;
   }

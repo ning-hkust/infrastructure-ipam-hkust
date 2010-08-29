@@ -21,8 +21,8 @@ public class SMTStatementList {
     // create Yices assert statements
     HashSet<String> asserted = new HashSet<String>();
     StringBuilder yicesStr = new StringBuilder();
-    for (int i = 0; i < m_smtStatements.size(); i++) {
-      String toAssertStr = m_smtStatements.get(i).toYicesExprString();
+    for (SMTStatement smtStatement : m_smtStatements) {
+      String toAssertStr = smtStatement.toYicesExprString();
       if (toAssertStr.length() > 0 && !asserted.contains(toAssertStr)) {
         yicesStr.append("(assert ");
         yicesStr.append(toAssertStr);
@@ -40,8 +40,7 @@ public class SMTStatementList {
   }
   
   private void finalizeAllSMTStatements(Hashtable<SMTVariable, SMTVariable> finalVarMap) {
-    for (int i = 0; i < m_smtStatements.size(); i++) {
-      SMTStatement smtStatement = m_smtStatements.get(i);
+    for (SMTStatement smtStatement : m_smtStatements) {
       smtStatement.finalizeSMTStatement(finalVarMap);
     }
   }
@@ -49,14 +48,12 @@ public class SMTStatementList {
   private void buildSMTStatementList(List<List<String>> smtStatementList,
       Hashtable<String, SMTVariable> allVarMap) {
     m_smtStatements = new ArrayList<SMTStatement>();
-    for (int i = 0; i < smtStatementList.size(); i++) {
-      List<String> smtStatementTerms = smtStatementList.get(i);
-
+    for (List<String> smtStatementTerms : smtStatementList) {
       List<SMTTerm> smtTerms = new ArrayList<SMTTerm>();
-      for (int j = 0; j < smtStatementTerms.size(); j++) {
-        String var1 = smtStatementTerms.get(j++);
-        String op   = smtStatementTerms.get(j++);
-        String var2 = smtStatementTerms.get(j);
+      for (int i = 0; i < smtStatementTerms.size(); i++) {
+        String var1 = smtStatementTerms.get(i++);
+        String op   = smtStatementTerms.get(i++);
+        String var2 = smtStatementTerms.get(i);
         
         SMTTerm term = translateSMTStr(var1, op, var2, allVarMap);
         if (term != null) {
