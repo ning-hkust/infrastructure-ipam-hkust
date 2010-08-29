@@ -1,10 +1,11 @@
 package hk.ust.cse.Prevision;
 
+import hk.ust.cse.Prevision.Solver.ISolverLoader;
+import hk.ust.cse.Prevision.Solver.SMTStatementList;
+import hk.ust.cse.Prevision.Solver.SMTVariableMap;
+import hk.ust.cse.Prevision.Solver.Yices.YicesLoader;
 import hk.ust.cse.Prevision.WeakestPrecondition.BBorInstInfo;
 import hk.ust.cse.Prevision.WeakestPrecondition.GlobalOptionsAndStates;
-import hk.ust.cse.Prevision.Yices.SMTStatementList;
-import hk.ust.cse.Prevision.Yices.SMTVariableMap;
-import hk.ust.cse.Prevision.Yices.YicesLoader;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -51,7 +52,7 @@ public class Predicate {
 
   public Predicate getPrecondtion(GlobalOptionsAndStates optionsAndStates, 
       SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, 
-      int nCurInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
+      int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     try {
       Matcher matcher = s_instPattern.matcher(inst.toString());
       if (matcher.find()) {
@@ -69,7 +70,7 @@ public class Predicate {
           Predicate preCond = null;
           if (!instType.startsWith("invoke") || 
               (!optionsAndStates.isEnteringCallStack() && 
-              nCurInvokeDepth >= optionsAndStates.nMaxInvokeDepth && 
+               curInvokeDepth >= optionsAndStates.maxInvokeDepth && 
               !instInfo.wp.isCallStackInvokeInst(instInfo, inst))) {
             // invoke handler for this instruction
             Method method = InstHandler.class.getMethod("handle_" + instType,
@@ -83,7 +84,7 @@ public class Predicate {
                 GlobalOptionsAndStates.class, Predicate.class, SSAInstruction.class, 
                 BBorInstInfo.class, CallStack.class, int.class, List.class);
             preCond = (Predicate) method.invoke(null, optionsAndStates, this, inst, 
-                instInfo, callStack, nCurInvokeDepth, usedPredicates);
+                instInfo, callStack, curInvokeDepth, usedPredicates);
           }
           return preCond;
         }
@@ -116,10 +117,10 @@ public class Predicate {
   }
 
   public SMT_RESULT smtCheck() {
-    // initialize YicesLoader
-    if (s_yicesLoader == null) {
-      //s_yicesLoader = new YicesLoader2(1);
-      s_yicesLoader = new YicesLoader();
+    // initialize ISolverLoader
+    if (s_solverLoader == null) {
+      //s_solverLoader = new YicesLoader2(1);
+      s_solverLoader = new YicesLoader();
     }
     
     // create SMTObjects and save into member variables
@@ -128,15 +129,15 @@ public class Predicate {
     
     SMT_RESULT smtResult = null;
     try {
-      // generate Yices inputs
-      StringBuilder yicesCmd = new StringBuilder();
-      yicesCmd.append(m_SMTVariableMap.genYicesInput());
-      yicesCmd.append(m_SMTStatementList.genYicesInput(m_SMTVariableMap.getFinalVarMap()));
+      // generate SMT Solver inputs
+      StringBuilder solverCmd = new StringBuilder();
+      solverCmd.append(m_SMTVariableMap.genYicesInput());
+      solverCmd.append(m_SMTStatementList.genYicesInput(m_SMTVariableMap.getFinalVarMap()));
       
-      // check with yices instance
-      YicesLoader.YICES_COMP_PROCESS yicesResult = 
-        s_yicesLoader.check(yicesCmd.toString(), m_SMTVariableMap.getDefFinalVarMap());
-      switch (yicesResult) {
+      // check with an smt solver instance
+      ISolverLoader.SOLVER_COMP_PROCESS solverResult = 
+        s_solverLoader.check(solverCmd.toString(), m_SMTVariableMap.getDefFinalVarMap());
+      switch (solverResult) {
       case SAT:
         smtResult = SMT_RESULT.SAT;
         break;
@@ -150,6 +151,12 @@ public class Predicate {
         smtResult = SMT_RESULT.TIMEOUT;
         break;
       }
+      
+      // save smt solver input and output right away, because s_solverLoader only  
+      // keeps the last one, so it might change from time to time
+      m_lastSolverInput  = s_solverLoader.getLastInput();
+      m_lastSolverOutput = s_solverLoader.getLastOutput();
+      
     } catch (StackOverflowError e) {
       System.err.println("Stack overflowed when generating SMT statements, skip!");
       smtResult = SMT_RESULT.STACK_OVERFLOW;
@@ -157,26 +164,26 @@ public class Predicate {
     return smtResult;
   }
 
-  public String getLastYicesOutput() {
-    if (s_yicesLoader != null) {
-      return s_yicesLoader.getLastOutput();
+  public String getLastSolverOutput() {
+    if (s_solverLoader != null) {
+      return m_lastSolverOutput;
     }
     else {
       return "";
     }
   }
 
-  public String getLastYicesInput() {
-    if (s_yicesLoader != null) {
-      return s_yicesLoader.getLastInput();
+  public String getLastSolverInput() {
+    if (s_solverLoader != null) {
+      return m_lastSolverInput;
     }
     else {
       return "";
     }
   }
 
-  public YicesLoader getYicesLoader() {
-    return s_yicesLoader;
+  public ISolverLoader getSolverLoader() {
+    return s_solverLoader;
   }
 
   public SMTStatementList getSMTStatementList() {
@@ -195,7 +202,7 @@ public class Predicate {
     return m_varMap;
   }
   
-  // is it effcient?
+  // is it efficient?
   @SuppressWarnings("unchecked")
   public Hashtable<String, List<String>> getVarMapClone() {
     Hashtable<String, List<String>> newVarMap = 
@@ -244,17 +251,17 @@ public class Predicate {
     }
     
     // mark as visited
-    Integer nCount = m_visitedRecord.get(newlyVisited.currentBB);
-    if (nCount == null) {
-      nCount = 0;
+    Integer count = m_visitedRecord.get(newlyVisited.currentBB);
+    if (count == null) {
+      count = 0;
     }
     
     // add loop
     if (newlyVisited.sucessorBB != null && 
         newlyVisited.sucessorBB.getNumber() < newlyVisited.currentBB.getNumber()) {
-      nCount++;
+      count++;
     }
-    m_visitedRecord.put(newlyVisited.currentBB, nCount);
+    m_visitedRecord.put(newlyVisited.currentBB, count);
   }
 
   public boolean equals(Object obj) {
@@ -289,5 +296,7 @@ public class Predicate {
   private SMTStatementList                      m_SMTStatementList;
   private SMTVariableMap                        m_SMTVariableMap;
   private Hashtable<ISSABasicBlock, Integer>    m_visitedRecord;
-  private static YicesLoader                    s_yicesLoader;
+  private String                                m_lastSolverInput;
+  private String                                m_lastSolverOutput;
+  private static ISolverLoader                  s_solverLoader;
 }

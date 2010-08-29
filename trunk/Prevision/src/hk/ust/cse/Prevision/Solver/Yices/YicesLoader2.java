@@ -1,4 +1,7 @@
-package hk.ust.cse.Prevision.Yices;
+package hk.ust.cse.Prevision.Solver.Yices;
+
+import hk.ust.cse.Prevision.Solver.ISolverResult;
+import hk.ust.cse.Prevision.Solver.SMTVariable;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -147,7 +150,7 @@ public class YicesLoader2 {
     return m_lastInput;
   }
 
-  public YicesResult getLastResult() {
+  public ISolverResult getLastResult() {
     return m_lastResult;
   }
 
@@ -161,10 +164,10 @@ public class YicesLoader2 {
     }
   }
 
-  private Process     m_yicesProc;
-  private String      m_lastInput;
-  private YicesResult m_lastResult;
-  private int         m_nCurrentCount;
-  private final int   m_nRestartInterval;
+  private Process       m_yicesProc;
+  private String        m_lastInput;
+  private ISolverResult m_lastResult;
+  private int           m_nCurrentCount;
+  private final int     m_nRestartInterval;
   private static final String s_yicesPath;
 }

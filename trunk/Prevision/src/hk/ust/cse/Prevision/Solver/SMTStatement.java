@@ -1,6 +1,6 @@
-package hk.ust.cse.Prevision.Yices;
+package hk.ust.cse.Prevision.Solver;
 
-import hk.ust.cse.Prevision.Yices.SMTVariable.VarCategory;
+import hk.ust.cse.Prevision.Solver.SMTVariable.VarCategory;
 
 import java.util.Hashtable;
 import java.util.List;

@@ -5,9 +5,9 @@ import java.util.List;
 
 public class CallStack implements Cloneable {
   class StackTrace {
-    public StackTrace(String methodNameOrSign, int nLineNo) {
+    public StackTrace(String methodNameOrSign, int lineNo) {
       m_methodNameOrSign  = methodNameOrSign;
-      m_nLineNo           = nLineNo;
+      m_lineNo            = lineNo;
     }
     
     public String getMethodNameOrSign() {
@@ -15,7 +15,7 @@ public class CallStack implements Cloneable {
     }
     
     public int getLineNo() {
-      return m_nLineNo;
+      return m_lineNo;
     }
     
     // we need to find it from hashtable
@@ -25,7 +25,7 @@ public class CallStack implements Cloneable {
       }
 
       StackTrace st = (StackTrace) o;
-      return m_nLineNo == st.m_nLineNo
+      return m_lineNo == st.m_lineNo
           && m_methodNameOrSign.equals(st.m_methodNameOrSign);
     }
 
@@ -35,7 +35,7 @@ public class CallStack implements Cloneable {
     }
 
     private final String m_methodNameOrSign;
-    private final int    m_nLineNo;
+    private final int    m_lineNo;
   }
 
   public CallStack(boolean isOutMostCall) {
@@ -53,8 +53,8 @@ public class CallStack implements Cloneable {
   /**
    * add a stack trace to inner call stack
    */
-  public void addStackTrace(String methodNameOrSign, int nLineNo) {
-    m_callStack.add(new StackTrace(methodNameOrSign, nLineNo));
+  public void addStackTrace(String methodNameOrSign, int lineNo) {
+    m_callStack.add(new StackTrace(methodNameOrSign, lineNo));
   }
 
   public CallStack getInnerCallStack() {

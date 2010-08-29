@@ -1,13 +1,15 @@
-package hk.ust.cse.Prevision.Yices;
+package hk.ust.cse.Prevision.Solver.Yices;
 
+import hk.ust.cse.Prevision.Solver.ISolverLoader;
+import hk.ust.cse.Prevision.Solver.ISolverResult;
+import hk.ust.cse.Prevision.Solver.SMTVariable;
 import hk.ust.cse.YicesWrapper.YicesWrapper;
 
 import java.util.Hashtable;
 
-public class YicesLoader {
-  public enum YICES_COMP_PROCESS {SAT, UNSAT, ERROR, TIMEOUT}
+public class YicesLoader implements ISolverLoader {
   
-  public YICES_COMP_PROCESS check(String input, Hashtable<String, SMTVariable> defFinalVarMap) {
+  public SOLVER_COMP_PROCESS check(String input, Hashtable<String, SMTVariable> defFinalVarMap) {
     // call YicesWrapper directly
     boolean result = YicesWrapper.check(input);
     String output  = YicesWrapper.getLastOutput();
@@ -21,15 +23,15 @@ public class YicesLoader {
       m_lastResult.parseOutput(output, defFinalVarMap);
 
       // return satisfactory or not
-      return (result) ? YICES_COMP_PROCESS.SAT : YICES_COMP_PROCESS.UNSAT;
+      return (result) ? SOLVER_COMP_PROCESS.SAT : SOLVER_COMP_PROCESS.UNSAT;
     }
     else if (errMsg.length() > 0) {       // SMT Check throws error
       System.out.println("SMT Check error: " + errMsg);
-      return YICES_COMP_PROCESS.ERROR;
+      return SOLVER_COMP_PROCESS.ERROR;
     }
     else {       // SMT Check timeout
       System.out.println("SMT Check timeout!");
-      return YICES_COMP_PROCESS.TIMEOUT;
+      return SOLVER_COMP_PROCESS.TIMEOUT;
     }
   }
   
@@ -41,9 +43,9 @@ public class YicesLoader {
     return YicesWrapper.getLastInput();
   }
 
-  public YicesResult getLastResult() {
+  public ISolverResult getLastResult() {
     return m_lastResult;
   }
   
-  private YicesResult m_lastResult;
+  private ISolverResult m_lastResult;
 }

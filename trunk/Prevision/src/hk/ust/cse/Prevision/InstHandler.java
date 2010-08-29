@@ -1074,7 +1074,7 @@ public class InstHandler {
   // go into invocation
   public static Predicate handle_invokeinterface_stepin(GlobalOptionsAndStates optionsAndStates, 
       Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack,
-      int nCurInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
+      int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     return handle_invokeinterface(postCond, inst, instInfo);
   }
 
@@ -1082,7 +1082,7 @@ public class InstHandler {
   @SuppressWarnings("unchecked")
   public static Predicate handle_invokevirtual_stepin(GlobalOptionsAndStates optionsAndStates, 
       Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack,
-      int nCurInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
+      int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     Predicate preCond = null;
     MethodMetaData methData = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
@@ -1156,7 +1156,7 @@ public class InstHandler {
         // we only consider inclLine at the inner most call
         boolean inclLine = true;
         if (innerCallStack.getDepth() == 1) {
-          inclLine = optionsAndStates.bInclInnerMostLine;
+          inclLine = optionsAndStates.inclInnerMostLine;
         }
         
         // call compute, outer computeRec() will make sure that this stepped 
@@ -1164,14 +1164,14 @@ public class InstHandler {
         String methodSig = invokevirtualInst.getDeclaredTarget().getSignature();
         try {
           WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optionsAndStates,
-              methodSig, nLineNo, inclLine, innerCallStack, nCurInvokeDepth, newValPrefix, newPostCond);
-          preCond = wpResult.getSatisfiable();
+              methodSig, nLineNo, inclLine, innerCallStack, curInvokeDepth, newValPrefix, newPostCond);
+          preCond = wpResult.getFirstSatisfiable();
         } catch (InvalidStackTraceException e) {}
       }
       else {
         // compute targeting method with nStartLine = -1 (from exit block)
         preCond = computeAtCallSite(invokevirtualInst, instInfo, optionsAndStates, 
-            callStack, nCurInvokeDepth, newValPrefix, newPostCond);
+            callStack, curInvokeDepth, newValPrefix, newPostCond);
       }
 
       // if succeed
@@ -1216,7 +1216,7 @@ public class InstHandler {
   @SuppressWarnings("unchecked")
   public static Predicate handle_invokespecial_stepin(GlobalOptionsAndStates optionsAndStates, 
       Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack,
-      int nCurInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
+      int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     Predicate preCond = null;
     MethodMetaData methData = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
@@ -1290,7 +1290,7 @@ public class InstHandler {
         // we only consider inclLine at the inner most call
         boolean inclLine = true;
         if (innerCallStack.getDepth() == 1) {
-          inclLine = optionsAndStates.bInclInnerMostLine;
+          inclLine = optionsAndStates.inclInnerMostLine;
         }
         
         // call compute, outer computeRec() will make sure that this stepped 
@@ -1298,14 +1298,14 @@ public class InstHandler {
         String methodSig = invokespecialInst.getDeclaredTarget().getSignature();
         try {
           WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optionsAndStates, 
-              methodSig, nLineNo, inclLine, innerCallStack, nCurInvokeDepth, newValPrefix, newPostCond);
-          preCond = wpResult.getSatisfiable();
+              methodSig, nLineNo, inclLine, innerCallStack, curInvokeDepth, newValPrefix, newPostCond);
+          preCond = wpResult.getFirstSatisfiable();
         } catch (InvalidStackTraceException e) {}
       }
       else {
         // compute targeting method with nStartLine = -1 (from exit block)
         preCond = computeAtCallSite(invokespecialInst, instInfo, optionsAndStates, 
-            callStack, nCurInvokeDepth, newValPrefix, newPostCond);
+            callStack, curInvokeDepth, newValPrefix, newPostCond);
       }
 
       // if succeed
@@ -1350,7 +1350,7 @@ public class InstHandler {
   @SuppressWarnings("unchecked")
   public static Predicate handle_invokestatic_stepin(GlobalOptionsAndStates optionsAndStates, 
       Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack,
-      int nCurInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
+      int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
 
     Predicate preCond = null;
     MethodMetaData methData = instInfo.methData;
@@ -1403,7 +1403,7 @@ public class InstHandler {
       // we only consider inclLine at the inner most call
       boolean inclLine = true;
       if (innerCallStack.getDepth() == 1) {
-        inclLine = optionsAndStates.bInclInnerMostLine;
+        inclLine = optionsAndStates.inclInnerMostLine;
       }
       
       // call compute, outer computeRec() will make sure that this stepped 
@@ -1411,14 +1411,14 @@ public class InstHandler {
       String methodSig = invokestaticInst.getDeclaredTarget().getSignature();
       try {
         WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optionsAndStates, 
-            methodSig, nLineNo, inclLine, innerCallStack, nCurInvokeDepth, newValPrefix, newPostCond);
-        preCond = wpResult.getSatisfiable();
+            methodSig, nLineNo, inclLine, innerCallStack, curInvokeDepth, newValPrefix, newPostCond);
+        preCond = wpResult.getFirstSatisfiable();
       } catch (InvalidStackTraceException e) {}
     }
     else {
       // compute targeting method with nStartLine = -1 (from exit block)
       preCond = computeAtCallSite(invokestaticInst, instInfo, optionsAndStates, 
-          callStack, nCurInvokeDepth, newValPrefix, newPostCond);
+          callStack, curInvokeDepth, newValPrefix, newPostCond);
     }
 
     // if succeed
@@ -1903,7 +1903,7 @@ public class InstHandler {
 
   private static Predicate computeAtCallSite(SSAInvokeInstruction invokeInst,
       BBorInstInfo instInfo, GlobalOptionsAndStates optAndStates, 
-      CallStack callStack, int nCurInvokeDepth, String newValPrefix, 
+      CallStack callStack, int curInvokeDepth, String newValPrefix, 
       Predicate newPostCond) {
     Predicate preCond = null;
 
@@ -1912,7 +1912,7 @@ public class InstHandler {
     // get from summary
     boolean noMatch = false;
     if (optAndStates.summary != null) {
-      preCond = optAndStates.summary.getSummary(methodSig, nCurInvokeDepth + 1,
+      preCond = optAndStates.summary.getSummary(methodSig, curInvokeDepth + 1,
           newValPrefix, newPostCond);
       if (preCond == null) {
         noMatch = true;
@@ -1924,14 +1924,14 @@ public class InstHandler {
       try {    
         // call compute, nStartLine = -1 (from exit block)
         WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optAndStates, 
-            methodSig, -1, false, callStack, nCurInvokeDepth + 1, newValPrefix, newPostCond);
-        preCond = wpResult.getSatisfiable();
+            methodSig, -1, false, callStack, curInvokeDepth + 1, newValPrefix, newPostCond);
+        preCond = wpResult.getFirstSatisfiable();
       } catch (InvalidStackTraceException e) {}
     }
       
     // save to summary
     if (noMatch && preCond != null) {
-      optAndStates.summary.putSummary(methodSig, nCurInvokeDepth + 1,
+      optAndStates.summary.putSummary(methodSig, curInvokeDepth + 1,
           newValPrefix, newPostCond, preCond);
     }
     
@@ -1973,7 +1973,7 @@ public class InstHandler {
       // if newVar1 it's a parameter, substitute with
       // the parameter name right away!
       // because we're using valPrefix, a param name will be returned only
-      // when it's not inside an invocation(nCurInvokeDepth == 0, so valPrefix == "")
+      // when it's not inside an invocation(curInvokeDepth == 0, so valPrefix == "")
       // we don't want to replace with a param name if it's still inside some
       // invocation, because it's hard to replace a param at the outter handle_invoke*_stepin
       String param = methData.getParamStr(newVar1);
@@ -2003,7 +2003,7 @@ public class InstHandler {
       // if newVar2 it's a parameter, substitute with
       // the parameter name right away!
       // because we're using valPrefix, a param name will be returned only
-      // when it's not inside an invocation(nCurInvokeDepth == 0, so valPrefix == "")
+      // when it's not inside an invocation(curInvokeDepth == 0, so valPrefix == "")
       // we don't want to replace with a param name if it's still inside some
       // invocation, because it's hard to replace a param at the outter handle_invoke*_stepin
       String param = methData.getParamStr(newVar2);
@@ -2047,7 +2047,7 @@ public class InstHandler {
         // if var it's a parameter, substitute with
         // the parameter name right away!
         // because we're using valPrefix, a param name will be returned only
-        // when it's not inside an invocation(nCurInvokeDepth == 0, so valPrefix
+        // when it's not inside an invocation(curInvokeDepth == 0, so valPrefix
         // == "")
         // we don't want to replace with a param name if it's still inside some
         // invocation, because it's hard to replace a param at the outter
@@ -2132,7 +2132,7 @@ public class InstHandler {
       // if newKey it's a parameter, substitute with
       // the parameter name right away!
       // because we're using valPrefix, a param name will be returned only
-      // when it's not inside an invocation(nCurInvokeDepth == 0, so valPrefix == "")
+      // when it's not inside an invocation(curInvokeDepth == 0, so valPrefix == "")
       // we don't want to replace with a param name if it's still inside some
       // invocation, because it's hard to replace a param at the outter handle_invoke*_stepin
       String param = methData.getParamStr(newKey);
