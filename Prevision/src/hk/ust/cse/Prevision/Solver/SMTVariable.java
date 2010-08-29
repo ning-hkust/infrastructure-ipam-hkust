@@ -1,4 +1,4 @@
-package hk.ust.cse.Prevision.Yices;
+package hk.ust.cse.Prevision.Solver;
 
 import java.util.ArrayList;
 import java.util.Hashtable;

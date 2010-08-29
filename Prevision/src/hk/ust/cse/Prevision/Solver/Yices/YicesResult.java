@@ -1,7 +1,11 @@
-package hk.ust.cse.Prevision.Yices;
+package hk.ust.cse.Prevision.Solver.Yices;
 
-import hk.ust.cse.Prevision.Yices.SMTTerm.Operator;
-import hk.ust.cse.Prevision.Yices.SMTVariable.VarCategory;
+import hk.ust.cse.Prevision.Solver.ISolverResult;
+import hk.ust.cse.Prevision.Solver.SMTTerm;
+import hk.ust.cse.Prevision.Solver.SMTVariable;
+import hk.ust.cse.Prevision.Solver.Utils;
+import hk.ust.cse.Prevision.Solver.SMTTerm.Operator;
+import hk.ust.cse.Prevision.Solver.SMTVariable.VarCategory;
 
 import java.util.ArrayList;
 import java.util.Hashtable;
@@ -9,7 +13,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class YicesResult {
+public class YicesResult implements ISolverResult {
   
   private static final Pattern s_pattern = Pattern.compile("^\\(= ([\\S]+) ([\\S]+)\\)$");
   

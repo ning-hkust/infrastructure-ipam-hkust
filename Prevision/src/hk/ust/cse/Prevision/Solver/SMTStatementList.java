@@ -1,6 +1,6 @@
-package hk.ust.cse.Prevision.Yices;
+package hk.ust.cse.Prevision.Solver;
 
-import hk.ust.cse.Prevision.Yices.SMTTerm.Operator;
+import hk.ust.cse.Prevision.Solver.SMTTerm.Operator;
 
 import java.util.ArrayList;
 import java.util.HashSet;

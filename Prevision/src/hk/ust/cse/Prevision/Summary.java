@@ -10,21 +10,21 @@ public class Summary {
     m_summary = new Hashtable<List<Object>, Predicate>();
   }
 
-  public void putSummary(String methodNameOrSign, int nCurInvokeDepth,
+  public void putSummary(String methodNameOrSign, int curInvokeDepth,
       String valPrefix, Predicate postCond, Predicate preCond) {
     List<Object> key = new ArrayList<Object>();
     key.add(methodNameOrSign);
-    key.add(nCurInvokeDepth);
+    key.add(curInvokeDepth);
     key.add(valPrefix);
     key.add(postCond);
     m_summary.put(key, preCond);
   }
   
-  public Predicate getSummary(String methodNameOrSign, int nCurInvokeDepth,
+  public Predicate getSummary(String methodNameOrSign, int curInvokeDepth,
       String valPrefix, Predicate postCond) {
     List<Object> key = new ArrayList<Object>();
     key.add(methodNameOrSign);
-    key.add(nCurInvokeDepth);
+    key.add(curInvokeDepth);
     key.add(valPrefix);
     key.add(postCond);
     return m_summary.get(key);

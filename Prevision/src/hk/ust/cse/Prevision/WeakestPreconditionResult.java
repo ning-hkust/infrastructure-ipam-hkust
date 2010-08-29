@@ -1,42 +1,54 @@
 package hk.ust.cse.Prevision;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class WeakestPreconditionResult {
-  public enum SAT_RESULT {SAT, UNSAT, OVER_LIMIT, NOT_CHECKED}
   
-  public WeakestPreconditionResult(SAT_RESULT satResult, Predicate satisfiable) {
-    m_satResult   = satResult;
-    m_satisfiable = satisfiable;
+  public WeakestPreconditionResult() {
+    m_overLimit    = false;
+    m_reachMaximum = false;
+    m_satisfiables = new ArrayList<Predicate>();
   }
   
-  public void setResult(SAT_RESULT satResult, Predicate satisfiable) {
-    m_satResult   = satResult;
-    m_satisfiable = satisfiable;
+  public void addSatisfiable(Predicate satisfiable) {
+    m_satisfiables.add(satisfiable);
   }
   
-  public boolean isSatisfiable() {
-    return m_satResult == SAT_RESULT.SAT;
+  public void setOverLimit(boolean overLimit) {
+    m_overLimit = overLimit;
   }
   
-  public boolean isUnsatisfiable() {
-    return m_satResult == SAT_RESULT.UNSAT;
+  public void setReachMaximum(boolean reachMaximum) {
+    m_reachMaximum = reachMaximum;
   }
   
   public boolean isOverLimit() {
-    return m_satResult == SAT_RESULT.OVER_LIMIT;
+    return m_overLimit;
   }
   
-  public boolean isNotChecked() {
-    return m_satResult == SAT_RESULT.NOT_CHECKED;
+  public boolean isReachMaximum() {
+    return m_reachMaximum;
   }
   
-  public SAT_RESULT getSatResult() {
-    return m_satResult;
+  public boolean isSatisfiable() {
+    return m_satisfiables.size() > 0;
+  }
+
+  public List<Predicate> getSatisfiables() {
+    return m_satisfiables;
   }
   
-  public Predicate getSatisfiable() {
-    return m_satisfiable;
+  // return the first satisfiable precondition if exists
+  public Predicate getFirstSatisfiable() {
+    Predicate precond = null;
+    if (m_satisfiables.size() > 0) {
+      precond = m_satisfiables.get(0);
+    }
+    return precond;
   }
   
-  private SAT_RESULT m_satResult;
-  private Predicate  m_satisfiable;
+  private boolean         m_overLimit;
+  private boolean         m_reachMaximum;
+  private List<Predicate> m_satisfiables;
 }
