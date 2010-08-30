@@ -79,14 +79,14 @@ public class WeakestPrecondition {
     public BBorInstInfo(ISSABasicBlock currentBB, Predicate postCond,
         int sucessorType, ISSABasicBlock sucessorBB, BBorInstInfo sucessorInfo, 
         MethodMetaData methData, String valPrefix, WeakestPrecondition wp) {
-      this.currentBB      = currentBB;
-      this.postCond       = postCond;
-      this.sucessorType   = sucessorType;
-      this.sucessorBB     = sucessorBB;
-      this.sucessorInfo   = sucessorInfo;
-      this.methData       = methData;
-      this.valPrefix      = valPrefix;
-      this.wp             = wp;
+      this.currentBB    = currentBB;
+      this.postCond     = postCond;
+      this.sucessorType = sucessorType;
+      this.sucessorBB   = sucessorBB;
+      this.sucessorInfo = sucessorInfo;
+      this.methData     = methData;
+      this.valPrefix    = valPrefix;
+      this.wp           = wp;
     }
     
     public final Predicate postCond;
