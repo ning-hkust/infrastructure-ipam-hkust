@@ -35,12 +35,12 @@ public class WeakestPrecondition {
     public GlobalOptionsAndStates(boolean inclInnerMostLine, boolean bUseSummary, 
         int maxRetrieve, int maxSmtCheck, int maxInvokeDepth, int maxLoop, CallStack fullCallStack) {
       // options
-      this.inclInnerMostLine  = inclInnerMostLine;
-      this.maxRetrieve        = maxRetrieve;
-      this.maxSmtCheck        = maxSmtCheck;
-      this.maxInvokeDepth     = maxInvokeDepth;
-      this.maxLoop            = maxLoop;
-      this.fullCallStack      = fullCallStack;
+      this.inclInnerMostLine = inclInnerMostLine;
+      this.maxRetrieve       = maxRetrieve;
+      this.maxSmtCheck       = maxSmtCheck;
+      this.maxInvokeDepth    = maxInvokeDepth;
+      this.maxLoop           = maxLoop;
+      this.fullCallStack     = fullCallStack;
       
       // initialize summary
       if (bUseSummary) {
