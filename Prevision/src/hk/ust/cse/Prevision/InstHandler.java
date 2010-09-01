@@ -1921,7 +1921,7 @@ public class InstHandler {
 
     // if no summary, compute
     if (preCond == null) {
-      try {    
+      try {
         // call compute, nStartLine = -1 (from exit block)
         WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optAndStates, 
             methodSig, -1, false, callStack, curInvokeDepth + 1, newValPrefix, newPostCond);

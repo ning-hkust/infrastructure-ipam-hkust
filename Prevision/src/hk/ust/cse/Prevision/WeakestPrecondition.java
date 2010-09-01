@@ -2,6 +2,7 @@ package hk.ust.cse.Prevision;
 
 import hk.ust.cse.Prevision.Wala.Jar2IR;
 import hk.ust.cse.Prevision.Wala.MethodMetaData;
+import hk.ust.cse.Prevision.Wala.WalaAnalyzer;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -14,10 +15,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Stack;
 import java.util.AbstractMap.SimpleEntry;
-import java.util.jar.JarFile;
 
 import com.ibm.wala.classLoader.IBytecodeMethod;
-import com.ibm.wala.ipa.callgraph.AnalysisCache;
 import com.ibm.wala.shrikeCT.InvalidClassFileException;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
@@ -72,7 +71,7 @@ public class WeakestPrecondition {
     public final Summary   summary;
 
     // global states
-    private boolean  m_bEnteringCallStack;
+    private boolean m_bEnteringCallStack;
   }
 
   public class BBorInstInfo {
@@ -99,11 +98,10 @@ public class WeakestPrecondition {
     public final WeakestPrecondition wp;
   }
 
-  public WeakestPrecondition(JarFile jarFile) {
-    m_jarFile = jarFile;
-
-    // cache for IRs of this jar file
-    m_IRCache = new AnalysisCache();
+  public WeakestPrecondition(String appJar) throws Exception {
+    // create the wala analyzer which holds all the 
+    // wala related information of this wp instance
+    m_walaAnalyzer = new WalaAnalyzer(appJar);
   }
   
   public WeakestPreconditionResult compute(GlobalOptionsAndStates optionsAndStates, 
@@ -145,17 +143,13 @@ public class WeakestPrecondition {
     // start timing
     long start = System.currentTimeMillis();
 
-    // get ir(ssa) for some method in jar file
+    // get ir(ssa) for methods in jar file
     if (ir == null) {
-      try {
-        if (Utils.isMethodSignature(methodNameOrSign)) {
-          ir = Jar2IR.getIR(m_jarFile.getName(), methodNameOrSign, m_IRCache);
-        }
-        else {
-          ir = Jar2IR.getIR(m_jarFile.getName(), methodNameOrSign, nStartLine, m_IRCache);
-        }
-      } catch (Exception e) {
-        e.printStackTrace();
+      if (Utils.isMethodSignature(methodNameOrSign)) {
+        ir = Jar2IR.getIR(m_walaAnalyzer, methodNameOrSign);
+      }
+      else {
+        ir = Jar2IR.getIR(m_walaAnalyzer, methodNameOrSign, nStartLine);
       }
     }
 
@@ -266,6 +260,10 @@ public class WeakestPrecondition {
   // return the first satisfiable precondition if exists
   public Predicate getFirstSatisfiable() {
     return m_wpResult.getFirstSatisfiable();
+  }
+  
+  public WalaAnalyzer getWalaAnalyzer() {
+    return m_walaAnalyzer;
   }
  
   private WeakestPreconditionResult computeMethod(GlobalOptionsAndStates optionsAndStates,
@@ -725,8 +723,7 @@ public class WeakestPrecondition {
   
   public static void main(String args[]) {
     try {
-      JarFile jarFile = new JarFile(args[0]/*jar file path*/);
-      WeakestPrecondition wp = new WeakestPrecondition(jarFile);
+      WeakestPrecondition wp = new WeakestPrecondition(args[0]/*jar file path*/);
       
       // read stack frames
       CallStack callStack = new CallStack(true);
@@ -748,11 +745,10 @@ public class WeakestPrecondition {
     }
   }
 
-  private final JarFile             m_jarFile;
-  private final AnalysisCache       m_IRCache;
+  private final WalaAnalyzer        m_walaAnalyzer;
   private MethodMetaData            m_methMetaData;
   private WeakestPreconditionResult m_wpResult;
-  
+
   private Hashtable<BBorInstInfo, SSAInstruction>                        m_callStackInvokes;
   private Hashtable<SimpleEntry<String, Predicate>, Stack<BBorInstInfo>> m_dfsStacks;
 }
