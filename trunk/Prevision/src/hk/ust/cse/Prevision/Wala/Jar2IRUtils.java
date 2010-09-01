@@ -10,20 +10,20 @@ import java.util.AbstractMap.SimpleEntry;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.ShrikeBTMethod;
-import com.ibm.wala.core.tests.callGraph.CallGraphTestUtil;
 import com.ibm.wala.examples.drivers.PDFCallGraph;
 import com.ibm.wala.ipa.callgraph.AnalysisScope;
 import com.ibm.wala.ipa.cha.ClassHierarchy;
 import com.ibm.wala.shrikeBT.IInstruction;
 import com.ibm.wala.types.MethodReference;
-import com.ibm.wala.util.config.AnalysisScopeReader;
-import com.ibm.wala.util.io.FileProvider;
 import com.ibm.wala.util.strings.Atom;
 import com.ibm.wala.util.warnings.WalaException;
 
-public class Jar2IRUtils {
+/**
+ * Internal Utils class for Jar2IR and WalaAnalyzer
+ */
+class Jar2IRUtils {
   
-  public static ClassHierarchy getClassHierarchy(String appJar) throws IOException, WalaException{
+  static ClassHierarchy getClassHierarchy(String appJar, AnalysisScope scope) throws IOException, WalaException{
     if (s_classHierarchyCache == null) {
       s_classHierarchyCache = new Hashtable<String, ClassHierarchy>();
     }
@@ -35,11 +35,6 @@ public class Jar2IRUtils {
       if (PDFCallGraph.isDirectory(appJar)) {
         appJar = PDFCallGraph.findJarFiles(new String[] { appJar });
       }
-
-      // Build an AnalysisScope which represents the set of classes to analyze.  In particular,
-      // we will analyze the contents of the appJar jar file and the Java standard libraries.
-      AnalysisScope scope = AnalysisScopeReader.makeJavaBinaryAnalysisScope(appJar, FileProvider
-          .getFile(CallGraphTestUtil.REGRESSION_EXCLUSIONS));
 
       // Build a class hierarchy representing all classes to analyze.  This step will read the class
       // files and organize them into a tree.
@@ -54,20 +49,7 @@ public class Jar2IRUtils {
   /**
    * find method reference according to method name and line number
    */
-  public static MethodReference getMethodReference(String jarFile, String methodName, int nLine) throws IOException{
-    try {
-      ClassHierarchy cha = getClassHierarchy(jarFile);
-      return getMethodReference(cha, methodName, nLine);
-    } catch (WalaException e) {
-      e.printStackTrace();
-      return null;
-    }
-  }
-  
-  /**
-   * find method reference according to method name and line number
-   */
-  public static MethodReference getMethodReference(ClassHierarchy cha, String methodName, int nLine) {
+  static MethodReference getMethodReference(ClassHierarchy cha, String methodName, int nLine) {
     MethodReference mr = null;
     
     // get class name
