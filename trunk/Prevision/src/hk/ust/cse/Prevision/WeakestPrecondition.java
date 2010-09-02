@@ -17,6 +17,7 @@ import java.util.Stack;
 import java.util.AbstractMap.SimpleEntry;
 
 import com.ibm.wala.classLoader.IBytecodeMethod;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.shrikeCT.InvalidClassFileException;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
@@ -31,18 +32,21 @@ import com.ibm.wala.util.heapTrace.HeapTracer.Result;
 
 public class WeakestPrecondition {
   public class GlobalOptionsAndStates {
-    public GlobalOptionsAndStates(boolean inclInnerMostLine, boolean bUseSummary, 
-        int maxRetrieve, int maxSmtCheck, int maxInvokeDepth, int maxLoop, CallStack fullCallStack) {
+    public GlobalOptionsAndStates(boolean inclInnerMostLine, boolean useSummary, 
+        boolean compDispatchTargets, int maxRetrieve, int maxSmtCheck, 
+        int maxInvokeDepth, int maxLoop, CallStack fullCallStack) {
+      
       // options
-      this.inclInnerMostLine = inclInnerMostLine;
-      this.maxRetrieve       = maxRetrieve;
-      this.maxSmtCheck       = maxSmtCheck;
-      this.maxInvokeDepth    = maxInvokeDepth;
-      this.maxLoop           = maxLoop;
-      this.fullCallStack     = fullCallStack;
+      this.inclInnerMostLine   = inclInnerMostLine;
+      this.compDispatchTargets = compDispatchTargets;
+      this.maxRetrieve         = maxRetrieve;
+      this.maxSmtCheck         = maxSmtCheck;
+      this.maxInvokeDepth      = maxInvokeDepth;
+      this.maxLoop             = maxLoop;
+      this.fullCallStack       = fullCallStack;
       
       // initialize summary
-      if (bUseSummary) {
+      if (useSummary) {
         this.summary = new Summary();
       }
       else {
@@ -63,6 +67,7 @@ public class WeakestPrecondition {
 
     // global options
     public final boolean   inclInnerMostLine;
+    public final boolean   compDispatchTargets;
     public final int       maxRetrieve;
     public final int       maxSmtCheck;
     public final int       maxInvokeDepth;
@@ -122,49 +127,74 @@ public class WeakestPrecondition {
     if (fullStack.getDepth() == 1) {
       inclLine = optionsAndStates.inclInnerMostLine;
     }
-    
-    return computeRec(optionsAndStates, methNameOrSig, lineNo, inclLine, fullStack, 0, "", postCond, ir);
-  }
-  
-  WeakestPreconditionResult computeRec(GlobalOptionsAndStates optionsAndStates, 
-      String methodNameOrSign, int nStartLine, boolean inclLine, 
-      CallStack callStack, int curInvokeDepth, String valPrefix,
-      Predicate postCond) throws InvalidStackTraceException {
-
-    return computeRec(optionsAndStates, methodNameOrSign, nStartLine, inclLine,
-        callStack, curInvokeDepth, valPrefix, postCond, null);
-  }
-
-  WeakestPreconditionResult computeRec(GlobalOptionsAndStates optionsAndStates, 
-      String methodNameOrSign, int nStartLine, boolean inclLine, 
-      CallStack callStack, int curInvokeDepth, String valPrefix,
-      Predicate postCond, IR ir) throws InvalidStackTraceException {
-    
-    // start timing
-    long start = System.currentTimeMillis();
 
     // get ir(ssa) for methods in jar file
     if (ir == null) {
-      if (Utils.isMethodSignature(methodNameOrSign)) {
-        ir = Jar2IR.getIR(m_walaAnalyzer, methodNameOrSign);
+      if (Utils.isMethodSignature(methNameOrSig)) {
+        ir = Jar2IR.getIR(m_walaAnalyzer, methNameOrSig);
       }
       else {
-        ir = Jar2IR.getIR(m_walaAnalyzer, methodNameOrSign, nStartLine);
+        ir = Jar2IR.getIR(m_walaAnalyzer, methNameOrSig, lineNo);
+      }
+    
+      // return if method is not found
+      if (ir == null) {
+        String msg = "Failed to locate " + methNameOrSig + ":" + lineNo;
+        System.err.println(msg);
+        throw new InvalidStackTraceException(msg);
       }
     }
-
+      
+    // get the initial cgNode
+    CGNode cgNode = null;
+    if (optionsAndStates.compDispatchTargets) {
+      cgNode = m_walaAnalyzer.getCallGraph().getNode(ir.getMethod());
+    }
+    
+    return computeRec(optionsAndStates, cgNode, ir, lineNo, inclLine, fullStack, 0, "", postCond);
+  }
+  
+  WeakestPreconditionResult computeRec(GlobalOptionsAndStates optionsAndStates, 
+      CGNode cgNode, String methNameOrSig, int startLine, boolean inclLine, CallStack callStack, 
+      int curInvokeDepth, String valPrefix, Predicate postCond) throws InvalidStackTraceException {
+    
+    // get ir(ssa) for methods in jar file
+    IR ir = null;
+    if (Utils.isMethodSignature(methNameOrSig)) {
+      ir = Jar2IR.getIR(m_walaAnalyzer, methNameOrSig);
+    }
+    else {
+      ir = Jar2IR.getIR(m_walaAnalyzer, methNameOrSig, startLine);
+    }
+  
     // return if method is not found
     if (ir == null) {
-      String msg = "Failed to locate " + methodNameOrSign;
+      String msg = "Failed to locate " + methNameOrSig + ":" + startLine;
       System.err.println(msg);
       throw new InvalidStackTraceException(msg);
     }
+    
+    return computeRec(optionsAndStates, cgNode, ir, startLine, inclLine, 
+        callStack, curInvokeDepth, valPrefix, postCond);
+  }
 
+  /**
+   * @param cgNode: only useful when we use 'compDispatchTargets' function
+   */
+  WeakestPreconditionResult computeRec(GlobalOptionsAndStates optionsAndStates, 
+      CGNode cgNode, IR ir, int startLine, boolean inclLine, CallStack callStack, 
+      int curInvokeDepth, String valPrefix, Predicate postCond) throws InvalidStackTraceException {
+    
+    assert(ir != null);
+    
+    // start timing
+    long start = System.currentTimeMillis();
+    
     // printIR(ir);
     // System.out.println(ir.toString());
 
-    // init MethodMetaData, save it if it's not inside an invocation and it's at
-    // the out most call
+    // init MethodMetaData, save it if it's not inside an 
+    // invocation and it's at the out most call
     MethodMetaData methMetaData = new MethodMetaData(ir);
     if (curInvokeDepth == 0 && callStack.isOutMostCall()) {
       m_methMetaData = methMetaData;
@@ -186,9 +216,9 @@ public class WeakestPrecondition {
     }
     if (dfsStack == null || dfsStack.empty()) {
       // start from the basic block at nStartLine
-      ISSABasicBlock startFromBB = findBasicBlock(methMetaData.getcfg(), nStartLine);
+      ISSABasicBlock startFromBB = findBasicBlock(methMetaData.getcfg(), startLine);
       if (startFromBB == null) {
-        String msg = "Line " + nStartLine + " does not contain valid instructions.";
+        String msg = "Line " + startLine + " does not contain valid instructions.";
         System.err.println(msg);
         throw new InvalidStackTraceException(msg);
       }
@@ -210,8 +240,8 @@ public class WeakestPrecondition {
     }
 
     // start depth first search
-    WeakestPreconditionResult wpResult = computeMethod(optionsAndStates, 
-        methMetaData, dfsStack, nStartLine, inclLine, callStack, curInvokeDepth, valPrefix);
+    WeakestPreconditionResult wpResult = computeMethod(optionsAndStates, cgNode, 
+        methMetaData, dfsStack, startLine, inclLine, callStack, curInvokeDepth, valPrefix);
 
     // save result if it's not inside an invocation and it's at the out most call
     if (curInvokeDepth == 0 && callStack.isOutMostCall()) {
@@ -267,8 +297,9 @@ public class WeakestPrecondition {
   }
  
   private WeakestPreconditionResult computeMethod(GlobalOptionsAndStates optionsAndStates,
-      MethodMetaData methData, Stack<BBorInstInfo> dfsStack, int startLine, boolean inclLine, 
-      CallStack callStack, int curInvokeDepth, String valPrefix) throws InvalidStackTraceException {
+      CGNode cgNode, MethodMetaData methData, Stack<BBorInstInfo> dfsStack, 
+      int startLine, boolean inclLine, CallStack callStack, int curInvokeDepth, 
+      String valPrefix) throws InvalidStackTraceException {
     
     // start timing
     long start = System.currentTimeMillis();
@@ -311,7 +342,7 @@ public class WeakestPrecondition {
         
         // compute for this BB
         List<SimpleEntry<String, Predicate>> usedPredicates = new ArrayList<SimpleEntry<String, Predicate>>();
-        Predicate precond = computeBB(optionsAndStates, methData, infoItem, startLine, 
+        Predicate precond = computeBB(optionsAndStates, cgNode, methData, infoItem, startLine, 
             inclLine, callStack, starting, curInvokeDepth, valPrefix, usedPredicates);
 
         if (precond == null) {
@@ -407,7 +438,7 @@ public class WeakestPrecondition {
     return wpResult;
   }
 
-  private Predicate computeBB(GlobalOptionsAndStates optionsAndStates, 
+  private Predicate computeBB(GlobalOptionsAndStates optionsAndStates, CGNode cgNode, 
       MethodMetaData methData, BBorInstInfo infoItem, int startLine, boolean inclLine, 
       CallStack callStack, boolean[] starting, int curInvokeDepth, String valPrefix, 
       List<SimpleEntry<String, Predicate>> usedPredicates) throws InvalidStackTraceException {
@@ -419,7 +450,7 @@ public class WeakestPrecondition {
     for (Iterator<SSAPiInstruction> it = infoItem.currentBB.iteratePis(); it.hasNext();) {
       SSAPiInstruction piInst = (SSAPiInstruction) it.next();
       if (piInst != null) {
-        preCond = preCond.getPrecondtion(optionsAndStates, piInst, infoItem, callStack,
+        preCond = preCond.getPrecondtion(optionsAndStates, cgNode, piInst, infoItem, callStack,
             curInvokeDepth, usedPredicates);
       }
     }
@@ -470,7 +501,7 @@ public class WeakestPrecondition {
       if (inst != null && (!starting[0] || (currLine - (inclLine ? 1 : 0)) < startLine)) {
         // get precond for this instruction
         if (lastInst) {
-          preCond = preCond.getPrecondtion(optionsAndStates, inst, infoItem, 
+          preCond = preCond.getPrecondtion(optionsAndStates, cgNode, inst, infoItem, 
               callStack, curInvokeDepth, usedPredicates);
         }
         else {
@@ -478,7 +509,7 @@ public class WeakestPrecondition {
           BBorInstInfo instInfo = new BBorInstInfo(infoItem.currentBB, preCond, 
               Predicate.NORMAL_SUCCESSOR, infoItem.sucessorBB,
               infoItem.sucessorInfo, methData, valPrefix, this);
-          preCond = preCond.getPrecondtion(optionsAndStates, inst, instInfo,
+          preCond = preCond.getPrecondtion(optionsAndStates, cgNode, inst, instInfo,
               callStack, curInvokeDepth, usedPredicates);
         }
 
@@ -506,7 +537,7 @@ public class WeakestPrecondition {
     for (Iterator<SSAPhiInstruction> it = infoItem.currentBB.iteratePhis(); it.hasNext();) {
       SSAPhiInstruction phiInst = (SSAPhiInstruction) it.next();
       if (phiInst != null) {
-        preCond = preCond.getPrecondtion(optionsAndStates, phiInst, infoItem, 
+        preCond = preCond.getPrecondtion(optionsAndStates, cgNode, phiInst, infoItem, 
             callStack, curInvokeDepth, usedPredicates);
       }
     }
@@ -736,7 +767,7 @@ public class WeakestPrecondition {
       
       // set options
       GlobalOptionsAndStates optionsAndStates = 
-        wp.new GlobalOptionsAndStates(false, false, 10, 50, 1, 3, callStack);
+        wp.new GlobalOptionsAndStates(false, false, false, 10, 50, 1, 3, callStack);
       
       wp.compute(optionsAndStates, null);
       // wp.heapTracer();

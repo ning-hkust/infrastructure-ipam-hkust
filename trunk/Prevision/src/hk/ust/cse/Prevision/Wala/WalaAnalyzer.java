@@ -1,5 +1,7 @@
 package hk.ust.cse.Prevision.Wala;
 
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.jar.JarFile;
 
 import com.ibm.wala.core.tests.callGraph.CallGraphTestUtil;
@@ -14,7 +16,12 @@ import com.ibm.wala.util.config.AnalysisScopeReader;
 import com.ibm.wala.util.io.FileProvider;
 
 public class WalaAnalyzer {
+  
   public WalaAnalyzer(String appJar) throws Exception {
+    this(appJar, null);
+  }
+  
+  public WalaAnalyzer(String appJar, Iterable<Entrypoint> additionalEntryPoints) throws Exception {
     m_jarFile = new JarFile(appJar);
     
     // Create an object which caches IRs and related information, 
@@ -34,9 +41,26 @@ public class WalaAnalyzer {
     // entry points are useful to construct the call graph
     Iterable<Entrypoint> entrypoints = Util.makeMainEntrypoints(m_scope, m_cha);
     
+    // add entry points to a new set
+    HashSet<Entrypoint> totalPoints = new HashSet<Entrypoint>();
+    if (entrypoints != null) {
+      Iterator<Entrypoint> iter = entrypoints.iterator();
+      while (iter.hasNext()) {
+        totalPoints.add((Entrypoint)iter.next());
+      }
+    }
+    
+    // add in additional entry points
+    if (additionalEntryPoints != null) {
+      Iterator<Entrypoint> iter = additionalEntryPoints.iterator();
+      while (iter.hasNext()) {
+        totalPoints.add((Entrypoint)iter.next());
+      }
+    }
+    
     // Set up options which govern analysis choices.  
     // In particular, we will use all Pi nodes when building the IR.
-    m_options = new AnalysisOptions(m_scope, entrypoints);
+    m_options = new AnalysisOptions(m_scope, totalPoints);
     m_options.getSSAOptions().setPiNodePolicy(SSAOptions.getAllBuiltInPiNodes());
     
     // construct call graph
