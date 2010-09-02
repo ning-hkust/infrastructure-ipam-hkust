@@ -1,5 +1,6 @@
 package hk.ust.cse.Prevision;
 
+import hk.ust.cse.Prevision.Wala.CallGraph;
 import hk.ust.cse.Prevision.Wala.MethodMetaData;
 import hk.ust.cse.Prevision.WeakestPrecondition.BBorInstInfo;
 import hk.ust.cse.Prevision.WeakestPrecondition.GlobalOptionsAndStates;
@@ -10,6 +11,8 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.AbstractMap.SimpleEntry;
 
+import com.ibm.wala.classLoader.CallSiteReference;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrikeBT.IComparisonInstruction;
 import com.ibm.wala.shrikeBT.IConditionalBranchInstruction;
@@ -1073,16 +1076,16 @@ public class InstHandler {
   
   // go into invocation
   public static Predicate handle_invokeinterface_stepin(GlobalOptionsAndStates optionsAndStates, 
-      Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack,
-      int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
+      CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
+      CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     return handle_invokeinterface(postCond, inst, instInfo);
   }
 
   // go into invocation
   @SuppressWarnings("unchecked")
   public static Predicate handle_invokevirtual_stepin(GlobalOptionsAndStates optionsAndStates, 
-      Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack,
-      int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
+      CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
+      CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     Predicate preCond = null;
     MethodMetaData methData = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
@@ -1149,29 +1152,14 @@ public class InstHandler {
         // save this invoke instruction
         instInfo.wp.saveCallStackInvokeInst(instInfo, inst);
 
-        // get inner call stack
-        CallStack innerCallStack = callStack.getInnerCallStack();
-        int nLineNo = innerCallStack.getCurLineNo();
-        
-        // we only consider inclLine at the inner most call
-        boolean inclLine = true;
-        if (innerCallStack.getDepth() == 1) {
-          inclLine = optionsAndStates.inclInnerMostLine;
-        }
-        
-        // call compute, outer computeRec() will make sure that this stepped 
-        // in invocation is exactly the next invocation in the call stack
-        String methodSig = invokevirtualInst.getDeclaredTarget().getSignature();
-        try {
-          WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optionsAndStates,
-              methodSig, nLineNo, inclLine, innerCallStack, curInvokeDepth, newValPrefix, newPostCond);
-          preCond = wpResult.getFirstSatisfiable();
-        } catch (InvalidStackTraceException e) {}
+        // compute targeting method to enter call stack
+        preCond = computeToEnterCallSite(invokevirtualInst, instInfo, optionsAndStates, 
+            caller, callStack, curInvokeDepth, newValPrefix, newPostCond);
       }
       else {
-        // compute targeting method with nStartLine = -1 (from exit block)
+        // compute targeting method with startLine = -1 (from exit block)
         preCond = computeAtCallSite(invokevirtualInst, instInfo, optionsAndStates, 
-            callStack, curInvokeDepth, newValPrefix, newPostCond);
+            caller, callStack, curInvokeDepth, newValPrefix, newPostCond);
       }
 
       // if succeed
@@ -1215,8 +1203,8 @@ public class InstHandler {
   // go into invocation
   @SuppressWarnings("unchecked")
   public static Predicate handle_invokespecial_stepin(GlobalOptionsAndStates optionsAndStates, 
-      Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack,
-      int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
+      CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
+      CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     Predicate preCond = null;
     MethodMetaData methData = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
@@ -1283,29 +1271,14 @@ public class InstHandler {
         // save this invoke instruction
         instInfo.wp.saveCallStackInvokeInst(instInfo, inst);
 
-        // get inner call stack
-        CallStack innerCallStack = callStack.getInnerCallStack();
-        int nLineNo = innerCallStack.getCurLineNo();
-        
-        // we only consider inclLine at the inner most call
-        boolean inclLine = true;
-        if (innerCallStack.getDepth() == 1) {
-          inclLine = optionsAndStates.inclInnerMostLine;
-        }
-        
-        // call compute, outer computeRec() will make sure that this stepped 
-        // in invocation is exactly the next invocation in the call stack
-        String methodSig = invokespecialInst.getDeclaredTarget().getSignature();
-        try {
-          WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optionsAndStates, 
-              methodSig, nLineNo, inclLine, innerCallStack, curInvokeDepth, newValPrefix, newPostCond);
-          preCond = wpResult.getFirstSatisfiable();
-        } catch (InvalidStackTraceException e) {}
+        // compute targeting method to enter call stack
+        preCond = computeToEnterCallSite(invokespecialInst, instInfo, optionsAndStates, 
+            caller, callStack, curInvokeDepth, newValPrefix, newPostCond);
       }
       else {
-        // compute targeting method with nStartLine = -1 (from exit block)
+        // compute targeting method with startLine = -1 (from exit block)
         preCond = computeAtCallSite(invokespecialInst, instInfo, optionsAndStates, 
-            callStack, curInvokeDepth, newValPrefix, newPostCond);
+            caller, callStack, curInvokeDepth, newValPrefix, newPostCond);
       }
 
       // if succeed
@@ -1349,8 +1322,8 @@ public class InstHandler {
   // go into invocation
   @SuppressWarnings("unchecked")
   public static Predicate handle_invokestatic_stepin(GlobalOptionsAndStates optionsAndStates, 
-      Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack,
-      int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
+      CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
+      CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
 
     Predicate preCond = null;
     MethodMetaData methData = instInfo.methData;
@@ -1396,29 +1369,14 @@ public class InstHandler {
       // save this invoke instruction
       instInfo.wp.saveCallStackInvokeInst(instInfo, inst);
 
-      // get inner call stack
-      CallStack innerCallStack = callStack.getInnerCallStack();
-      int nLineNo = innerCallStack.getCurLineNo();
-      
-      // we only consider inclLine at the inner most call
-      boolean inclLine = true;
-      if (innerCallStack.getDepth() == 1) {
-        inclLine = optionsAndStates.inclInnerMostLine;
-      }
-      
-      // call compute, outer computeRec() will make sure that this stepped 
-      // in invocation is exactly the next invocation in the call stack
-      String methodSig = invokestaticInst.getDeclaredTarget().getSignature();
-      try {
-        WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optionsAndStates, 
-            methodSig, nLineNo, inclLine, innerCallStack, curInvokeDepth, newValPrefix, newPostCond);
-        preCond = wpResult.getFirstSatisfiable();
-      } catch (InvalidStackTraceException e) {}
+      // compute targeting method to enter call stack
+      preCond = computeToEnterCallSite(invokestaticInst, instInfo, optionsAndStates, 
+          caller, callStack, curInvokeDepth, newValPrefix, newPostCond);
     }
     else {
-      // compute targeting method with nStartLine = -1 (from exit block)
+      // compute targeting method with startLine = -1 (from exit block)
       preCond = computeAtCallSite(invokestaticInst, instInfo, optionsAndStates, 
-          callStack, curInvokeDepth, newValPrefix, newPostCond);
+          caller, callStack, curInvokeDepth, newValPrefix, newPostCond);
     }
 
     // if succeed
@@ -1901,14 +1859,58 @@ public class InstHandler {
     return newVarMap;
   }
 
+  private static Predicate computeToEnterCallSite(SSAInvokeInstruction invokeInst,
+      BBorInstInfo instInfo, GlobalOptionsAndStates optAndStates, CGNode caller, 
+      CallStack callStack, int curInvokeDepth, String newValPrefix, 
+      Predicate newPostCond) {
+    Predicate preCond = null;
+    
+    String methodSig = invokeInst.getDeclaredTarget().getSignature();
+    
+    // get inner call stack
+    CallStack innerCallStack = callStack.getInnerCallStack();
+    int lineNo = innerCallStack.getCurLineNo();
+    
+    // we only consider inclLine at the inner most call
+    boolean inclLine = true;
+    if (innerCallStack.getDepth() == 1) {
+      inclLine = optAndStates.inclInnerMostLine;
+    }
+
+    // get dispatch target
+    CGNode target = null;
+    if (optAndStates.compDispatchTargets) {
+      // get targets
+      CallGraph callGraph = instInfo.wp.getWalaAnalyzer().getCallGraph();
+      CGNode[] targets = getInvokeTargets(callGraph, caller, invokeInst.getCallSite());
+      
+      // TODO: support multiple targets
+      if (targets != null && targets.length > 0) {
+        target = targets[0]; // take the first one
+        if (target != null) {
+          methodSig = target.getMethod().getSignature();
+        }
+      }
+    }
+
+    try {
+      WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optAndStates, 
+          target, methodSig, lineNo, inclLine, innerCallStack, curInvokeDepth, 
+          newValPrefix, newPostCond);
+      preCond = wpResult.getFirstSatisfiable();
+    } catch (InvalidStackTraceException e) {}
+    
+    return preCond;
+  }
+  
   private static Predicate computeAtCallSite(SSAInvokeInstruction invokeInst,
-      BBorInstInfo instInfo, GlobalOptionsAndStates optAndStates, 
+      BBorInstInfo instInfo, GlobalOptionsAndStates optAndStates, CGNode caller, 
       CallStack callStack, int curInvokeDepth, String newValPrefix, 
       Predicate newPostCond) {
     Predicate preCond = null;
 
     String methodSig = invokeInst.getDeclaredTarget().getSignature();
-
+    
     // get from summary
     boolean noMatch = false;
     if (optAndStates.summary != null) {
@@ -1921,21 +1923,46 @@ public class InstHandler {
 
     // if no summary, compute
     if (preCond == null) {
-      try {
-        // call compute, nStartLine = -1 (from exit block)
+      CGNode target = null;
+      if (optAndStates.compDispatchTargets) {
+        // get targets
+        CallGraph callGraph = instInfo.wp.getWalaAnalyzer().getCallGraph();
+        CGNode[] targets = getInvokeTargets(callGraph, caller, invokeInst.getCallSite());
+        
+        // TODO: support multiple targets
+        if (targets != null && targets.length > 0) {
+          target = targets[0]; // take the first one
+          if (target != null) {
+            methodSig = target.getMethod().getSignature();
+          }
+        }
+      }
+      
+      try { 
+        // call compute, startLine = -1 (from exit block)
         WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optAndStates, 
-            methodSig, -1, false, callStack, curInvokeDepth + 1, newValPrefix, newPostCond);
+            target, methodSig, -1, false, callStack, curInvokeDepth + 1, 
+            newValPrefix, newPostCond);
         preCond = wpResult.getFirstSatisfiable();
       } catch (InvalidStackTraceException e) {}
     }
-      
+    
     // save to summary
     if (noMatch && preCond != null) {
+      // use the original method signature
+      methodSig = invokeInst.getDeclaredTarget().getSignature();
+      
       optAndStates.summary.putSummary(methodSig, curInvokeDepth + 1,
           newValPrefix, newPostCond, preCond);
     }
     
     return preCond;
+  }
+  
+  private static CGNode[] getInvokeTargets(CallGraph callGraph, CGNode caller, 
+      CallSiteReference callSite) {
+    // find all possible targets
+    return callGraph.getDispatchTargets(caller, callSite);
   }
 
   private static List<List<String>> addSMTStatments(List<List<String>> oldSMTStatmentList, 

@@ -9,6 +9,7 @@ import com.ibm.wala.ipa.callgraph.AnalysisCache;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.AnalysisScope;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.impl.Everywhere;
 import com.ibm.wala.ipa.callgraph.impl.ExplicitCallGraph;
 import com.ibm.wala.ipa.callgraph.impl.Util;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
@@ -38,17 +39,27 @@ public class CallGraph {
     //m_ctxSelector     = callGraphBuilder.getContextSelector();
   }
   
-  public IMethod[] getDispatchTargets(CGNode caller, CallSiteReference site) {
-    // get all possible targets at call site
-    Set<CGNode> targetNodes = m_callGraph.getPossibleTargets(caller, site);
+  public CGNode[] getDispatchTargets(CGNode caller, CallSiteReference site) {
+    CGNode[] dispatchTargets = null;
     
-    IMethod[] dispatchTargets = new IMethod[targetNodes.size()];
-    Iterator<CGNode> iter = targetNodes.iterator();
-    for (int i = 0; iter.hasNext(); i++) {
-      CGNode cgNode = (CGNode) iter.next();
-      dispatchTargets[i] = cgNode.getMethod();
+    if (caller != null && site != null) {
+      // get all possible targets at call site
+      Set<CGNode> targetNodes = m_callGraph.getPossibleTargets(caller, site);
+      
+      // fill array
+      dispatchTargets = new CGNode[targetNodes.size()];
+      Iterator<CGNode> iter = targetNodes.iterator();
+      for (int i = 0; iter.hasNext(); i++) {
+        CGNode cgNode = (CGNode) iter.next();
+        dispatchTargets[i] = cgNode;
+      }
     }
     return dispatchTargets;
+  }
+  
+  public CGNode getNode(IMethod m) {
+    // get the exact method cgnode
+    return m_callGraph.getNode(m, Everywhere.EVERYWHERE);
   }
   
   private final ExplicitCallGraph m_callGraph;

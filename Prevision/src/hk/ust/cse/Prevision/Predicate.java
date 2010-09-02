@@ -16,6 +16,7 @@ import java.util.AbstractMap.SimpleEntry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAInstruction;
 
@@ -51,7 +52,7 @@ public class Predicate {
   }
 
   public Predicate getPrecondtion(GlobalOptionsAndStates optionsAndStates, 
-      SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, 
+      CGNode method, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, 
       int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     try {
       Matcher matcher = s_instPattern.matcher(inst.toString());
@@ -73,18 +74,18 @@ public class Predicate {
                curInvokeDepth >= optionsAndStates.maxInvokeDepth && 
               !instInfo.wp.isCallStackInvokeInst(instInfo, inst))) {
             // invoke handler for this instruction
-            Method method = InstHandler.class.getMethod("handle_" + instType,
+            Method rmethod = InstHandler.class.getMethod("handle_" + instType,
                 Predicate.class, SSAInstruction.class, BBorInstInfo.class);
-            preCond = (Predicate) method.invoke(null, this, inst, instInfo);
+            preCond = (Predicate) rmethod.invoke(null, this, inst, instInfo);
           }
           else {
             System.out.println("stepping into " + instType + "...");
             // invoke handler for this instruction
-            Method method = InstHandler.class.getMethod("handle_" + instType + "_stepin", 
-                GlobalOptionsAndStates.class, Predicate.class, SSAInstruction.class, 
+            Method rmethod = InstHandler.class.getMethod("handle_" + instType + "_stepin", 
+                GlobalOptionsAndStates.class, CGNode.class, Predicate.class, SSAInstruction.class, 
                 BBorInstInfo.class, CallStack.class, int.class, List.class);
-            preCond = (Predicate) method.invoke(null, optionsAndStates, this, inst, 
-                instInfo, callStack, curInvokeDepth, usedPredicates);
+            preCond = (Predicate) rmethod.invoke(null, optionsAndStates, method, 
+                this, inst, instInfo, callStack, curInvokeDepth, usedPredicates);
           }
           return preCond;
         }
