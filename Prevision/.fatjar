@@ -1,5 +1,5 @@
 #Fat Jar Configuration File
-#Mon Aug 23 17:21:59 CST 2010
+#Fri Oct 08 23:39:44 CST 2010
 onejar.license.required=true
 manifest.classpath=
 manifest.removesigners=true
@@ -10,5 +10,5 @@ manifest.mainclass=
 manifest.file=<createnew>
 jarname.isextern=false
 onejar.expand=
-excludes=<cl|D\:\\Projects\\Infrastructure\\Prevision\\wala-properties>;<jar|org.eclipse.core.jobs_3.4.100.v20090429-1800.jar>;<jar|org.eclipse.core.resources_3.5.0.v20090512.jar>;<jar|org.eclipse.core.runtime_3.5.0.v20090525.jar>;<jar|org.eclipse.equinox.common_3.5.0.v20090520-1800.jar>;<jar|org.eclipse.osgi_3.5.0.v20090520.jar>;<jar|com.ibm.wala.shrike.jar>;<jar|com.ibm.wala.core.jar>;<jar|com.ibm.wala.core.tests.jar>
+excludes=<cl|D\:\\Projects\\Infrastructure\\Prevision\\wala-properties>;<cl|D\:\\Projects\\Infrastructure\\YicesWrapper\\bin>;<jar|org.eclipse.core.jobs_3.4.100.v20090429-1800.jar>;<jar|org.eclipse.core.resources_3.5.0.v20090512.jar>;<jar|org.eclipse.core.runtime_3.5.0.v20090525.jar>;<jar|org.eclipse.equinox.common_3.5.0.v20090520-1800.jar>;<jar|org.eclipse.osgi_3.5.0.v20090520.jar>;<jar|com.ibm.wala.shrike.jar>;<jar|com.ibm.wala.core.jar>;<jar|com.ibm.wala.core.tests.jar>
 includes=
