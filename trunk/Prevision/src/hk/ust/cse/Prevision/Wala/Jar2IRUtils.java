@@ -3,6 +3,7 @@ package hk.ust.cse.Prevision.Wala;
 import hk.ust.cse.Prevision.Utils;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.AbstractMap.SimpleEntry;
@@ -15,6 +16,7 @@ import com.ibm.wala.ipa.callgraph.AnalysisScope;
 import com.ibm.wala.ipa.cha.ClassHierarchy;
 import com.ibm.wala.shrikeBT.IInstruction;
 import com.ibm.wala.types.MethodReference;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.strings.Atom;
 import com.ibm.wala.util.warnings.WalaException;
 
@@ -49,7 +51,7 @@ class Jar2IRUtils {
   /**
    * find method reference according to method name and line number
    */
-  static MethodReference getMethodReference(ClassHierarchy cha, String methodName, int nLine) {
+  static MethodReference getMethodReference(ClassHierarchy cha, String methodName, int lineNo) {
     MethodReference mr = null;
     
     // get class name
@@ -81,16 +83,72 @@ class Jar2IRUtils {
       }
       Iterator<IMethod> methods = aClass.getAllMethods().iterator();
       while (methods.hasNext()) {
-        IMethod method = methods.next();
+        IMethod aMethod = methods.next();
         // method name matches?
-        String methName = declaringClass + "." + method.getName().toString();
+        String methName = declaringClass + "." + aMethod.getName().toString();
         if (methName.equals(methodName)) {
-          if (isMethodAtLine(method, nLine)) {
-            mr = method.getReference();
+          if (isMethodAtLine(aMethod, lineNo)) {
+            mr = aMethod.getReference();
             break;
           }
           else {
             System.out.println("Method " + methName + " found, but cannot verify line number");
+          }
+        }
+      }
+    }
+    
+    return mr;
+  }
+  
+  /**
+   * find method reference according to method name and line number
+   */
+  static MethodReference getMethodReference(ClassHierarchy cha, Method method) {
+    MethodReference mr = null;
+    
+    // get method name
+    String methodName = method.getDeclaringClass().getName() + "." + method.getName();
+    
+    // get class name
+    String clsName = methodName.replace('.', '/');
+    int index1 = clsName.lastIndexOf('/');
+    int index2 = clsName.lastIndexOf('/', index1 - 1) + 1;
+    clsName = clsName.substring(index2, index1);
+    int clsLength = clsName.length();
+    
+    // find class
+    Iterator<IClass> classes = cha.iterator();
+    while (classes.hasNext() && mr == null) {
+      IClass aClass = (IClass) classes.next();
+
+      // filter
+      Atom clsAtom = aClass.getName().getClassName();
+      if (clsAtom.length() != clsLength || 
+          clsAtom.getVal(clsLength-1) != clsName.charAt(clsLength-1) || 
+          clsAtom.getVal(0) != clsName.charAt(0) || 
+          !clsAtom.toString().equals(clsName)) {
+        continue;
+      }
+      
+      // class name matches?
+      String declaringClass = aClass.getName().toString();
+      declaringClass = Utils.getClassTypeJavaStr(declaringClass);
+      if (!methodName.startsWith(declaringClass)) {
+        continue;
+      }
+      Iterator<IMethod> methods = aClass.getAllMethods().iterator();
+      while (methods.hasNext()) {
+        IMethod aMethod = methods.next();
+        // method name matches?
+        String methName = declaringClass + "." + aMethod.getName().toString();
+        if (methName.equals(methodName)) {
+          if (isParametersSame(aMethod, method)) {
+            mr = aMethod.getReference();
+            break;
+          }
+          else {
+            System.out.println("Method " + methName + " found, but parameter types are different!");
           }
         }
       }
@@ -108,6 +166,29 @@ class Jar2IRUtils {
     else {
       return false;
     }
+  }
+  
+  private static boolean isParametersSame(IMethod method1, Method method2) {
+    boolean isSame = false;
+    
+    Class<?>[] paramTypes = method2.getParameterTypes();
+    int baseIndex = method1.isStatic() ? 0 : 1;
+    
+    if ((method1.getNumberOfParameters() - baseIndex) == paramTypes.length) {
+      isSame = true;
+      for (int i = 0; i < paramTypes.length; i++) {
+        TypeReference type1 = method1.getParameterType(i + baseIndex);
+        Class<?> type2      = paramTypes[i];
+        
+        String type1Name = Utils.toPrimitiveType(Utils.getClassTypeJavaStr(type1.getName().toString()));
+        String type2Name = Utils.toPrimitiveType(Utils.getClassTypeJavaStr(type2.getName()));
+        if (!type1Name.equals(type2Name)) {
+          isSame = false;
+          break;
+        }
+      }
+    }
+    return isSame;
   }
   
   // get the beginning and ending line number of the method
