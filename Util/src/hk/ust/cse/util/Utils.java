@@ -1,6 +1,10 @@
 package hk.ust.cse.util;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
@@ -75,6 +79,32 @@ public class Utils {
       // Ljava/lang/String -> java.lang.String
       return getClassTypeJavaStr(classType, false);
     }
+  }
+  
+  public static Method[] getPublicMethods(Class<?> cls) {
+    Method[] allPublicMethods = cls.getMethods();
+    // sort, because getMethods() does not guarantee order
+    Arrays.sort(allPublicMethods, new Comparator<Method>() {
+      public int compare(Method o1, Method o2) {
+        return o1.getName().compareTo(o2.getName());
+      }
+    });
+    return allPublicMethods;
+  }
+  
+  public static List<Field> getInheritedFields(Class<?> cls) {
+    List<Field> fields = new ArrayList<Field>();
+    for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
+      Field[] declFields = c.getDeclaredFields();
+      // sort, because getDeclaredFields() does not guarantee order
+      Arrays.sort(declFields, new Comparator<Field>() {
+        public int compare(Field o1, Field o2) {
+          return o1.getName().compareTo(o2.getName());
+        }
+      });
+      fields.addAll(Arrays.asList(declFields));
+    }
+    return fields;
   }
   
   public static Class<?> findClass(String clsName) {
