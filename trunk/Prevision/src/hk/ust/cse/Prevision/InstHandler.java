@@ -24,6 +24,7 @@ import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSACheckCastInstruction;
 import com.ibm.wala.ssa.SSAComparisonInstruction;
 import com.ibm.wala.ssa.SSAConditionalBranchInstruction;
+import com.ibm.wala.ssa.SSAConversionInstruction;
 import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstanceofInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
@@ -492,13 +493,96 @@ public class InstHandler {
     return preCond;
   }
 
+  @SuppressWarnings("unchecked")
   public static Predicate handle_conversion(Predicate postCond,
       SSAInstruction inst, BBorInstInfo instInfo) {
     Predicate preCond = null;
+    MethodMetaData methData = instInfo.methData;
+    Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
+    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
+    SSAConversionInstruction convInst = (SSAConversionInstruction) inst;
 
-    // not implement
-    preCond = new Predicate(postCond.getSMTStatements(), postCond.getVarMap(),
-        postCond.getPhiMap(), postCond.getDefMap());
+    // the variable(result) define by the conversion instruction
+    String toVal    = methData.getSymbol(convInst.getDef(), instInfo.valPrefix, newDefMap);
+    String fromVal  = methData.getSymbol(convInst.getUse(0), instInfo.valPrefix, newDefMap);
+    String fromType = convInst.getFromType().getName().toString();
+    String toType   = convInst.getToType().getName().toString();    
+    
+    // assign concrete variable to phi variable
+    List<Hashtable<String, ?>> rets =
+      assignPhiValue(postCond, methData, newVarMap, toVal);
+    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
+    newPhiMap = (Hashtable<String, String>) rets.get(1);
+    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    
+    List<List<String>> smtStatements = new ArrayList<List<String>>();
+    if (newVarMap.containsKey(toVal)) {
+      if (fromType.equals("I") || // from integer to float
+          fromType.equals("J") || 
+          fromType.equals("S")) {
+        // add new variables to varMap
+        newVarMap = addVars2VarMap(postCond, methData, newVarMap, fromVal, null);
+        
+        // toVal is not exist before conversion Instruction
+        newVarMap = substituteVarMapKey(postCond, methData, newVarMap, toVal, fromVal);
+      }
+      else if (fromType.equals("D") || // from float to integer
+               fromType.equals("F")) {
+        if (toType.equals("I") || 
+            toType.equals("J") || 
+            toType.equals("S")) {
+          
+          String convVal = null;
+          if (fromVal.startsWith("#!")) { // it is a constant number
+            int index = fromVal.lastIndexOf('.');
+            if (index >= 0) {
+              convVal = fromVal.substring(0, index);
+            }
+            else {
+              convVal = fromVal;
+            }
+          }
+          else {
+            // create a converted val
+            convVal = fromVal + "$1" /* first kind of conversion */;
+            
+            if (!newVarMap.containsKey(convVal)) {
+              // the converted integer should be: fromVal - 1 < convVal <= fromVal
+              List<String> smtStatement = null;
+              smtStatement = new ArrayList<String>();
+              smtStatement.add(convVal);
+              smtStatement.add("<=");
+              smtStatement.add(fromVal);
+              smtStatements.add(smtStatement);
+  
+              smtStatement = new ArrayList<String>();
+              smtStatement.add(convVal + " + #!1");
+              smtStatement.add(">");
+              smtStatement.add(fromVal);
+              smtStatements.add(smtStatement);
+              
+              // add new variables to varMap
+              newVarMap = addVars2VarMap(postCond, methData, newVarMap, fromVal, null);
+              newVarMap = addVars2VarMap(postCond, methData, newVarMap, convVal, null);
+              newVarMap = addVars2VarMap(postCond, methData, newVarMap, convVal + " + #!1", null);           
+            }
+          }
+          
+          // toVal is not exist before conversion Instruction
+          newVarMap = substituteVarMapKey(postCond, methData, newVarMap, toVal, convVal);
+        }
+      }
+      else {
+        // not implement
+      }
+    }
+    
+    // add smtStatments to smtStatement list
+    List<List<String>> newSMTStatements = addSMTStatments(
+        postCond.getSMTStatements(), smtStatements);
+    
+    preCond = new Predicate(newSMTStatements, newVarMap, newPhiMap, newDefMap);
     return preCond;
   }
   
@@ -1393,6 +1477,26 @@ public class InstHandler {
       preCond = handle_invokestatic(postCond, inst, instInfo);
       return preCond;
     }
+  }
+  
+  public static Predicate handle_monitorenter(Predicate postCond, 
+      SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond = null;
+
+    // not implement
+    preCond = new Predicate(postCond.getSMTStatements(), postCond.getVarMap(),
+        postCond.getPhiMap(), postCond.getDefMap());
+    return preCond;
+  }
+  
+  public static Predicate handle_monitorexit(Predicate postCond, 
+      SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond = null;
+
+    // not implement
+    preCond = new Predicate(postCond.getSMTStatements(), postCond.getVarMap(),
+        postCond.getPhiMap(), postCond.getDefMap());
+    return preCond;
   }
   
   @SuppressWarnings("unchecked")
