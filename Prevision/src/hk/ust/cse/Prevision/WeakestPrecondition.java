@@ -374,12 +374,12 @@ public class WeakestPrecondition {
         if (!infoItem.currentBB.isEntryBlock()) {
           Collection<ISSABasicBlock> normPredBB =
             cfg.getNormalPredecessors(infoItem.currentBB);
-          Collection<ISSABasicBlock> excpPredBB =
-            cfg.getExceptionalPredecessors(infoItem.currentBB);
+          //Collection<ISSABasicBlock> excpPredBB =
+          //  cfg.getExceptionalPredecessors(infoItem.currentBB);
           
           // iterate all exceptional predecessors
-          pushChildrenBlocks(excpPredBB, infoItem, precond, methData,
-              Predicate.NPE_SUCCESSOR, dfsStack, optionsAndStates.maxLoop, valPrefix);
+          //pushChildrenBlocks(excpPredBB, infoItem, precond, methData,
+          //    Predicate.NPE_SUCCESSOR, dfsStack, optionsAndStates.maxLoop, valPrefix);
           
           // iterate all normal predecessors
           pushChildrenBlocks(normPredBB, infoItem, precond, methData,
@@ -404,6 +404,7 @@ public class WeakestPrecondition {
           boolean canBreak = false;
           if (optionsAndStates.maxSmtCheck > 0 && ++smtChecked >= optionsAndStates.maxSmtCheck) {
             wpResult.setOverLimit(true);
+            System.out.println("Reached Maximum SMT Check Limit!");
             canBreak = true;
           }
           
@@ -416,6 +417,7 @@ public class WeakestPrecondition {
             // limit maximum number of satisfiable preconditions to retrieve
             if (optionsAndStates.maxRetrieve > 0 && ++satRetrieved >= optionsAndStates.maxRetrieve) {
               wpResult.setReachMaximum(true);
+              System.out.println("Reached Maximum Retrieve Limit!");
               canBreak = true;
             }
           }
@@ -582,6 +584,13 @@ public class WeakestPrecondition {
     List<ISSABasicBlock> notvisitedList = new ArrayList<ISSABasicBlock>();
     while (iterBB.hasNext()) {
       ISSABasicBlock basicBlock = iterBB.next();
+      
+      // make sure we are not pushing the current node again.
+      // Sometimes, a monitorexit node can be a child of itself, 
+      // making the search endless.
+      if (basicBlock.getNumber() == currentInfo.currentBB.getNumber()) {
+        continue;
+      }
       
       Integer count = visitedBB.get(basicBlock);
       if (count != null) {
@@ -767,7 +776,7 @@ public class WeakestPrecondition {
       
       // set options
       GlobalOptionsAndStates optionsAndStates = 
-        wp.new GlobalOptionsAndStates(false, false, false, 10, 50, 1, 3, callStack);
+        wp.new GlobalOptionsAndStates(false, false, false, 10, 5000, 1, 3, callStack);
       
       wp.compute(optionsAndStates, null);
       // wp.heapTracer();

@@ -44,21 +44,20 @@ public class Jar2IR {
     if (mr != null) {
       // Resolve the method name into the IMethod, the canonical representation of the method information.
       IMethod m = walaAnalyzer.getClassHierarchy().resolveMethod(mr);
-      if (m == null) {
-        // Throws an exception here
-        Assertions.UNREACHABLE("could not resolve " + mr);
-      }
-      
-      // Build the IR and cache it.
-      ir = walaAnalyzer.getAnalysisCache().getSSACache().findOrCreateIR(m, 
-          Everywhere.EVERYWHERE, walaAnalyzer.getAnalysisOptions().getSSAOptions());
 
-      if (ir == null) {
-        // Throws an exception here
-        Assertions.UNREACHABLE("Null IR for " + m);
-      }
+      // if resolve to IMethod succeed
+      if (m != null && !m.isAbstract() && !m.isNative()) {
+        // Build the IR and cache it.
+        ir = walaAnalyzer.getAnalysisCache().getSSACache().findOrCreateIR(m, 
+            Everywhere.EVERYWHERE, walaAnalyzer.getAnalysisOptions().getSSAOptions());
 
-      //System.err.println(ir.toString());
+        if (ir == null) {
+          // Throws an exception here
+          Assertions.UNREACHABLE("Null IR for " + m);
+        }
+
+        System.err.println(ir.toString());
+      }
     }
     return ir;
   }
