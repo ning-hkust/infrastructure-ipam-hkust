@@ -182,6 +182,11 @@ public class SMTVariableMap {
         m_allVarMap.put(finalVar, smtFinalVar);
       }
       else {
+        // neglect Caught/Triggered exception flag variable
+        if (finalVar.startsWith("Triggered ") || finalVar.startsWith("Caught ")) {
+          continue;
+        }
+        
         System.err.println("Unable to analyze variable: " + finalVar);
       }
     }
