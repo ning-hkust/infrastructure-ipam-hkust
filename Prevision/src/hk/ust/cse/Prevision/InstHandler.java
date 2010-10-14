@@ -92,6 +92,13 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
+      
+      // set caught variable into triggered variable, 
+      // indicating the caught exception is trigger by the instruction
+      String caughtVar  = "Caught Ljava/lang/NullPointerException";
+      String triggerVar = "Triggered Ljava/lang/NullPointerException";
+      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
+      
       break;
     }
     
@@ -167,9 +174,17 @@ public class InstHandler {
       TypeReference excepType = 
         methData.getExceptionType(instInfo.currentBB, instInfo.sucessorBB);
       
+      String excepTypeStr = null;
       if (excepType != null) {
-        String excepTypeStr = excepType.toString();
-        if (excepTypeStr.equals("<Primordial,Ljava/lang/NullPointerException>")) {
+        excepTypeStr = excepType.getName().toString();
+      }
+      else {
+        // try to find exception type string from postcond
+        excepTypeStr = findCaughtExceptionTypeStr(postCond);
+      }
+      
+      if (excepTypeStr != null) {
+        if (excepTypeStr.equals("Ljava/lang/NullPointerException")) {
           smtStatement = new ArrayList<String>();
           smtStatement.add(arrayRef);
           smtStatement.add("==");
@@ -178,8 +193,14 @@ public class InstHandler {
 
           // add new variables to varMap
           newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
+          
+          // set caught variable into triggered variable, 
+          // indicating the caught exception is trigger by the instruction
+          String caughtVar  = "Caught Ljava/lang/NullPointerException";
+          String triggerVar = "Triggered Ljava/lang/NullPointerException";
+          newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
         }
-        else if (excepTypeStr.equals("<Primordial,Ljava/lang/ArrayIndexOutOfBoundsException>")) {
+        else if (excepTypeStr.equals("Ljava/lang/ArrayIndexOutOfBoundsException")) {
           smtStatement = new ArrayList<String>();
           smtStatement.add(arrayRef);
           smtStatement.add("!=");
@@ -198,14 +219,21 @@ public class InstHandler {
           // add new variables to varMap
           newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, arrayIndex);
           newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef + ".length", "#!0");
+          
+          // set caught variable into triggered variable, 
+          // indicating the caught exception is trigger by the instruction
+          String caughtVar  = "Caught Ljava/lang/ArrayIndexOutOfBoundsException";
+          String triggerVar = "Triggered Ljava/lang/ArrayIndexOutOfBoundsException";
+          newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
         }
         else {
           // cannot decide which kind of exception it is!
         }
       }
       else {
-        // cannot find an explicit catch block in the current method
+        System.err.println("Failed to obtain the exception type string!");
       }
+      break;
     }
     
     // add smtStatments to smtStatement list
@@ -269,9 +297,17 @@ public class InstHandler {
       TypeReference excepType = 
         methData.getExceptionType(instInfo.currentBB, instInfo.sucessorBB);
       
+      String excepTypeStr = null;
       if (excepType != null) {
-        String excepTypeStr = excepType.toString();
-        if (excepTypeStr.equals("<Primordial,Ljava/lang/NullPointerException>")) {
+        excepTypeStr = excepType.getName().toString();
+      }
+      else {
+        // try to find exception type string from postcond
+        excepTypeStr = findCaughtExceptionTypeStr(postCond);
+      }
+      
+      if (excepTypeStr != null) {
+        if (excepTypeStr.equals("Ljava/lang/NullPointerException")) {
           smtStatement = new ArrayList<String>();
           smtStatement.add(arrayRef);
           smtStatement.add("==");
@@ -280,8 +316,14 @@ public class InstHandler {
   
           // add new variables to varMap
           newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
+          
+          // set caught variable into triggered variable, 
+          // indicating the caught exception is trigger by the instruction
+          String caughtVar  = "Caught Ljava/lang/NullPointerException";
+          String triggerVar = "Triggered Ljava/lang/NullPointerException";
+          newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
         }
-        else if (excepTypeStr.equals("<Primordial,Ljava/lang/ArrayIndexOutOfBoundsException>")) {
+        else if (excepTypeStr.equals("Ljava/lang/ArrayIndexOutOfBoundsException")) {
           smtStatement = new ArrayList<String>();
           smtStatement.add(arrayRef);
           smtStatement.add("!=");
@@ -300,14 +342,21 @@ public class InstHandler {
           // add new variables to varMap
           newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, arrayIndex);
           newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef + ".length", "#!0");
+          
+          // set caught variable into triggered variable, 
+          // indicating the caught exception is trigger by the instruction
+          String caughtVar  = "Caught Ljava/lang/ArrayIndexOutOfBoundsException";
+          String triggerVar = "Triggered Ljava/lang/ArrayIndexOutOfBoundsException";
+          newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
         }
         else {
           // cannot decide which kind of exception it is!
         }
       }
       else {
-        // cannot find an explicit catch block in the current method
+        System.err.println("Failed to obtain the exception type string!");
       }
+      break;
     }
     
     // add smtStatments to smtStatement list
@@ -403,16 +452,21 @@ public class InstHandler {
     newVarMap = (Hashtable<String, List<String>>) rets.get(0);
     newPhiMap = (Hashtable<String, String>) rets.get(1);
     newDefMap = (Hashtable<String, Integer>) rets.get(2);
-
+    
+    // get the declared type of the exception
+    TypeReference excepType = methData.getExceptionType(instInfo.currentBB);
+    String excepTypeStr = excepType.getName().toString();
+    
     // the variable define by the new instruction
     if (newVarMap.containsKey(def)) {
-      // get the declared type of the exception
-      TypeReference excepType = methData.getExceptionType(instInfo.currentBB);      
-      String excepTypeStr = excepType.getName().toString();
       // def is not exist before catch Instruction
       newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def,
           "FreshInstanceOf(" + excepTypeStr + ")");
     }
+    
+    // add a caught variable to indicate "coming from a catch block of 
+    // some exception type", and expect to meet an exception triggering point
+    newVarMap = addVars2VarMap(postCond, methData, newVarMap, "Caught " + excepTypeStr, null);
 
     preCond = new Predicate(postCond.getSMTStatements(), newVarMap, newPhiMap, newDefMap);
     return preCond;
@@ -481,6 +535,12 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, val, subTypeStr);
+      
+      // set caught variable into triggered variable, 
+      // indicating the caught exception is trigger by the instruction
+      String caughtVar  = "Caught Ljava/lang/ClassCastException";
+      String triggerVar = "Triggered Ljava/lang/ClassCastException";
+      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
       break;
     }
 
@@ -783,6 +843,12 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
+      
+      // set caught variable into triggered variable, 
+      // indicating the caught exception is trigger by the instruction
+      String caughtVar  = "Caught Ljava/lang/NullPointerException";
+      String triggerVar = "Triggered Ljava/lang/NullPointerException";
+      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
       break;
     }
 
@@ -952,6 +1018,12 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
+      
+      // set caught variable into triggered variable, 
+      // indicating the caught exception is trigger by the instruction
+      String caughtVar  = "Caught Ljava/lang/NullPointerException";
+      String triggerVar = "Triggered Ljava/lang/NullPointerException";
+      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
       break;
     }
 
@@ -1038,6 +1110,12 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
+      
+      // set caught variable into triggered variable, 
+      // indicating the caught exception is trigger by the instruction
+      String caughtVar  = "Caught Ljava/lang/NullPointerException";
+      String triggerVar = "Triggered Ljava/lang/NullPointerException";
+      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
       break;
     }
 
@@ -1124,6 +1202,12 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
+      
+      // set caught variable into triggered variable, 
+      // indicating the caught exception is trigger by the instruction
+      String caughtVar  = "Caught Ljava/lang/NullPointerException";
+      String triggerVar = "Triggered Ljava/lang/NullPointerException";
+      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
       break;
     }
 
@@ -1301,6 +1385,12 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
+      
+      // set caught variable into triggered variable, 
+      // indicating the caught exception is trigger by the instruction
+      String caughtVar  = "Caught Ljava/lang/NullPointerException";
+      String triggerVar = "Triggered Ljava/lang/NullPointerException";
+      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
       break;
     }
 
@@ -1417,6 +1507,12 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
+      
+      // set caught variable into triggered variable, 
+      // indicating the caught exception is trigger by the instruction
+      String caughtVar  = "Caught Ljava/lang/NullPointerException";
+      String triggerVar = "Triggered Ljava/lang/NullPointerException";
+      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
       break;
     }
 
@@ -1720,6 +1816,12 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
+      
+      // set caught variable into triggered variable, 
+      // indicating the caught exception is trigger by the instruction
+      String caughtVar  = "Caught Ljava/lang/NullPointerException";
+      String triggerVar = "Triggered Ljava/lang/NullPointerException";
+      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, caughtVar, triggerVar);
       break;
     }
 
@@ -2331,5 +2433,21 @@ public class InstHandler {
     }
     
     return defMap;
+  }
+  
+  /**
+   * Assuming there is at most one 'Caught ...' at a time.
+   */
+  private static String findCaughtExceptionTypeStr(Predicate predicate) {
+    String caughtStr = null;
+    Enumeration<String> vars = predicate.getVarMap().keys();
+    while (vars.hasMoreElements()) {
+      String var = (String) vars.nextElement();
+      if (var.startsWith("Caught ")) {
+        caughtStr = var.substring(7);
+        break;
+      }
+    }
+    return caughtStr;
   }
 }
