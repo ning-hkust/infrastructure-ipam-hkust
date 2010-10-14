@@ -17,9 +17,11 @@ import com.ibm.wala.shrikeBT.ConstantInstruction;
 import com.ibm.wala.shrikeBT.IInstruction;
 import com.ibm.wala.shrikeCT.InvalidClassFileException;
 import com.ibm.wala.ssa.IR;
+import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSACFG;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SymbolTable;
+import com.ibm.wala.types.TypeReference;
 
 public class MethodMetaData {
   public MethodMetaData(IR ir) {
@@ -237,6 +239,26 @@ public class MethodMetaData {
 
   public boolean isStatic() {
     return m_ir.getMethod().isStatic();
+  }
+  
+  public TypeReference getExceptionType(ISSABasicBlock currentBB, ISSABasicBlock catchBB) {
+    TypeReference exceptionType = null;
+    List<ISSABasicBlock> allCatchBB = 
+      m_ir.getControlFlowGraph().getExceptionalSuccessors(currentBB);
+    if (allCatchBB.contains(catchBB)) {
+      exceptionType = getExceptionType(catchBB);
+    }
+    return exceptionType;
+  }
+  
+  public TypeReference getExceptionType(ISSABasicBlock catchBB) {
+    TypeReference exceptionType = null;
+    Iterator<TypeReference> allCaughtExcepTypes = catchBB.getCaughtExceptionTypes();
+    while (allCaughtExcepTypes.hasNext()) {
+      exceptionType = (TypeReference) allCaughtExcepTypes.next();
+      break;  // can there be more than one?
+    }
+    return exceptionType;
   }
 
   public String getConstantInstructionStr(int nInstruction) {

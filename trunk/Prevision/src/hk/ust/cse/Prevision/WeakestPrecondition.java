@@ -374,12 +374,12 @@ public class WeakestPrecondition {
         if (!infoItem.currentBB.isEntryBlock()) {
           Collection<ISSABasicBlock> normPredBB =
             cfg.getNormalPredecessors(infoItem.currentBB);
-          //Collection<ISSABasicBlock> excpPredBB =
-          //  cfg.getExceptionalPredecessors(infoItem.currentBB);
+          Collection<ISSABasicBlock> excpPredBB =
+            cfg.getExceptionalPredecessors(infoItem.currentBB);
           
           // iterate all exceptional predecessors
-          //pushChildrenBlocks(excpPredBB, infoItem, precond, methData,
-          //    Predicate.NPE_SUCCESSOR, dfsStack, optionsAndStates.maxLoop, valPrefix);
+          pushChildrenBlocks(excpPredBB, infoItem, precond, methData,
+              Predicate.EXCEPTIONAL_SUCCESSOR, dfsStack, optionsAndStates.maxLoop, valPrefix);
           
           // iterate all normal predecessors
           pushChildrenBlocks(normPredBB, infoItem, precond, methData,
@@ -533,6 +533,11 @@ public class WeakestPrecondition {
       // get previous inst
       currInstIndex--;
       lastInst = false;
+    }
+    
+    // handle catch instructions at the entry of a catch block
+    if (infoItem.currentBB.isCatchBlock()) {
+      preCond = InstHandler.handle_catch(preCond, null, infoItem);
     }
     
     // handle phi instructions last if any
