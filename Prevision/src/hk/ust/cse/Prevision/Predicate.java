@@ -24,10 +24,8 @@ import com.ibm.wala.ssa.SSAInstruction;
 public class Predicate {
   public enum SMT_RESULT {SAT, UNSAT, ERROR, TIMEOUT, STACK_OVERFLOW}
   
-  public static final int NORMAL_SUCCESSOR = 0;
-  public static final int NPE_SUCCESSOR    = 1;
-  public static final int OOB_SUCCESSOR    = 2;
-  public static final int CCE_SUCCESSOR    = 3;
+  public static final int NORMAL_SUCCESSOR      = 0;
+  public static final int EXCEPTIONAL_SUCCESSOR = 1;
 
   private static final String s_regExpInstStr = "(?:v[\\d]+ = )*([\\p{Alpha}]+[ ]*[\\p{Alpha}]+)(?:\\([\\w]+\\))*(?: <[ \\S]+)*";
   private static final Pattern s_instPattern  = Pattern.compile(s_regExpInstStr);

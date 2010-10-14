@@ -25,6 +25,7 @@ import com.ibm.wala.ssa.SSACheckCastInstruction;
 import com.ibm.wala.ssa.SSAComparisonInstruction;
 import com.ibm.wala.ssa.SSAConditionalBranchInstruction;
 import com.ibm.wala.ssa.SSAConversionInstruction;
+import com.ibm.wala.ssa.SSAGetCaughtExceptionInstruction;
 import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstanceofInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
@@ -37,6 +38,8 @@ import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SSASwitchInstruction;
 import com.ibm.wala.ssa.SSAThrowInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
+import com.ibm.wala.ssa.SSACFG.ExceptionHandlerBasicBlock;
+import com.ibm.wala.types.TypeReference;
 
 public class InstHandler {
   
@@ -79,7 +82,8 @@ public class InstHandler {
       String arrayLengthStr = arrayRef + ".length";
       newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, arrayLengthStr);
       break;
-    case Predicate.NPE_SUCCESSOR:
+    case Predicate.EXCEPTIONAL_SUCCESSOR:
+      /* can only be NPE */
       smtStatement = new ArrayList<String>();
       smtStatement.add(arrayRef);
       smtStatement.add("==");
@@ -88,10 +92,6 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
-
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, ""/* exc */,
-          "FreshInstanceOf(NullPointerException)");
       break;
     }
     
@@ -163,44 +163,44 @@ public class InstHandler {
       arrayLoadStr.append("]");
       newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, arrayLoadStr.toString());
       break;
-    case Predicate.NPE_SUCCESSOR:
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(arrayRef);
-      smtStatement.add("==");
-      smtStatement.add("null");
-      smtStatements.add(smtStatement);
+    case Predicate.EXCEPTIONAL_SUCCESSOR:
+      TypeReference excepType = 
+        methData.getExceptionType(instInfo.currentBB, instInfo.sucessorBB);
+      
+      String excepTypeStr = excepType.toString();
+      if (excepTypeStr.equals("<Primordial,Ljava/lang/NullPointerException>")) {
+        smtStatement = new ArrayList<String>();
+        smtStatement.add(arrayRef);
+        smtStatement.add("==");
+        smtStatement.add("null");
+        smtStatements.add(smtStatement);
 
-      // add new variables to varMap
-      newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
-
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, ""/* exc */, 
-          "FreshInstanceOf(NullPointerException)");
-      break;
-    case Predicate.OOB_SUCCESSOR:
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(arrayRef);
-      smtStatement.add("!=");
-      smtStatement.add("null");
-      smtStatements.add(smtStatement);
-      
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(arrayIndex);
-      smtStatement.add("<");
-      smtStatement.add("#!0");
-      smtStatement.add(arrayIndex);
-      smtStatement.add(">=");
-      smtStatement.add("arrayRef" + ".length");
-      smtStatements.add(smtStatement);
-      
-      // add new variables to varMap
-      newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, arrayIndex);
-      newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef + ".length", "#!0");
-      
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, ""/* exc */, 
-          "FreshInstanceOf(IndexOutOfBoundsException)");
-      break;
+        // add new variables to varMap
+        newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
+      }
+      else if (excepTypeStr.equals("<Primordial,Ljava/lang/ArrayIndexOutOfBoundsException>")) {
+        smtStatement = new ArrayList<String>();
+        smtStatement.add(arrayRef);
+        smtStatement.add("!=");
+        smtStatement.add("null");
+        smtStatements.add(smtStatement);
+        
+        smtStatement = new ArrayList<String>();
+        smtStatement.add(arrayIndex);
+        smtStatement.add("<");
+        smtStatement.add("#!0");
+        smtStatement.add(arrayIndex);
+        smtStatement.add(">=");
+        smtStatement.add(arrayRef + ".length");
+        smtStatements.add(smtStatement);
+        
+        // add new variables to varMap
+        newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, arrayIndex);
+        newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef + ".length", "#!0");
+      }
+      else {
+        // cannot decide which kind of exception it is!
+      }
     }
     
     // add smtStatments to smtStatement list
@@ -260,44 +260,44 @@ public class InstHandler {
       arrayStoreStr.append("]");
       newVarMap = substituteVarMapKey(postCond, methData, newVarMap, arrayStoreStr.toString(), storeValue);
       break;
-    case Predicate.NPE_SUCCESSOR:
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(arrayRef);
-      smtStatement.add("==");
-      smtStatement.add("null");
-      smtStatements.add(smtStatement);
-
-      // add new variables to varMap
-      newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
-
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, ""/* exc */,
-          "FreshInstanceOf(NullPointerException)");
-      break;
-    case Predicate.OOB_SUCCESSOR:
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(arrayRef);
-      smtStatement.add("!=");
-      smtStatement.add("null");
-      smtStatements.add(smtStatement);
-
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(arrayIndex);
-      smtStatement.add("<");
-      smtStatement.add("#!0");
-      smtStatement.add(arrayIndex);
-      smtStatement.add(">=");
-      smtStatement.add("arrayRef" + ".length");
-      smtStatements.add(smtStatement);
+    case Predicate.EXCEPTIONAL_SUCCESSOR:
+      TypeReference excepType = 
+        methData.getExceptionType(instInfo.currentBB, instInfo.sucessorBB);
       
-      // add new variables to varMap
-      newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, arrayIndex);
-      newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef + ".length", "#!0");
-      
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, ""/* exc */,
-          "FreshInstanceOf(IndexOutOfBoundsException)");
-      break;
+      String excepTypeStr = excepType.toString();
+      if (excepTypeStr.equals("<Primordial,Ljava/lang/NullPointerException>")) {
+        smtStatement = new ArrayList<String>();
+        smtStatement.add(arrayRef);
+        smtStatement.add("==");
+        smtStatement.add("null");
+        smtStatements.add(smtStatement);
+
+        // add new variables to varMap
+        newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
+      }
+      else if (excepTypeStr.equals("<Primordial,Ljava/lang/ArrayIndexOutOfBoundsException>")) {
+        smtStatement = new ArrayList<String>();
+        smtStatement.add(arrayRef);
+        smtStatement.add("!=");
+        smtStatement.add("null");
+        smtStatements.add(smtStatement);
+
+        smtStatement = new ArrayList<String>();
+        smtStatement.add(arrayIndex);
+        smtStatement.add("<");
+        smtStatement.add("#!0");
+        smtStatement.add(arrayIndex);
+        smtStatement.add(">=");
+        smtStatement.add(arrayRef + ".length");
+        smtStatements.add(smtStatement);
+        
+        // add new variables to varMap
+        newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, arrayIndex);
+        newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef + ".length", "#!0");
+      }
+      else {
+        // cannot decide which kind of exception it is!
+      }
     }
     
     // add smtStatments to smtStatement list
@@ -372,6 +372,42 @@ public class InstHandler {
     return preCond;
   }
   
+  // handler for catch instruction
+  @SuppressWarnings("unchecked")
+  public static Predicate handle_catch(Predicate postCond,
+      SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond = null;
+    MethodMetaData methData = instInfo.methData;
+    Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
+    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
+    SSAGetCaughtExceptionInstruction catchInst = 
+      ((ExceptionHandlerBasicBlock) instInfo.currentBB).getCatchInstruction();
+
+    // the e defined by catch
+    String def = methData.getSymbol(catchInst.getDef(), instInfo.valPrefix, newDefMap);
+
+    // assign concrete variable to phi variable
+    List<Hashtable<String, ?>> rets =
+      assignPhiValue(postCond, methData, newVarMap, def);
+    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
+    newPhiMap = (Hashtable<String, String>) rets.get(1);
+    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+
+    // the variable define by the new instruction
+    if (newVarMap.containsKey(def)) {
+      // get the declared type of the exception
+      TypeReference excepType = methData.getExceptionType(instInfo.currentBB);      
+      String excepTypeStr = excepType.getName().toString();
+      // def is not exist before catch Instruction
+      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def,
+          "FreshInstanceOf(" + excepTypeStr + ")");
+    }
+
+    preCond = new Predicate(postCond.getSMTStatements(), newVarMap, newPhiMap, newDefMap);
+    return preCond;
+  }
+  
   // handler for checkcast instruction
   @SuppressWarnings("unchecked")
   public static Predicate handle_checkcast(Predicate postCond,
@@ -419,7 +455,8 @@ public class InstHandler {
         newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, val);
       }
       break;
-    case Predicate.CCE_SUCCESSOR:
+    case Predicate.EXCEPTIONAL_SUCCESSOR:
+      /* can only be CCE */
       smtStatement = new ArrayList<String>();
       smtStatement.add(val);
       smtStatement.add("!=");
@@ -434,10 +471,6 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, val, subTypeStr);
-
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, ""/* exc */,
-          "FreshInstanceOf(ClassCastException)");
       break;
     }
 
@@ -730,7 +763,8 @@ public class InstHandler {
         newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, declaredField);
       }
       break;
-    case Predicate.NPE_SUCCESSOR:
+    case Predicate.EXCEPTIONAL_SUCCESSOR:
+      /* can only be NPE */
       smtStatement = new ArrayList<String>();
       smtStatement.add(ref);
       smtStatement.add("==");
@@ -739,10 +773,6 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, ""/* exc */,
-          "FreshInstanceOf(NullPointerException)");
       break;
     }
 
@@ -902,7 +932,8 @@ public class InstHandler {
         newVarMap = addVars2VarMap(postCond, methData, newVarMap, params);
       }
       break;
-    case Predicate.NPE_SUCCESSOR:
+    case Predicate.EXCEPTIONAL_SUCCESSOR:
+      /* can only be NPE */
       smtStatement = new ArrayList<String>();
       smtStatement.add(ref);
       smtStatement.add("==");
@@ -911,10 +942,6 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, ""/* exc */,
-          "FreshInstanceOf(NullPointerException)");
       break;
     }
 
@@ -991,7 +1018,8 @@ public class InstHandler {
         newVarMap = addVars2VarMap(postCond, methData, newVarMap, params);
       }
       break;
-    case Predicate.NPE_SUCCESSOR:
+    case Predicate.EXCEPTIONAL_SUCCESSOR:
+      /* can only be NPE */
       smtStatement = new ArrayList<String>();
       smtStatement.add(ref);
       smtStatement.add("==");
@@ -1000,10 +1028,6 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, ""/* exc */,
-          "FreshInstanceOf(NullPointerException)");
       break;
     }
 
@@ -1080,7 +1104,8 @@ public class InstHandler {
         newVarMap = addVars2VarMap(postCond, methData, newVarMap, params);
       }
       break;
-    case Predicate.NPE_SUCCESSOR:
+    case Predicate.EXCEPTIONAL_SUCCESSOR:
+      /* can only be NPE */
       smtStatement = new ArrayList<String>();
       smtStatement.add(ref);
       smtStatement.add("==");
@@ -1089,10 +1114,6 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, ""/* exc */,
-          "FreshInstanceOf(NullPointerException)");
       break;
     }
 
@@ -1185,7 +1206,7 @@ public class InstHandler {
     for (int i = 1; i < count; i++) {
       params.add(methData.getSymbol(invokevirtualInst.getUse(i), instInfo.valPrefix, newDefMap));
     }
-
+    
     List<String> smtStatement = null;
     List<List<String>> smtStatements = new ArrayList<List<String>>();
     switch (instInfo.sucessorType) {
@@ -1260,7 +1281,8 @@ public class InstHandler {
         preCond = handle_invokevirtual(postCond, inst, instInfo);
         return preCond;
       }
-    case Predicate.NPE_SUCCESSOR:
+    case Predicate.EXCEPTIONAL_SUCCESSOR:
+      /* can only be NPE */
       smtStatement = new ArrayList<String>();
       smtStatement.add(ref);
       smtStatement.add("==");
@@ -1269,10 +1291,6 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap,
-          ""/* exc */, "FreshInstanceOf(NullPointerException)");
       break;
     }
 
@@ -1379,7 +1397,8 @@ public class InstHandler {
         preCond = handle_invokespecial(postCond, inst, instInfo);
         return preCond;
       }
-    case Predicate.NPE_SUCCESSOR:
+    case Predicate.EXCEPTIONAL_SUCCESSOR:
+      /* can only be NPE */
       smtStatement = new ArrayList<String>();
       smtStatement.add(ref);
       smtStatement.add("==");
@@ -1388,10 +1407,6 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap,
-          ""/* exc */, "FreshInstanceOf(NullPointerException)");
       break;
     }
 
@@ -1685,7 +1700,8 @@ public class InstHandler {
         newVarMap = substituteVarMapKey(postCond, methData, newVarMap, declaredField, val);
       }
       break;
-    case Predicate.NPE_SUCCESSOR:
+    case Predicate.EXCEPTIONAL_SUCCESSOR:
+      /* can only be NPE */
       smtStatement = new ArrayList<String>();
       smtStatement.add(ref);
       smtStatement.add("==");
@@ -1694,10 +1710,6 @@ public class InstHandler {
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-
-      // exc is not exist before this instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, ""/* exc */,
-          "FreshInstanceOf(NullPointerException)");
       break;
     }
 
