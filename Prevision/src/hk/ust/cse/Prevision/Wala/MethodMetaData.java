@@ -248,6 +248,9 @@ public class MethodMetaData {
     if (allCatchBB.contains(catchBB)) {
       exceptionType = getExceptionType(catchBB);
     }
+    
+    // the return value is null if catchBB is the exit block, which 
+    // means we cannot find an explicit catch block in the current method.
     return exceptionType;
   }
   
