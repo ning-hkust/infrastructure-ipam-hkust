@@ -167,39 +167,44 @@ public class InstHandler {
       TypeReference excepType = 
         methData.getExceptionType(instInfo.currentBB, instInfo.sucessorBB);
       
-      String excepTypeStr = excepType.toString();
-      if (excepTypeStr.equals("<Primordial,Ljava/lang/NullPointerException>")) {
-        smtStatement = new ArrayList<String>();
-        smtStatement.add(arrayRef);
-        smtStatement.add("==");
-        smtStatement.add("null");
-        smtStatements.add(smtStatement);
+      if (excepType != null) {
+        String excepTypeStr = excepType.toString();
+        if (excepTypeStr.equals("<Primordial,Ljava/lang/NullPointerException>")) {
+          smtStatement = new ArrayList<String>();
+          smtStatement.add(arrayRef);
+          smtStatement.add("==");
+          smtStatement.add("null");
+          smtStatements.add(smtStatement);
 
-        // add new variables to varMap
-        newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
-      }
-      else if (excepTypeStr.equals("<Primordial,Ljava/lang/ArrayIndexOutOfBoundsException>")) {
-        smtStatement = new ArrayList<String>();
-        smtStatement.add(arrayRef);
-        smtStatement.add("!=");
-        smtStatement.add("null");
-        smtStatements.add(smtStatement);
-        
-        smtStatement = new ArrayList<String>();
-        smtStatement.add(arrayIndex);
-        smtStatement.add("<");
-        smtStatement.add("#!0");
-        smtStatement.add(arrayIndex);
-        smtStatement.add(">=");
-        smtStatement.add(arrayRef + ".length");
-        smtStatements.add(smtStatement);
-        
-        // add new variables to varMap
-        newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, arrayIndex);
-        newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef + ".length", "#!0");
+          // add new variables to varMap
+          newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
+        }
+        else if (excepTypeStr.equals("<Primordial,Ljava/lang/ArrayIndexOutOfBoundsException>")) {
+          smtStatement = new ArrayList<String>();
+          smtStatement.add(arrayRef);
+          smtStatement.add("!=");
+          smtStatement.add("null");
+          smtStatements.add(smtStatement);
+          
+          smtStatement = new ArrayList<String>();
+          smtStatement.add(arrayIndex);
+          smtStatement.add("<");
+          smtStatement.add("#!0");
+          smtStatement.add(arrayIndex);
+          smtStatement.add(">=");
+          smtStatement.add(arrayRef + ".length");
+          smtStatements.add(smtStatement);
+          
+          // add new variables to varMap
+          newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, arrayIndex);
+          newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef + ".length", "#!0");
+        }
+        else {
+          // cannot decide which kind of exception it is!
+        }
       }
       else {
-        // cannot decide which kind of exception it is!
+        // cannot find an explicit catch block in the current method
       }
     }
     
@@ -264,39 +269,44 @@ public class InstHandler {
       TypeReference excepType = 
         methData.getExceptionType(instInfo.currentBB, instInfo.sucessorBB);
       
-      String excepTypeStr = excepType.toString();
-      if (excepTypeStr.equals("<Primordial,Ljava/lang/NullPointerException>")) {
-        smtStatement = new ArrayList<String>();
-        smtStatement.add(arrayRef);
-        smtStatement.add("==");
-        smtStatement.add("null");
-        smtStatements.add(smtStatement);
-
-        // add new variables to varMap
-        newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
-      }
-      else if (excepTypeStr.equals("<Primordial,Ljava/lang/ArrayIndexOutOfBoundsException>")) {
-        smtStatement = new ArrayList<String>();
-        smtStatement.add(arrayRef);
-        smtStatement.add("!=");
-        smtStatement.add("null");
-        smtStatements.add(smtStatement);
-
-        smtStatement = new ArrayList<String>();
-        smtStatement.add(arrayIndex);
-        smtStatement.add("<");
-        smtStatement.add("#!0");
-        smtStatement.add(arrayIndex);
-        smtStatement.add(">=");
-        smtStatement.add(arrayRef + ".length");
-        smtStatements.add(smtStatement);
-        
-        // add new variables to varMap
-        newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, arrayIndex);
-        newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef + ".length", "#!0");
+      if (excepType != null) {
+        String excepTypeStr = excepType.toString();
+        if (excepTypeStr.equals("<Primordial,Ljava/lang/NullPointerException>")) {
+          smtStatement = new ArrayList<String>();
+          smtStatement.add(arrayRef);
+          smtStatement.add("==");
+          smtStatement.add("null");
+          smtStatements.add(smtStatement);
+  
+          // add new variables to varMap
+          newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
+        }
+        else if (excepTypeStr.equals("<Primordial,Ljava/lang/ArrayIndexOutOfBoundsException>")) {
+          smtStatement = new ArrayList<String>();
+          smtStatement.add(arrayRef);
+          smtStatement.add("!=");
+          smtStatement.add("null");
+          smtStatements.add(smtStatement);
+  
+          smtStatement = new ArrayList<String>();
+          smtStatement.add(arrayIndex);
+          smtStatement.add("<");
+          smtStatement.add("#!0");
+          smtStatement.add(arrayIndex);
+          smtStatement.add(">=");
+          smtStatement.add(arrayRef + ".length");
+          smtStatements.add(smtStatement);
+          
+          // add new variables to varMap
+          newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, arrayIndex);
+          newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef + ".length", "#!0");
+        }
+        else {
+          // cannot decide which kind of exception it is!
+        }
       }
       else {
-        // cannot decide which kind of exception it is!
+        // cannot find an explicit catch block in the current method
       }
     }
     
