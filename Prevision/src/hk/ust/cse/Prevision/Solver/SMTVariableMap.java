@@ -183,7 +183,7 @@ public class SMTVariableMap {
       }
       else {
         // neglect Caught/Triggered exception flag variable
-        if (finalVar.startsWith("Triggered ") || finalVar.startsWith("Caught ")) {
+        if (finalVar.startsWith("Triggered") || finalVar.startsWith("Caught")) {
           continue;
         }
         
