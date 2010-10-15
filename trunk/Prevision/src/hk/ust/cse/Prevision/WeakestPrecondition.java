@@ -371,28 +371,28 @@ public class WeakestPrecondition {
           dfsStack.push(infoItem);
         }
 
+        // check whether the caught exception is/can be triggered
+        if (!infoItem.currentBB.isCatchBlock() && 
+            !infoItem.currentBB.isExitBlock() && 
+            isCatchNeverTriggered(precond)) {
+          // the caught exception is not trigger, no need to go further
+          System.out.println("The caught exception is not triggered! Don't need to go futher.");
+          continue;
+        }
+        
         if (!infoItem.currentBB.isEntryBlock()) {
-          // check whether the caught exception is triggered
-          if (!infoItem.currentBB.isCatchBlock() && 
-              !infoItem.currentBB.isExitBlock() && 
-              !isExceptionTriggered(precond)) {
-            // the caught exception is not trigger, no need to go further
-            System.out.println("The caught exception is not triggered! Don't need to go futher.");
-          }
-          else {
-            Collection<ISSABasicBlock> normPredBB =
-              cfg.getNormalPredecessors(infoItem.currentBB);
-            Collection<ISSABasicBlock> excpPredBB =
-              cfg.getExceptionalPredecessors(infoItem.currentBB);
-            
-            // iterate all exceptional predecessors
-            pushChildrenBlocks(excpPredBB, infoItem, precond, methData,
-                Predicate.EXCEPTIONAL_SUCCESSOR, dfsStack, optionsAndStates.maxLoop, valPrefix);
-            
-            // iterate all normal predecessors
-            pushChildrenBlocks(normPredBB, infoItem, precond, methData,
-                Predicate.NORMAL_SUCCESSOR, dfsStack, optionsAndStates.maxLoop, valPrefix);
-          }
+          Collection<ISSABasicBlock> normPredBB =
+            cfg.getNormalPredecessors(infoItem.currentBB);
+          Collection<ISSABasicBlock> excpPredBB =
+            cfg.getExceptionalPredecessors(infoItem.currentBB);
+          
+          // iterate all exceptional predecessors
+          pushChildrenBlocks(excpPredBB, infoItem, precond, methData,
+              Predicate.EXCEPTIONAL_SUCCESSOR, dfsStack, optionsAndStates.maxLoop, valPrefix);
+          
+          // iterate all normal predecessors
+          pushChildrenBlocks(normPredBB, infoItem, precond, methData,
+              Predicate.NORMAL_SUCCESSOR, dfsStack, optionsAndStates.maxLoop, valPrefix);
         }
         else if (curInvokeDepth != 0 || !callStack.isOutMostCall()) {
           // we only do smtCheck() if it's not inside an invocation and
@@ -685,17 +685,9 @@ public class WeakestPrecondition {
   /**
    * Assuming there is at most one 'Caught ...' at a time.
    */
-  private boolean isExceptionTriggered(Predicate predicate) {
-    boolean ret = true;
-    Enumeration<String> vars = predicate.getVarMap().keys();
-    while (vars.hasMoreElements()) {
-      String var = (String) vars.nextElement();
-      if (var.startsWith("Caught ")) {
-        ret = false;
-        break;
-      }
-    }
-    return ret;
+  private boolean isCatchNeverTriggered(Predicate predicate) {
+    return  predicate.getVarMap().containsKey("Caught") && 
+           !predicate.getVarMap().containsKey("ThrownInstCurrent");
   }
   
   private void printPropagationPath(BBorInstInfo entryNode) {
