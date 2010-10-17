@@ -86,13 +86,19 @@ public class SMTVariable implements Cloneable {
           }
         }
 
-        str.append("(");
-        str.append(binaryOp);
-        str.append(" ");
-        str.append(varNames[0]);
-        str.append(" ");
-        str.append(varNames[1]);
-        str.append(")");
+        if (!varNames[0].equals("NaN") && !varNames[1].equals("NaN")) {
+          str.append("(");
+          str.append(binaryOp);
+          str.append(" ");
+          str.append(varNames[0]);
+          str.append(" ");
+          str.append(varNames[1]);
+          str.append(")");
+        }
+        else {
+          // NaN +-*/ any number is still NaN
+          str.append("NaN");
+        }
       }
       m_yicesExprStr = str.toString();
     }

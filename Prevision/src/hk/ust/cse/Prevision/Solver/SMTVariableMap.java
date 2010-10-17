@@ -18,7 +18,7 @@ public class SMTVariableMap {
   
   static {
     String regSimple      = "v[\\d@$]+";                 // v5, v5@2, v5$1
-    String regConstant    = "(?:(?:##.*)|(?:#!-*(?:(?:[\\d\\.]+[\\d\\.E-]*)|Infinity))|(?:null))"; // #!11 or #!2.3 or 1.0E-6 or ##str1 or -Infinity
+    String regConstant    = "(?:(?:##.*)|(?:#!-*(?:(?:[\\d\\.]+[\\d\\.E-]*)|Infinity|NaN))|(?:null))"; // #!11 or #!2.3 or 1.0E-6 or ##str1 or #!-Infinity or #!NaN
     String regVarType     = "[\\w_\\[/$,]+";            // [Ljava/lang/String, etc
     String regName        = "[\\w_\\[/$#@]+";           // args
     String regMethodArgs  = "(?:[\\S]+[, ]*)*";         // might have problem if it's a str constant with ', ' in it, but good enough anyway!

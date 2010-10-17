@@ -39,21 +39,30 @@ public class SMTTerm {
   public String toYicesExprString() {
     String var1Str = m_var1.toYicesExprString(0);
     String var2Str = m_var2.toYicesExprString(0);
-    switch (m_op) {
-    case OP_EQUAL:
-      return "(= " + var1Str + " " + var2Str + ")";
-    case OP_INEQUAL:
-      return "(/= " + var1Str + " " + var2Str + ")";
-    case OP_GREATER:
-      return "(> " + var1Str + " " + var2Str + ")";
-    case OP_GREATER_EQUAL:
-      return "(>= " + var1Str + " " + var2Str + ")";
-    case OP_SMALLER:
-      return "(< " + var1Str + " " + var2Str + ")";
-    case OP_SMALLER_EQUAL:
-      return "(<= " + var1Str + " " + var2Str + ")";
-    default:
-      return "Unknown SMTTerm!";
+    
+    if (!var1Str.equals("NaN") && 
+        !var2Str.equals("NaN")) {
+      // ordinary boolean expression
+      switch (m_op) {
+      case OP_EQUAL:
+        return "(= " + var1Str + " " + var2Str + ")";
+      case OP_INEQUAL:
+        return "(/= " + var1Str + " " + var2Str + ")";
+      case OP_GREATER:
+        return "(> " + var1Str + " " + var2Str + ")";
+      case OP_GREATER_EQUAL:
+        return "(>= " + var1Str + " " + var2Str + ")";
+      case OP_SMALLER:
+        return "(< " + var1Str + " " + var2Str + ")";
+      case OP_SMALLER_EQUAL:
+        return "(<= " + var1Str + " " + var2Str + ")";
+      default:
+        return "Unknown SMTTerm!";
+      }
+    }
+    else {
+      // boolean expression with NaN (NaN is not equal to everything!)
+      return (m_op == Operator.OP_INEQUAL) ? "true" : "false";
     }
   }
 
