@@ -254,6 +254,9 @@ public class WeakestPrecondition {
         printResult(satisfiables.get(i));
         System.out.println();
       }
+      
+      // clear non-solver data in each Predicate object
+      m_wpResult.clearAllCheckedNonSolverData();
 
       // end timing
       long end = System.currentTimeMillis();
@@ -433,6 +436,9 @@ public class WeakestPrecondition {
           else {
             System.out.println("SMT Check failed!\n");
           }
+          
+          // save the checked predicate
+          wpResult.addChecked(precond);
           
           // break loop if appropriate
           if (canBreak) {

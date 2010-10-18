@@ -8,7 +8,12 @@ public class WeakestPreconditionResult {
   public WeakestPreconditionResult() {
     m_overLimit    = false;
     m_reachMaximum = false;
+    m_allChecked   = new ArrayList<Predicate>();
     m_satisfiables = new ArrayList<Predicate>();
+  }
+  
+  public void addChecked(Predicate checked) {
+    m_allChecked.add(checked);
   }
   
   public void addSatisfiable(Predicate satisfiable) {
@@ -34,6 +39,10 @@ public class WeakestPreconditionResult {
   public boolean isSatisfiable() {
     return m_satisfiables.size() > 0;
   }
+  
+  public List<Predicate> getAllChecked() {
+    return m_allChecked;
+  }
 
   public List<Predicate> getSatisfiables() {
     return m_satisfiables;
@@ -48,7 +57,14 @@ public class WeakestPreconditionResult {
     return precond;
   }
   
+  public void clearAllCheckedNonSolverData() {
+    for (Predicate checked : m_allChecked) {
+      checked.clearNonSolverData();
+    }
+  }
+  
   private boolean         m_overLimit;
   private boolean         m_reachMaximum;
+  private List<Predicate> m_allChecked;
   private List<Predicate> m_satisfiables;
 }
