@@ -160,7 +160,22 @@ public class Predicate {
       System.err.println("Stack overflowed when generating SMT statements, skip!");
       smtResult = SMT_RESULT.STACK_OVERFLOW;
     }
+    
+    // save the solver result
+    m_lastSolverResult = smtResult;
+    
     return smtResult;
+  }
+  
+  public void clearNonSolverData() {
+    // clear everything except solver results, they are taking too much memory!
+    m_SMTStatements    = null;
+    m_varMap           = null;
+    m_phiMap           = null;
+    m_defMap           = null;
+    m_SMTStatementList = null;
+    m_SMTVariableMap   = null;
+    m_visitedRecord    = null;
   }
 
   public String getLastSolverOutput() {
@@ -178,6 +193,15 @@ public class Predicate {
     }
     else {
       return "";
+    }
+  }
+  
+  public SMT_RESULT getLastSolverResult() {
+    if (s_solverLoader != null) {
+      return m_lastSolverResult;
+    }
+    else {
+      return null;
     }
   }
 
@@ -287,15 +311,16 @@ public class Predicate {
     m_contradicted = Boolean.valueOf(false);
   }
   
-  private Boolean                               m_contradicted;
-  private final List<List<String>>              m_SMTStatements;
-  private final Hashtable<String, List<String>> m_varMap;
-  private final Hashtable<String, String>       m_phiMap;
-  private final Hashtable<String, Integer>      m_defMap;
-  private SMTStatementList                      m_SMTStatementList;
-  private SMTVariableMap                        m_SMTVariableMap;
-  private Hashtable<ISSABasicBlock, Integer>    m_visitedRecord;
-  private String                                m_lastSolverInput;
-  private String                                m_lastSolverOutput;
-  private static ISolverLoader                  s_solverLoader;
+  private Boolean                            m_contradicted;
+  private List<List<String>>                 m_SMTStatements;
+  private Hashtable<String, List<String>>    m_varMap;
+  private Hashtable<String, String>          m_phiMap;
+  private Hashtable<String, Integer>         m_defMap;
+  private SMTStatementList                   m_SMTStatementList;
+  private SMTVariableMap                     m_SMTVariableMap;
+  private Hashtable<ISSABasicBlock, Integer> m_visitedRecord;
+  private String                             m_lastSolverInput;
+  private String                             m_lastSolverOutput;
+  private SMT_RESULT                        m_lastSolverResult;
+  private static ISolverLoader               s_solverLoader;
 }
