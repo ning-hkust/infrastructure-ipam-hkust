@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Hashtable;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -15,6 +16,8 @@ public class SMTVariableMap {
   private static final Pattern s_pattern1, s_pattern2, s_pattern3, s_pattern4, 
                                s_pattern5, s_pattern6, s_pattern7, s_pattern8, 
                                s_pattern9, s_pattern10, s_pattern11;
+  
+  private static final Pattern s_floatPattern1, s_floatPattern2;
   
   static {
     String regSimple      = "v[\\d@$]+";                 // v5, v5@2, v5$1
@@ -34,6 +37,19 @@ public class SMTVariableMap {
     s_pattern9 = Pattern.compile("^subType\\(typeOf\\((" + regName + ")\\),(" + regVarType + ")\\)$");
     s_pattern10 = Pattern.compile("^(" + regName + "|" + regConstant + ")( " + regBinaryOp + " )(" + regName + "|" + regConstant + ")$");
     s_pattern11 = Pattern.compile("^\\((" + regVarType + ")\\)(" + regName + ")\\[(" + regName + "|" + regConstant + ")\\]$");
+  
+    s_floatPattern1 = Pattern.compile("-*[\\d]+\\.[\\d]+"); // 1.0
+    s_floatPattern2 = Pattern.compile("-*[\\d]+\\.[\\d]+E-*[\\d]+");  // 1.0E-6 or 1.0E6
+    
+    // keeps a record of how a var string is matched by the patterns
+    s_translateVarCache = new LinkedHashMap<String, Integer>() {
+      private static final long serialVersionUID = 1L;
+
+      @Override
+      protected boolean removeEldestEntry(java.util.Map.Entry<String, Integer> eldest) {
+        return size() > 5000;
+      }
+    }; 
   }
   
   public SMTVariableMap(Hashtable<String, List<String>> plainVarMap, int maxRecDepth) {
@@ -192,38 +208,60 @@ public class SMTVariableMap {
     }
   }
 
-  private SMTVariable translateSMTVar(String finalVarStr) { 
-    Matcher matcher = null;
-    if ((matcher = s_pattern1.matcher(finalVarStr)).find()) {
-      return new SMTVariable(finalVarStr, "Unknown-Type", null);
+  private SMTVariable translateSMTVar(String finalVarStr) {
+    // try to obtain the previous pattern matching history for this var string
+    Integer matchedPattern = s_translateVarCache.get(finalVarStr);
+    matchedPattern = (matchedPattern == null) ? 0 : matchedPattern;
+    
+    int matchedBy           = 0;
+    Matcher matcher         = null;
+    SMTVariable smtVariable = null;
+    if ((matchedPattern == 1 && (matcher = s_pattern1.matcher(finalVarStr)).find()) || 
+        (matchedPattern == 0 && (matcher = s_pattern1.matcher(finalVarStr)).find())) {
+      // save matched history
+      matchedBy = 1;
+      
+      smtVariable = new SMTVariable(finalVarStr, "Unknown-Type", null);
     }
-    else if ((matcher = s_pattern2.matcher(finalVarStr)).find()) {
+    else if ((matchedPattern == 2 && (matcher = s_pattern2.matcher(finalVarStr)).find()) || 
+             (matchedPattern == 0 && (matcher = s_pattern2.matcher(finalVarStr)).find())) {
+      // save matched history
+      matchedBy = 2;
+      
       // if is number constant
       if (finalVarStr.startsWith("#!")) {
         String num = translateJavaNumber(finalVarStr);
-        return new SMTVariable(num, "#ConstantNumber", VarCategory.VAR_CONST, null);
+        smtVariable = new SMTVariable(num, "#ConstantNumber", VarCategory.VAR_CONST, null);
       }
       // if is string constant
       else if (finalVarStr.startsWith("##")) {
         // we keep one '#' at the beginning of the string to
         // make sure that the string will not begin with a number
-        return new SMTVariable(finalVarStr.substring(1), "#ConstantString",
+        smtVariable = new SMTVariable(finalVarStr.substring(1), "#ConstantString",
             VarCategory.VAR_CONST, null);
       }
       else if (finalVarStr.equals("null")) {
-        return new SMTVariable(finalVarStr, "#ConstantNumber",
+        smtVariable = new SMTVariable(finalVarStr, "#ConstantNumber",
             VarCategory.VAR_CONST, null);
       }
       else {
-        return null;
+        // 
       }
     }
-    else if ((matcher = s_pattern3.matcher(finalVarStr)).find()) {
+    else if ((matchedPattern == 3 && (matcher = s_pattern3.matcher(finalVarStr)).find()) || 
+             (matchedPattern == 0 && (matcher = s_pattern3.matcher(finalVarStr)).find())) {
+      // save matched history
+      matchedBy = 3;
+      
       String varType = matcher.group(1);
       String varName = matcher.group(2);
-      return new SMTVariable(varName, varType, VarCategory.VAR_ARG, null);
+      smtVariable = new SMTVariable(varName, varType, VarCategory.VAR_ARG, null);
     }
-    else if ((matcher = s_pattern4.matcher(finalVarStr)).find()) {
+    else if ((matchedPattern == 4 && (matcher = s_pattern4.matcher(finalVarStr)).find()) || 
+             (matchedPattern == 0 && (matcher = s_pattern4.matcher(finalVarStr)).find())) {
+      // save matched history
+      matchedBy = 4;
+      
       String fieldType = matcher.group(1);
       String refName   = matcher.group(2);
       String fieldName = matcher.group(3);
@@ -240,23 +278,35 @@ public class SMTVariableMap {
       getStr.append(".");
       getStr.append(fieldName);
       
-      return new SMTVariable(getStr.toString(), fieldType, VarCategory.VAR_FIELD, extraVars);
+      smtVariable = new SMTVariable(getStr.toString(), fieldType, VarCategory.VAR_FIELD, extraVars);
     }
-    else if ((matcher = s_pattern5.matcher(finalVarStr)).find()) {
+    else if ((matchedPattern == 5 && (matcher = s_pattern5.matcher(finalVarStr)).find()) || 
+             (matchedPattern == 0 && (matcher = s_pattern5.matcher(finalVarStr)).find())) {
+      // save matched history
+      matchedBy = 5;
+      
       String varType = matcher.group(1);
       String varName = "Fresh_" + m_nFreshInstance++ + "_(" + varType + ")";
-      return new SMTVariable(varName, "FreshInstanceOf", null);
+      smtVariable = new SMTVariable(varName, "FreshInstanceOf", null);
     }
-    else if ((matcher = s_pattern6.matcher(finalVarStr)).find()) {
+    else if ((matchedPattern == 6 && (matcher = s_pattern6.matcher(finalVarStr)).find()) || 
+             (matchedPattern == 0 && (matcher = s_pattern6.matcher(finalVarStr)).find())) {
+      // save matched history
+      matchedBy = 6;
+      
       String varName = matcher.group(1);
 
       String lengthOfStr = "($extraVar1).length";
       List<SMTVariable> extraVars = new ArrayList<SMTVariable>();
       extraVars.add(new SMTVariable(varName, "Unknown-Type", null));
 
-      return new SMTVariable(lengthOfStr, "I", VarCategory.VAR_FIELD, extraVars);
+      smtVariable = new SMTVariable(lengthOfStr, "I", VarCategory.VAR_FIELD, extraVars);
     }
-    else if ((matcher = s_pattern7.matcher(finalVarStr)).find()) {
+    else if ((matchedPattern == 7 && (matcher = s_pattern7.matcher(finalVarStr)).find()) || 
+             (matchedPattern == 0 && (matcher = s_pattern7.matcher(finalVarStr)).find())) {
+      // save matched history
+      matchedBy = 7;
+      
       String retType    = matcher.group(1);
       String ref        = matcher.group(2);
       String methodName = matcher.group(3);
@@ -294,27 +344,39 @@ public class SMTVariableMap {
       }
 
       methodStr.append(")");
-      return new SMTVariable(methodStr.toString(), retType, extraVars);
+      smtVariable = new SMTVariable(methodStr.toString(), retType, extraVars);
     }
-    else if ((matcher = s_pattern8.matcher(finalVarStr)).find()) {
+    else if ((matchedPattern == 8 && (matcher = s_pattern8.matcher(finalVarStr)).find()) || 
+             (matchedPattern == 0 && (matcher = s_pattern8.matcher(finalVarStr)).find())) {
+      // save matched history
+      matchedBy = 8;
+      
       String ref    = matcher.group(1);
       String instOf = matcher.group(2);
 
       instOf = "$extraVar1" + instOf;
       List<SMTVariable> extraVars = new ArrayList<SMTVariable>();
       extraVars.add(new SMTVariable(ref, "Unknown-Type", null));
-      return new SMTVariable(instOf, "Z", extraVars);
+      smtVariable = new SMTVariable(instOf, "Z", extraVars);
     }
-    else if ((matcher = s_pattern9.matcher(finalVarStr)).find()) {
+    else if ((matchedPattern == 9 && (matcher = s_pattern9.matcher(finalVarStr)).find()) || 
+             (matchedPattern == 0 && (matcher = s_pattern9.matcher(finalVarStr)).find())) {
+      // save matched history
+      matchedBy = 9;
+      
       String varName    = matcher.group(1);
       String superType  = matcher.group(2);
 
       String subTypeStr = "subType(typeOf($extraVar1), " + superType + ")";
       List<SMTVariable> extraVars = new ArrayList<SMTVariable>();
       extraVars.add(new SMTVariable(varName, "Unknown-Type", null));
-      return new SMTVariable(subTypeStr, "Z", extraVars);
+      smtVariable = new SMTVariable(subTypeStr, "Z", extraVars);
     }
-    else if ((matcher = s_pattern10.matcher(finalVarStr)).find()) {
+    else if ((matchedPattern == 10 && (matcher = s_pattern10.matcher(finalVarStr)).find()) || 
+             (matchedPattern == 0 && (matcher = s_pattern10.matcher(finalVarStr)).find())) {
+      // save matched history
+      matchedBy = 10;
+      
       String varName1 = matcher.group(1);
       String varName2 = matcher.group(3);
       String binaryOp = matcher.group(2);
@@ -335,9 +397,13 @@ public class SMTVariableMap {
       extraVars.add(new SMTVariable(varName1, "Unknown-Type", null));
       extraVars.add(new SMTVariable(varName2, "Unknown-Type", null));
 
-      return new SMTVariable(binaryOpStr.toString(), "#BinaryOp", extraVars);
+      smtVariable = new SMTVariable(binaryOpStr.toString(), "#BinaryOp", extraVars);
     }
-    else if ((matcher = s_pattern11.matcher(finalVarStr)).find()) {
+    else if ((matchedPattern == 11 && (matcher = s_pattern11.matcher(finalVarStr)).find()) || 
+             (matchedPattern == 0 && (matcher = s_pattern11.matcher(finalVarStr)).find())) {
+      // save matched history
+      matchedBy = 11;
+      
       String varType  = matcher.group(1);
       String varName  = matcher.group(2);
       String varIndex = matcher.group(3);
@@ -358,11 +424,15 @@ public class SMTVariableMap {
       extraVars.add(new SMTVariable(varName, "Unknown-Type", null));
       extraVars.add(new SMTVariable(varIndex, "Unknown-Type", null));
 
-      return new SMTVariable(arrayRefStr.toString(), varType, extraVars);
+      smtVariable = new SMTVariable(arrayRefStr.toString(), varType, extraVars);
     }
-    else {
-      return null;
+    
+    // save matched information into cache
+    if (matchedPattern == 0 && matchedBy > 1) {
+      s_translateVarCache.put(finalVarStr, matchedBy);
     }
+    
+    return smtVariable;
   }
 
   private void finalizeAllSMTVariables() {
@@ -386,7 +456,7 @@ public class SMTVariableMap {
       number = number.substring(0, number.length() - 8);
       number += String.valueOf(Integer.MAX_VALUE);
     }
-    else if (number.matches("-*[\\d]+\\.[\\d]+")) {
+    else if (s_floatPattern1.matcher(number).matches()) {
       float fNum = Float.parseFloat(number);
 
       if (fNum < 1) {
@@ -400,7 +470,7 @@ public class SMTVariableMap {
         number = String.valueOf((int)fNum /* lose some precision here*/) + "/1000"; 
       }
     }
-    else if (number.matches("-*[\\d]+\\.[\\d]+E-*[\\d]+")) {  // 1.0E-6 or 1.0E6
+    else if (s_floatPattern2.matcher(number).matches()) {  // 1.0E-6 or 1.0E6
       float fNum = Float.parseFloat(number);
       
       if (fNum < 1) {
@@ -422,4 +492,6 @@ public class SMTVariableMap {
   private Hashtable<String, SMTVariable>      m_allVarMap;      /*plain var string to smtvariable*/
   private Hashtable<SMTVariable, SMTVariable> m_finalVarMap;    /*mid-vars to final vars*/
   private Hashtable<String, SMTVariable>      m_defFinalVarMap; /*yices defined var string to smtvariable*/
+
+  private static LinkedHashMap<String, Integer> s_translateVarCache;
 }
