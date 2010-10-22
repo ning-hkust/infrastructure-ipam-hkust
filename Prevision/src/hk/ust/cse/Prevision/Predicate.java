@@ -176,6 +176,9 @@ public class Predicate {
     m_SMTStatementList = null;
     m_SMTVariableMap   = null;
     m_visitedRecord    = null;
+    
+    m_lastSolverInput  = null;
+    m_lastSolverOutput = null;
   }
 
   public String getLastSolverOutput() {
