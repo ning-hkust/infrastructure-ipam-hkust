@@ -109,7 +109,7 @@ public class CallStack implements Cloneable {
   
   public String toString() {
     StringBuilder str = new StringBuilder();
-    for (int i = 0; i < m_callStack.size(); i++) {
+    for (int i = 0, size = m_callStack.size(); i < size; i++) {
       str.append(m_callStack.get(i).getMethodNameOrSign() + ":");
       str.append(m_callStack.get(i).getLineNo());
       if (i != m_callStack.size() - 1) {
@@ -117,6 +117,26 @@ public class CallStack implements Cloneable {
       }
     }
     return str.toString();
+  }
+  
+  public static CallStack fromString(String callStackStr) {
+    CallStack cs = new CallStack(true);
+    
+    try {  
+      String[] frames = callStackStr.split(" -> ");
+      
+      // parse each frame
+      for (int i = 0; i < frames.length; i++) {
+        int index            = frames[i].indexOf(":");
+        String methNameOrSig = frames[i].substring(0, index);
+        int lineNo           = Integer.parseInt(frames[i].substring(index + 1));
+        cs.addStackTrace(methNameOrSig, lineNo);
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      cs = null;
+    }
+    return cs;
   }
   
   public CallStack clone() {
