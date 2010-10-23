@@ -25,18 +25,14 @@ public class DbHelperSqlite {
     return ret;
   }
 
-  public static int[] executeBatch(Connection conn, String[] sqlTexts) throws Exception {
-    PreparedStatement prep = conn.prepareStatement("");
-
+  // TODO: use transaction
+  public static int[] executeBatch(Connection conn, String[] sqlTexts) throws Exception { 
     // add batch
+    int[] rets = new int[sqlTexts.length];
     for (int i = 0; i < sqlTexts.length; i++) {
-      prep.addBatch(sqlTexts[i]);
+      Statement statement = conn.createStatement();
+      rets[i] = statement.executeUpdate(sqlTexts[i]);
     }
-
-    // execute
-    conn.setAutoCommit(false);
-    int[] rets = prep.executeBatch();
-    conn.setAutoCommit(true);
 
     return rets;
   }
