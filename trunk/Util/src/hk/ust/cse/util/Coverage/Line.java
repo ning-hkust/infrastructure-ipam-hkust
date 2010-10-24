@@ -23,12 +23,12 @@ public class Line {
       int nIndex2 = m_conditionCoverage.indexOf('/');
       int nIndex3 = m_conditionCoverage.indexOf(')');
       
-      m_nBranchCovered = Integer.parseInt(m_conditionCoverage.substring(nIndex1 + 1, nIndex2));
-      m_nBranchCount   = Integer.parseInt(m_conditionCoverage.substring(nIndex2 + 1, nIndex3)); 
+      m_conditionCovered = Integer.parseInt(m_conditionCoverage.substring(nIndex1 + 1, nIndex2));
+      m_conditionCount   = Integer.parseInt(m_conditionCoverage.substring(nIndex2 + 1, nIndex3)); 
     }
     else {
-      m_nBranchCovered = -1;
-      m_nBranchCount   = -1;
+      m_conditionCovered = -1;
+      m_conditionCount   = -1;
     }
   }
   
@@ -63,12 +63,12 @@ public class Line {
     return m_conditionCoverage;
   }
   
-  public int getBranchCovered() {
-    return m_nBranchCovered;
+  public int getConditionCovered() {
+    return m_conditionCovered;
   }
-
-  public int getBranchCount() {
-    return m_nBranchCount;
+  
+  public int getConditionCount() {
+    return m_conditionCount;
   }
   
   public Method getParentMethod() {
@@ -77,8 +77,8 @@ public class Line {
 
   private final int     m_nLineNo;
   private final int     m_nHits;
-  private final int     m_nBranchCovered;
-  private final int     m_nBranchCount;
+  private final int     m_conditionCovered;
+  private final int     m_conditionCount;
   private final boolean m_isBranch;
   private final String  m_conditionCoverage;
   private final Method  m_parentMethod;

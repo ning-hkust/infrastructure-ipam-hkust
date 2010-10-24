@@ -227,6 +227,29 @@ public class CoberturaXmlParser {
     return m_allPackages;
   }
   
+  public List<Line> getAllBranchLines() {
+    List<Line> branchLines = new ArrayList<Line>();
+    for (int i = 0, size1 = m_allPackages.size(); i < size1; i++) {
+      Package pkg = m_allPackages.get(i);
+      for (int j = 0, size2 = pkg.getAllClasses().size(); j < size2; j++) {
+        Class cls = pkg.getAllClasses().get(j);
+        for (int k = 0, size3 = cls.getAllMethods().size(); k < size3; k++) {
+          Method meth = cls.getAllMethods().get(k);
+          for (int l = 0, size4 = meth.getAllLines().size(); l < size4; l++) {
+            Line line = meth.getAllLines().get(l);
+            if (line.isBranch()) {
+              branchLines.add(line);
+            }
+          }
+        }
+      }
+    }
+    return branchLines;
+  }
+  
+  /**
+   * Get branch lines with uncovered conditions
+   */
   public List<Line> getUncoveredBranchLines() {
     List<Line> branchLines = new ArrayList<Line>();
     for (int i = 0, size1 = m_allPackages.size(); i < size1; i++) {
@@ -237,7 +260,7 @@ public class CoberturaXmlParser {
           Method meth = cls.getAllMethods().get(k);
           for (int l = 0, size4 = meth.getAllLines().size(); l < size4; l++) {
             Line line = meth.getAllLines().get(l);
-            if (line.isBranch() && (line.getBranchCount() - line.getBranchCovered() > 0)) {
+            if (line.isBranch() && (line.getConditionCount() - line.getConditionCovered() > 0)) {
               branchLines.add(line);
             }
           }
@@ -247,6 +270,9 @@ public class CoberturaXmlParser {
     return branchLines;
   }
   
+  /**
+   * Get branches and branch lines with uncovered conditions
+   */
   public List<List<Line>> getUncoveredBranches() {
     List<Line> uncovBranches    = new ArrayList<Line>();
     List<Line> uncovBranchLines = new ArrayList<Line>();
@@ -268,7 +294,7 @@ public class CoberturaXmlParser {
               branchLine = null;  // only add the first uncovered branch
             }
             // check if it is a unfully covered branch line
-            if (line.isBranch() && (line.getBranchCount() - line.getBranchCovered() > 0)) {
+            if (line.isBranch() && (line.getConditionCount() - line.getConditionCovered() > 0)) {
               branchLine = line;
             }
           }
