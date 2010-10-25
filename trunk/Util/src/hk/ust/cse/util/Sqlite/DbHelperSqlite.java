@@ -25,21 +25,25 @@ public class DbHelperSqlite {
     return ret;
   }
 
-  // TODO: use transaction
-  public static int[] executeBatch(Connection conn, String[] sqlTexts) throws Exception { 
+  public static int[] executeBatch(Connection conn, String[] sqlTexts) throws Exception {
+    // execute every statement in one transaction
+    conn.setAutoCommit(false);
+    
     // add batch
     int[] rets = new int[sqlTexts.length];
     for (int i = 0; i < sqlTexts.length; i++) {
       Statement statement = conn.createStatement();
       rets[i] = statement.executeUpdate(sqlTexts[i]);
     }
-
+    conn.commit();
     return rets;
   }
   
   public static boolean exist(Connection conn, String tableName) throws Exception {
     ResultSet rs = executeQuery(conn, "Select Count(*) from sqlite_master Where type='table' and name='" + tableName + "'");
-    return rs.getInt(1) > 0;
+    boolean ret = rs.getInt(1) > 0;
+    rs.close(); // close immediately
+    return ret;
   }
 
   public static Connection openConnection(String dbName) throws Exception {
