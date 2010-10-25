@@ -5,8 +5,9 @@ import hk.ust.cse.Prevision.Wala.MethodMetaData;
 import hk.ust.cse.Prevision.Wala.WalaAnalyzer;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.Iterator;
+import java.util.Comparator;
 import java.util.List;
 
 import com.ibm.wala.ssa.IR;
@@ -75,11 +76,16 @@ public class BranchAnalyzer {
     Collection<ISSABasicBlock> succBBs = methMetaData.getcfg().getNormalSuccessors(currentBB);
     assert(succBBs.size() == 2);
     
-    Iterator<ISSABasicBlock> iter = succBBs.iterator();
-    while (iter.hasNext()) {
-      ISSABasicBlock bb = (ISSABasicBlock) iter.next();
-      
-      int index = bb.getFirstInstructionIndex();
+    // sort succBBs first
+    ISSABasicBlock[] sortedSuccBBs = succBBs.toArray(new ISSABasicBlock[0]);
+    Arrays.sort(sortedSuccBBs, new Comparator<ISSABasicBlock>() {
+      public int compare(ISSABasicBlock o1, ISSABasicBlock o2) {
+        return o1.getNumber() - o2.getNumber();
+      }
+    });
+    
+    for (int i = 0; i < sortedSuccBBs.length; i++) {
+      int index = sortedSuccBBs[i].getFirstInstructionIndex();
       branchesFirstLineIndex.add(index);
       branchesFirstLineNo.add(methMetaData.getLineNumber(index));
     }
@@ -95,11 +101,18 @@ public class BranchAnalyzer {
     List<Integer> branchesFirstLineIndex = new ArrayList<Integer>();
     List<Integer> branchesFirstLineNo    = new ArrayList<Integer>();
     
-    int[] labels = switchInst.getCasesAndLabels();
-    int defaultLable = switchInst.getDefault();
+    int[] casesAndlabels = switchInst.getCasesAndLabels();
+    int defaultLable     = switchInst.getDefault();
+    
+    // sort
+    int[] labels = new int[casesAndlabels.length / 2];
+    for (int i = 0; i < labels.length; i++) {
+      labels[i] = casesAndlabels[i*2+1];
+    }
+    Arrays.sort(labels);
     
     // branches of each label
-    for (int i = 1; i < labels.length; i+=2) {
+    for (int i = 0; i < labels.length; i++) {
       if (labels[i] >= 0) {
         branchesFirstLineIndex.add(labels[i]);
         branchesFirstLineNo.add(methMetaData.getLineNumber(labels[i]));
@@ -122,7 +135,7 @@ public class BranchAnalyzer {
     BranchAnalyzer branchAnalyzer = new BranchAnalyzer("./test_programs/test_program.jar");
     
     List<List<Integer>> rets = 
-      branchAnalyzer.findBranchesFirstLine("test_program.func12", 104);
+      branchAnalyzer.findBranchesFirstLine("test_program.func6", 44);
     
     List<Integer> branchesFirstLineIndex = rets.get(0);
     List<Integer> branchesFirstLineNo    = rets.get(1);
