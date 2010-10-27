@@ -32,7 +32,7 @@ public class WeakestPrecondition {
   public class GlobalOptionsAndStates {
     public GlobalOptionsAndStates(boolean inclInnerMostLine, boolean inclStartingInst, 
         boolean useSummary, boolean compDispatchTargets, int maxRetrieve, int maxSmtCheck, 
-        int maxInvokeDepth, int maxLoop, int startInstIndex, CallStack fullCallStack) {
+        int maxInvokeDepth, int maxLoop, int startingInst, CallStack fullCallStack) {
       
       // options
       this.inclInnerMostLine   = inclInnerMostLine;
@@ -42,7 +42,7 @@ public class WeakestPrecondition {
       this.maxSmtCheck         = maxSmtCheck;
       this.maxInvokeDepth      = maxInvokeDepth;
       this.maxLoop             = maxLoop;
-      this.startInstIndex      = startInstIndex; /* -1 if don't want to specify the starting instruction index */
+      this.startingInst        = startingInst; /* -1 if don't want to specify the starting instruction index */
       this.fullCallStack       = fullCallStack;
       
       // initialize summary
@@ -73,7 +73,7 @@ public class WeakestPrecondition {
     public final int       maxSmtCheck;
     public final int       maxInvokeDepth;
     public final int       maxLoop;
-    public final int       startInstIndex;
+    public final int       startingInst;
     public final CallStack fullCallStack;
     public final Summary   summary;
 
@@ -125,11 +125,11 @@ public class WeakestPrecondition {
     int lineNo           = fullStack.getCurLineNo();
     
     // we only consider inclLine & starting instruction at the innermost call
-    boolean inclLine  = true;
-    int startingIndex = -1;
+    boolean inclLine = true;
+    int startingInst = -1;
     if (fullStack.getDepth() == 1) {
-      inclLine      = optAndStates.inclInnerMostLine;
-      startingIndex = optAndStates.startInstIndex;
+      inclLine     = optAndStates.inclInnerMostLine;
+      startingInst = optAndStates.startingInst;
     }
 
     // get ir(ssa) for methods in jar file
@@ -155,12 +155,12 @@ public class WeakestPrecondition {
       cgNode = m_walaAnalyzer.getCallGraph().getNode(ir.getMethod());
     }
     
-    return computeRec(optAndStates, cgNode, ir, lineNo, startingIndex, 
-        inclLine, fullStack, 0, "", postCond);
+    return computeRec(optAndStates, cgNode, ir, lineNo, startingInst, inclLine, 
+        fullStack, 0, "", postCond);
   }
   
   WeakestPreconditionResult computeRec(GlobalOptionsAndStates optAndStates, 
-      CGNode cgNode, String methNameOrSig, int startLine, int startingIndex, 
+      CGNode cgNode, String methNameOrSig, int startLine, int startingInst, 
       boolean inclLine, CallStack callStack, int curInvokeDepth, String valPrefix, 
       Predicate postCond) throws InvalidStackTraceException {
     
@@ -180,7 +180,7 @@ public class WeakestPrecondition {
       throw new InvalidStackTraceException(msg);
     }
     
-    return computeRec(optAndStates, cgNode, ir, startLine, startingIndex, 
+    return computeRec(optAndStates, cgNode, ir, startLine, startingInst, 
         inclLine, callStack, curInvokeDepth, valPrefix, postCond);
   }
 
@@ -188,7 +188,7 @@ public class WeakestPrecondition {
    * @param cgNode: only useful when we use 'compDispatchTargets' function
    */
   WeakestPreconditionResult computeRec(GlobalOptionsAndStates optAndStates, 
-      CGNode cgNode, IR ir, int startLine, int startingIndex, boolean inclLine, 
+      CGNode cgNode, IR ir, int startLine, int startingInst, boolean inclLine, 
       CallStack callStack, int curInvokeDepth, String valPrefix, 
       Predicate postCond) throws InvalidStackTraceException {
     
@@ -223,10 +223,10 @@ public class WeakestPrecondition {
     }
     if (dfsStack == null || dfsStack.empty()) {
       // start from the basic block at nStartLine
-      ISSABasicBlock startFromBB = findBasicBlock(methMetaData, startLine, startingIndex);
+      ISSABasicBlock startFromBB = findBasicBlock(methMetaData, startLine, startingInst);
       if (startFromBB == null) {
         String msg = "Failed to find a valid basic block at line: " + startLine + 
-                     " and instruction index: " + startingIndex;
+                     " and instruction index: " + startingInst;
         System.err.println(msg);
         throw new InvalidStackTraceException(msg);
       }
@@ -249,7 +249,7 @@ public class WeakestPrecondition {
 
     // start depth first search
     WeakestPreconditionResult wpResult = computeMethod(optAndStates, cgNode, methMetaData, 
-        dfsStack, startLine, startingIndex, inclLine, callStack, curInvokeDepth, valPrefix);
+        dfsStack, startLine, startingInst, inclLine, callStack, curInvokeDepth, valPrefix);
 
     // save result if it's not inside an invocation and it's at the out most call
     if (curInvokeDepth == 0 && callStack.isOutMostCall()) {
@@ -309,7 +309,7 @@ public class WeakestPrecondition {
  
   private WeakestPreconditionResult computeMethod(GlobalOptionsAndStates optAndStates,
       CGNode cgNode, MethodMetaData methData, Stack<BBorInstInfo> dfsStack, 
-      int startLine, int startingIndex, boolean inclLine, CallStack callStack, 
+      int startLine, int startingInst, boolean inclLine, CallStack callStack, 
       int curInvokeDepth, String valPrefix) throws InvalidStackTraceException {
     
     // start timing
@@ -354,7 +354,7 @@ public class WeakestPrecondition {
         // compute for this BB
         List<SimpleEntry<String, Predicate>> usedPredicates = new ArrayList<SimpleEntry<String, Predicate>>();
         Predicate precond = computeBB(optAndStates, cgNode, methData, infoItem, 
-            startLine, startingIndex, inclLine, callStack, starting, curInvokeDepth, 
+            startLine, startingInst, inclLine, callStack, starting, curInvokeDepth, 
             valPrefix, usedPredicates);
 
         if (precond == null) {
@@ -465,7 +465,7 @@ public class WeakestPrecondition {
   }
 
   private Predicate computeBB(GlobalOptionsAndStates optAndStates, CGNode cgNode, 
-      MethodMetaData methData, BBorInstInfo infoItem, int startLine, int startingIndex, 
+      MethodMetaData methData, BBorInstInfo infoItem, int startLine, int startingInst, 
       boolean inclLine, CallStack callStack, boolean[] starting, int curInvokeDepth, 
       String valPrefix, List<SimpleEntry<String, Predicate>> usedPredicates) throws InvalidStackTraceException {
     
@@ -528,8 +528,8 @@ public class WeakestPrecondition {
         boolean inclStartingInst = optAndStates.inclStartingInst;
         
         // if it is at the inner most frame, start from the starting index
-        if (!starting[0] || startingIndex < 0 || 
-            (currInstIndex - (inclStartingInst ? 1 : 0)) < startingIndex) {
+        if (!starting[0] || startingInst < 0 || 
+            (currInstIndex - (inclStartingInst ? 1 : 0)) < startingInst) {
           
           // get precond for this instruction
           if (lastInst) {

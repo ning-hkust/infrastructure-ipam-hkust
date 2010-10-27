@@ -2096,11 +2096,11 @@ public class InstHandler {
     int lineNo = innerCallStack.getCurLineNo();
     
     // we only consider inclLine & starting instruction at the innermost call
-    boolean inclLine  = true;
-    int startingIndex = -1;
+    boolean inclLine = true;
+    int startingInst = -1;
     if (innerCallStack.getDepth() == 1) {
-      inclLine      = optAndStates.inclInnerMostLine;
-      startingIndex = optAndStates.startInstIndex;
+      inclLine     = optAndStates.inclInnerMostLine;
+      startingInst = optAndStates.startingInst;
     }
 
     // get dispatch target
@@ -2121,7 +2121,7 @@ public class InstHandler {
 
     try {
       WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optAndStates, 
-          target, methodSig, lineNo, startingIndex, inclLine, innerCallStack, 
+          target, methodSig, lineNo, startingInst, inclLine, innerCallStack, 
           curInvokeDepth, newValPrefix, newPostCond);
       preCond = wpResult.getFirstSatisfiable();
     } catch (InvalidStackTraceException e) {}
