@@ -31,19 +31,27 @@ import com.ibm.wala.util.heapTrace.HeapTracer.Result;
 public class WeakestPrecondition {
   public class GlobalOptionsAndStates {
     public GlobalOptionsAndStates(boolean inclInnerMostLine, boolean inclStartingInst, 
-        boolean useSummary, boolean compDispatchTargets, int maxRetrieve, int maxSmtCheck, 
-        int maxInvokeDepth, int maxLoop, int startingInst, CallStack fullCallStack) {
+        boolean useSummary, boolean compDispatchTargets, int maxRetrieve, 
+        int maxSmtCheck, int maxInvokeDepth, int maxLoop, int startingInst, 
+        int[] startingInstBranchesTo, CallStack fullCallStack) {
       
       // options
-      this.inclInnerMostLine   = inclInnerMostLine;
-      this.inclStartingInst    = inclStartingInst;
-      this.compDispatchTargets = compDispatchTargets;
-      this.maxRetrieve         = maxRetrieve;
-      this.maxSmtCheck         = maxSmtCheck;
-      this.maxInvokeDepth      = maxInvokeDepth;
-      this.maxLoop             = maxLoop;
-      this.startingInst        = startingInst; /* -1 if don't want to specify the starting instruction index */
-      this.fullCallStack       = fullCallStack;
+      this.inclInnerMostLine      = inclInnerMostLine;
+      this.inclStartingInst       = inclStartingInst;
+      this.compDispatchTargets    = compDispatchTargets;
+      this.maxRetrieve            = maxRetrieve;
+      this.maxSmtCheck            = maxSmtCheck;
+      this.maxInvokeDepth         = maxInvokeDepth;
+      this.maxLoop                = maxLoop;
+      this.fullCallStack          = fullCallStack;
+      
+      // -1 if don't want to specify the starting instruction index
+      this.startingInst           = startingInst;
+      // null if don't want to specify the instructions that the 
+      // starting instruction is branching to
+      this.startingInstBranchesTo = startingInstBranchesTo;
+      
+      
       
       // initialize summary
       if (useSummary) {
@@ -74,6 +82,7 @@ public class WeakestPrecondition {
     public final int       maxInvokeDepth;
     public final int       maxLoop;
     public final int       startingInst;
+    public final int[]     startingInstBranchesTo;
     public final CallStack fullCallStack;
     public final Summary   summary;
 
@@ -397,6 +406,14 @@ public class WeakestPrecondition {
             cfg.getNormalPredecessors(infoItem.currentBB);
           Collection<ISSABasicBlock> excpPredBB =
             cfg.getExceptionalPredecessors(infoItem.currentBB);
+
+          // if have specified the optAndStates.startingInstBranchesTo list, 
+          // only take the specified branches at the starting basic block
+          if (shouldCheckBranching(cfg, startingInst, curInvokeDepth, callStack, optAndStates, infoItem)) {
+            
+            // retain only the branches in startingInstBranchesTo list
+            retainOnlyBranches(cfg, optAndStates.startingInstBranchesTo, normPredBB, excpPredBB);
+          }
           
           // iterate all exceptional predecessors
           pushChildrenBlocks(excpPredBB, infoItem, precond, methData,
@@ -605,6 +622,44 @@ public class WeakestPrecondition {
 
     methodNameOrSign = methodNameOrSign.replace('$', '.');
     return invokingMethod.equals(methodNameOrSign);
+  }
+  
+  private boolean shouldCheckBranching(SSACFG cfg, int startingInst, int curInvokeDepth, 
+      CallStack callStack, GlobalOptionsAndStates optAndStates, BBorInstInfo infoItem) {
+    return curInvokeDepth == 0 && callStack.getDepth() <= 1 && 
+        optAndStates.startingInst >= 0 && optAndStates.startingInstBranchesTo != null && 
+        infoItem.sucessorBB == null && 
+        infoItem.currentBB.equals(cfg.getBlockForInstruction(startingInst));
+  }
+  
+  private void retainOnlyBranches(SSACFG cfg, int[] branchesTo, 
+    Collection<ISSABasicBlock> normPredBB, Collection<ISSABasicBlock> excpPredBB) {
+
+    // only branching to certain basic blocks
+    HashSet<ISSABasicBlock> branchingToBBs = new HashSet<ISSABasicBlock>();
+    for (int i = 0; i < branchesTo.length; i++) {
+      if (branchesTo[i] < cfg.getInstructions().length) {
+        ISSABasicBlock bb = cfg.getBlockForInstruction(branchesTo[i]);
+        if (bb != null) {
+          branchingToBBs.add(bb);
+        }        
+      }
+    }
+    
+    // remove not using predecessors
+    normPredBB.retainAll(branchingToBBs);
+    excpPredBB.retainAll(branchingToBBs);
+    
+    System.out.print("Only retain basic blocks: ");
+    Iterator<ISSABasicBlock> iter = normPredBB.iterator();
+    while (iter.hasNext()) {
+      System.out.print(((ISSABasicBlock)iter.next()).getNumber() + " ");
+    }
+    iter = excpPredBB.iterator();
+    while (iter.hasNext()) {
+      System.out.print(((ISSABasicBlock)iter.next()).getNumber() + " ");
+    }
+    System.out.println();
   }
   
   private void pushChildrenBlocks(Collection<ISSABasicBlock> allChildrenBlocks,
@@ -829,8 +884,9 @@ public class WeakestPrecondition {
       }
       
       // set options
+      int[] branchesTo = new int[] {2};
       GlobalOptionsAndStates optAndStates = wp.new GlobalOptionsAndStates(
-          true, true, false, false, 10, 5000, 1, 3, 9, callStack);
+          true, false, false, false, 10, 5000, 1, 3, 6, branchesTo, callStack);
       
       wp.compute(optAndStates, null);
       // wp.heapTracer();
