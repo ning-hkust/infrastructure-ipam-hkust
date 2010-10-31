@@ -14,7 +14,7 @@ public class SMTVariable implements Cloneable {
   private static final Pattern s_pattern;
   static {
     String regName     = "[\\w_\\[/$#<>\\.]+";
-    String regBinaryOp = "[+-/&|^%\\*]";
+    String regBinaryOp = "(?:[+-/&|^%\\*]|(?:<<)|(?:>>))";
     s_pattern = Pattern.compile("^(" + regName + ") (" + regBinaryOp + ") (" + regName + ")$");
   }
 
@@ -87,6 +87,11 @@ public class SMTVariable implements Cloneable {
         }
 
         if (!varNames[0].equals("NaN") && !varNames[1].equals("NaN")) {
+          // prevent from dividing by zero expressions
+          if (binaryOp.equals("/") && (varNames[1].equals("0") || varNames[1].equals("0/1000000"))) {
+            binaryOp = "//"; // it will trigger an input error in solver
+          }
+          
           str.append("(");
           str.append(binaryOp);
           str.append(" ");

@@ -16,6 +16,7 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrikeBT.IComparisonInstruction;
 import com.ibm.wala.shrikeBT.IConditionalBranchInstruction;
+import com.ibm.wala.shrikeBT.IShiftInstruction;
 import com.ibm.wala.shrikeBT.IUnaryOpInstruction;
 import com.ibm.wala.ssa.SSAArrayLengthInstruction;
 import com.ibm.wala.ssa.SSAArrayLoadInstruction;
@@ -382,33 +383,50 @@ public class InstHandler {
     if (newVarMap.containsKey(def)) {
       // create binaryOp SMTStatement
       String binaryOp = null;
-      switch ((IBinaryOpInstruction.Operator) binaryOpInst.getOperator()) {
-      case ADD:
-        binaryOp = var1 + " + " + var2;
-        break;
-      case AND:
-        binaryOp = var1 + " & " + var2;
-        break;
-      case DIV:
-        binaryOp = var1 + " / " + var2;
-        break;
-      case MUL:
-        binaryOp = var1 + " * " + var2;
-        break;
-      case OR:
-        binaryOp = var1 + " | " + var2;
-        break;
-      case REM:
-        binaryOp = var1 + " % " + var2;
-        break;
-      case SUB:
-        binaryOp = var1 + " - " + var2;
-        break;
-      case XOR:
-        binaryOp = var1 + " ^ " + var2;
-        break;
+      
+      IBinaryOpInstruction.IOperator operator = binaryOpInst.getOperator();
+      if (operator instanceof IBinaryOpInstruction.Operator) {
+        switch ((IBinaryOpInstruction.Operator) operator) {
+        case ADD:
+          binaryOp = var1 + " + " + var2;
+          break;
+        case AND:
+          binaryOp = var1 + " & " + var2;
+          break;
+        case DIV:
+          binaryOp = var1 + " / " + var2;
+          break;
+        case MUL:
+          binaryOp = var1 + " * " + var2;
+          break;
+        case OR:
+          binaryOp = var1 + " | " + var2;
+          break;
+        case REM:
+          binaryOp = var1 + " % " + var2;
+          break;
+        case SUB:
+          binaryOp = var1 + " - " + var2;
+          break;
+        case XOR:
+          binaryOp = var1 + " ^ " + var2;
+          break;
+        }
       }
-
+      else if (operator instanceof IShiftInstruction.Operator) {
+        switch ((IShiftInstruction.Operator) operator) {
+        case SHL:
+          binaryOp = var1 + " << " + var2;
+          break;
+        case SHR:
+          binaryOp = var1 + " >> " + var2;
+          break;
+        case USHR:
+          binaryOp = var1 + " >> " + var2;
+          break;
+        }
+      }
+      
       // def is not exist before binarayOp Instruction
       newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, binaryOp);
       
