@@ -25,7 +25,7 @@ public class SMTVariableMap {
     String regVarType     = "[\\w_\\[/$,]+";            // [Ljava/lang/String, etc
     String regName        = "[\\w_\\[/$#@]+";           // args
     String regMethodArgs  = "(?:[\\S]+[, ]*)*";         // might have problem if it's a str constant with ', ' in it, but good enough anyway!
-    String regBinaryOp    = "[+-/&|^%\\*]";             // binaryOps
+    String regBinaryOp    = "(?:[+-/&|^%\\*]|(?:<<)|(?:>>))"; // binaryOps (should be identical to SMTVariable.java)
     s_pattern1 = Pattern.compile("^" + regSimple + "$");
     s_pattern2 = Pattern.compile("^" + regConstant + "$");
     s_pattern3 = Pattern.compile("^\\((" + regVarType + ")\\)(" + regName + ")$");

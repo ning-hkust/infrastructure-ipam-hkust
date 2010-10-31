@@ -522,7 +522,7 @@ public class WeakestPrecondition {
             // of an interface while methodNameOrSign is the concrete method
 
             // determine if entering call stack is still correct
-            if (!isTheSameMethod(mr, methodNameOrSign)) {
+            if (!isTheSameOrChildMethod(mr, methodNameOrSign)) {
               // skip this instruction
               inst = null;
             }
@@ -534,8 +534,8 @@ public class WeakestPrecondition {
         }
         else {
           // if we cannot enter call stack correctly, no need to continue
-          String msg = "Failed to enter call stack: " + 
-            callStack.getCurMethodNameOrSign() + " (Line " + callStack.getCurLineNo() + ")!";
+          String msg = "Failed to enter call stack: " + callStack.getNextMethodNameOrSign() + 
+            " at " + callStack.getCurMethodNameOrSign() + ":" + callStack.getCurLineNo();
           System.err.println(msg);
           throw new InvalidStackTraceException(msg);
         }
@@ -605,23 +605,33 @@ public class WeakestPrecondition {
     return preCond;
   }
   
-  private boolean isTheSameMethod(MethodReference mr, String methodNameOrSign) {
-    String invokingMethod = "";
-    boolean isSignature = Utils.isMethodSignature(methodNameOrSign);
-    if (isSignature) {
+  private boolean isTheSameOrChildMethod(MethodReference mr, String methodNameOrSign) {
+    boolean isSame = false;
+    
+    methodNameOrSign = methodNameOrSign.replace('$', '.');
+    if (Utils.isMethodSignature(methodNameOrSign)) {
       // get invoking method signature
-      invokingMethod = mr.getSignature();
+      String invokingMethod = mr.getSignature();
+      isSame = invokingMethod.equals(methodNameOrSign);
     }
     else {
       String declaringClass = mr.getDeclaringClass().getName().toString();
       declaringClass = Utils.getClassTypeJavaStr(declaringClass);
       
-      // get invoking method name
-      invokingMethod = declaringClass + "." + mr.getName().toString();
+      try {
+        // get class object
+        Class<?> cls = Class.forName(declaringClass);
+        for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
+          // get invoking method name
+          String invokingMethod = c.getName() + "." + mr.getName().toString();
+          if (invokingMethod.equals(methodNameOrSign)) {
+            isSame = true;
+            break;
+          }
+        }
+      } catch (ClassNotFoundException e) {}
     }
-
-    methodNameOrSign = methodNameOrSign.replace('$', '.');
-    return invokingMethod.equals(methodNameOrSign);
+    return isSame;
   }
   
   private boolean shouldCheckBranching(SSACFG cfg, int startingInst, int curInvokeDepth, 
