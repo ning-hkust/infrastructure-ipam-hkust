@@ -2,6 +2,7 @@ package hk.ust.cse.Prevision;
 
 import hk.ust.cse.Prevision.Solver.ISolverLoader;
 import hk.ust.cse.Prevision.Solver.SMTStatementList;
+import hk.ust.cse.Prevision.Solver.SMTTerm;
 import hk.ust.cse.Prevision.Solver.SMTVariableMap;
 import hk.ust.cse.Prevision.Solver.Yices.YicesLoader;
 import hk.ust.cse.Prevision.WeakestPrecondition.BBorInstInfo;
@@ -155,6 +156,7 @@ public class Predicate {
       // keeps the last one, so it might change from time to time
       m_lastSolverInput  = s_solverLoader.getLastInput();
       m_lastSolverOutput = s_solverLoader.getLastOutput();
+      m_lastSatModel     = s_solverLoader.getLastResult().getSatModel();
       
     } catch (StackOverflowError e) {
       System.err.println("Stack overflowed when generating SMT statements, skip!");
@@ -196,6 +198,15 @@ public class Predicate {
     }
     else {
       return "";
+    }
+  }
+  
+  public List<SMTTerm> getLastSatModel() {
+    if (s_solverLoader != null) {
+      return m_lastSatModel;
+    }
+    else {
+      return null;
     }
   }
   
@@ -325,5 +336,6 @@ public class Predicate {
   private String                             m_lastSolverInput;
   private String                             m_lastSolverOutput;
   private SMT_RESULT                        m_lastSolverResult;
+  private List<SMTTerm>                      m_lastSatModel;
   private static ISolverLoader               s_solverLoader;
 }
