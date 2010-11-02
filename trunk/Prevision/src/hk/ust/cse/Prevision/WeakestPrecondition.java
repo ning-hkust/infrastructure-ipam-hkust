@@ -902,9 +902,8 @@ public class WeakestPrecondition {
       }
       
       // set options
-      int[] branchesTo = new int[] {2};
       GlobalOptionsAndStates optAndStates = wp.new GlobalOptionsAndStates(
-          true, false, false, false, 10, 5000, 1, 3, 6, branchesTo, callStack);
+          false, false, false, false, 10, 5000, 1, 3, -1, null, callStack);
       
       wp.compute(optAndStates, null);
       // wp.heapTracer();
