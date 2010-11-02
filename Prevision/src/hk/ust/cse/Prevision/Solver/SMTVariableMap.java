@@ -81,6 +81,14 @@ public class SMTVariableMap {
     // add other define-type statements
     for (SMTVariable finalVar : m_finalVars) {
       String typeName = finalVar.getVarType();
+      // when containing space, it is a constant definition
+      // e.g., Fresh_0_(Ljava/lang/Object)::Ljava/lang/Object notnull
+      // e.g., this::Ljava/lang/Object notnull
+      int index = typeName.indexOf(' ');
+      if (index >= 0) {
+        typeName = typeName.substring(0, index);
+      }
+      
       if (!def_types.containsKey(typeName)) {
         def_types.put(typeName, "");
       }
@@ -255,6 +263,12 @@ public class SMTVariableMap {
       
       String varType = matcher.group(1);
       String varName = matcher.group(2);
+      
+      // special handling for 'this'
+      if (varName.equals("this")) {
+        varType += " notnull";
+      }
+      
       smtVariable = new SMTVariable(varName, varType, VarCategory.VAR_ARG, null);
     }
     else if ((matchedPattern == 4 && (matcher = s_pattern4.matcher(finalVarStr)).find()) || 
@@ -287,7 +301,7 @@ public class SMTVariableMap {
       
       String varType = matcher.group(1);
       String varName = "Fresh_" + m_nFreshInstance++ + "_(" + varType + ")";
-      smtVariable = new SMTVariable(varName, "FreshInstanceOf", null);
+      smtVariable = new SMTVariable(varName, varType + " notnull", null);
     }
     else if ((matchedPattern == 6 && (matcher = s_pattern6.matcher(finalVarStr)).find()) || 
              (matchedPattern == 0 && (matcher = s_pattern6.matcher(finalVarStr)).find())) {
