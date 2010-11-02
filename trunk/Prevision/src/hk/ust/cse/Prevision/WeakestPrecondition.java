@@ -423,6 +423,14 @@ public class WeakestPrecondition {
           pushChildrenBlocks(normPredBB, infoItem, precond, methData,
               Predicate.NORMAL_SUCCESSOR, dfsStack, optAndStates.maxLoop, valPrefix);
         }
+        else if (optAndStates.isEnteringCallStack()) {
+          // at method entry, we still cannot find the proper invocation 
+          // to enter call stack, throw InvalidStackTraceException
+          String msg = "Failed to enter call stack: " + callStack.getNextMethodNameOrSign() + 
+            " at " + callStack.getCurMethodNameOrSign() + ":" + callStack.getCurLineNo();
+          System.err.println(msg);
+          throw new InvalidStackTraceException(msg);
+        }
         else if (curInvokeDepth != 0 || !callStack.isOutMostCall()) {
           // we only do smtCheck() if it's not inside an invocation and
           // it's at the outermost invocation
