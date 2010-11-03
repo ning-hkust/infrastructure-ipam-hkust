@@ -1691,6 +1691,16 @@ public class InstHandler {
       // def is not exist before new Instruction
       newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, freshInst);
     }
+    
+    // for array types, we also need to substitute ".length" variables
+    if (newInst.getConcreteType().isArrayType()) {
+      // name of ".length" variables
+      String defLength = def + ".length";
+      
+      // substitute ".length" variables with the size variable
+      String valSize = methData.getSymbol(newInst.getUse(0), instInfo.valPrefix, newDefMap);
+      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, defLength, valSize);
+    }
 
     // add smtStatments to smtStatement list
     List<List<String>> newSMTStatements = addSMTStatments(
