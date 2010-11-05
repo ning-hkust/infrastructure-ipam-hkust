@@ -146,6 +146,23 @@ public class SMTVariable implements Cloneable {
       }
     }
   }
+  
+  // substitute SMTVariables, you need to consider if you should call 
+  // it before or after finalizeExtraVars
+  public void substExtraVars(Hashtable<SMTVariable, SMTVariable> varMap) {
+    for (int i = 0; m_extraVars != null && i < m_extraVars.size(); i++) {
+      if (varMap.containsKey(m_extraVars.get(i))) {
+        m_extraVars.set(i, varMap.get(m_extraVars.get(i)));
+
+        // clear all cache results
+        m_yicesExprStr = null;
+        m_javaExprStr  = null;
+        m_toString     = null;
+        m_hashCode     = -1;
+      }
+      m_extraVars.get(i).substExtraVars(varMap);
+    }
+  }
 
   public String toString() {
     if (m_toString != null) {

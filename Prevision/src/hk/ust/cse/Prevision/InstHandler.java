@@ -680,6 +680,14 @@ public class InstHandler {
           // toVal is not exist before conversion Instruction
           newVarMap = substituteVarMapKey(postCond, methData, newVarMap, toVal, convVal);
         }
+        else if (toType.equals("D") || 
+                 toType.equals("F")) {
+          // add new variables to varMap
+          newVarMap = addVars2VarMap(postCond, methData, newVarMap, fromVal, null);
+          
+          // toVal is not exist before conversion Instruction
+          newVarMap = substituteVarMapKey(postCond, methData, newVarMap, toVal, fromVal);
+        }
       }
       else {
         // not implement
