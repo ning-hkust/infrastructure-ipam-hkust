@@ -817,6 +817,12 @@ public class WeakestPrecondition {
       
       System.out.println("SMT Solver Output----------------------------------");
       System.out.println(precondtion.getLastSolverOutput());
+      
+      System.out.println("Parsed SatModel----------------------------------");
+      for (int i = 0, size = precondtion.getLastSatModel().size(); i < size; i++) {
+        System.out.println(precondtion.getLastSatModel().get(i).toYicesExprString());
+      }
+      System.out.println();
 
       System.out.println("SMT Statements--------------------------------");
       HashSet<String> outputted = new HashSet<String>();

@@ -15,7 +15,8 @@ import java.util.regex.Pattern;
 
 public class YicesResult implements ISolverResult {
   
-  private static final Pattern s_pattern = Pattern.compile("^\\(= ([\\S]+) ([\\S]+)\\)$");
+  private static final Pattern s_pattern1 = Pattern.compile("^\\(= ([\\S]+) ([\\S]+)\\)$");
+  private static final Pattern s_pattern2 = Pattern.compile("v[\\d]+\\$1");
   
   public void parseOutput(String output, Hashtable<String, SMTVariable> defFinalVarMap) {
     // save output first
@@ -34,9 +35,12 @@ public class YicesResult implements ISolverResult {
     }
     else {
       m_bSatisfactory = true;
+      
+      // analyze each model line
+      Hashtable<SMTVariable, SMTVariable> convHelperMap = new Hashtable<SMTVariable, SMTVariable>();
       for (int i = 1; i < outLines.length; i++) {
         if (outLines[i].length() > 0) {
-          SMTTerm term = toSMTTerm(outLines[i], defFinalVarMap);
+          SMTTerm term = toSMTTerm(outLines[i], defFinalVarMap, convHelperMap);
           if (term != null) {
             m_satModel.add(term);
           }
@@ -45,6 +49,9 @@ public class YicesResult implements ISolverResult {
           }
         }
       }
+      
+      // substitute conversion helper variables
+      substConvHelper(convHelperMap);
     }
   }
 
@@ -60,9 +67,14 @@ public class YicesResult implements ISolverResult {
     return m_satModel;
   }
 
-  private SMTTerm toSMTTerm(String str, Hashtable<String, SMTVariable> defFinalVarMap) {
+  private boolean isConversionHelper(String modelLine) {
+    return s_pattern2.matcher(modelLine).matches();
+  }
+  
+  private SMTTerm toSMTTerm(String str, Hashtable<String, SMTVariable> defFinalVarMap, 
+      Hashtable<SMTVariable, SMTVariable> convHelperMap) {
     Matcher matcher = null;
-    if ((matcher = s_pattern.matcher(str)).find()) {
+    if ((matcher = s_pattern1.matcher(str)).find()) {
       SMTVariable var1 = defFinalVarMap.get(matcher.group(1));
       SMTVariable var2 = defFinalVarMap.get(matcher.group(2));
       
@@ -74,6 +86,9 @@ public class YicesResult implements ISolverResult {
       }
       
       if (var1 != null) {
+        if (isConversionHelper(matcher.group(1))) {
+          convHelperMap.put(var1, var2);
+        }
         return new SMTTerm(var1, Operator.OP_EQUAL, var2);
       }
       else {
@@ -82,6 +97,24 @@ public class YicesResult implements ISolverResult {
     }
     else {
       return null;
+    }
+  }
+  
+  private void substConvHelper(Hashtable<SMTVariable, SMTVariable> convHelperMap) {
+    if (m_satModel != null) {
+      for (int i = 0; i < m_satModel.size(); i++) {
+        SMTVariable var1 = m_satModel.get(i).getVar1();
+        SMTVariable var2 = m_satModel.get(i).getVar2();
+        if (convHelperMap.containsKey(var1)) {
+          // var1 is a conversion helper, remove this term
+          m_satModel.remove(i--);
+        }
+        else {
+          // substitute conversion helper variables with concrete values
+          var1.substExtraVars(convHelperMap);
+          var2.substExtraVars(convHelperMap);
+        }
+      }
     }
   }
 
