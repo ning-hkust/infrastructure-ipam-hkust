@@ -415,9 +415,12 @@ public class WeakestPrecondition {
             retainOnlyBranches(cfg, optAndStates.startingInstBranchesTo, normPredBB, excpPredBB);
           }
           
-          // iterate all exceptional predecessors
-          pushChildrenBlocks(excpPredBB, infoItem, precond, methData,
-              Predicate.EXCEPTIONAL_SUCCESSOR, dfsStack, optAndStates.maxLoop, valPrefix);
+          // only traverse exceptional paths when we come from a catch block
+          if (isCaught(precond)) {
+            // iterate all exceptional predecessors
+            pushChildrenBlocks(excpPredBB, infoItem, precond, methData,
+                Predicate.EXCEPTIONAL_SUCCESSOR, dfsStack, optAndStates.maxLoop, valPrefix);            
+          }
           
           // iterate all normal predecessors
           pushChildrenBlocks(normPredBB, infoItem, precond, methData,
@@ -785,6 +788,9 @@ public class WeakestPrecondition {
     return foundBB;
   }
   
+  private boolean isCaught(Predicate predicate) {
+    return  predicate.getVarMap().containsKey("Caught");
+  }
   
   /**
    * Assuming there is at most one 'Caught ...' at a time.
