@@ -269,6 +269,29 @@ public class Utils {
     }
     return ret;
   }
+  
+  public static String toEncoding(String typeStr) {
+    if (s_encodingMap == null) {
+      s_encodingMap = new Hashtable<String, String>();
+      
+      // init
+      s_encodingMap.put("boolean", "Z");
+      s_encodingMap.put("int", "I");
+      s_encodingMap.put("short", "S");
+      s_encodingMap.put("long", "J");
+      s_encodingMap.put("float", "F");
+      s_encodingMap.put("double", "D");
+      s_encodingMap.put("char", "C");
+      s_encodingMap.put("byte", "B");
+    }
+    
+    // find in map
+    String encoding = s_encodingMap.get(typeStr);
+    if (encoding == null) {
+      encoding = typeStr;
+    }
+    return encoding;
+  }
 
   public static String toPrimitiveBagType(String typeStr) {
     String ret = typeStr;
@@ -396,4 +419,5 @@ public class Utils {
   }
   
   private static Hashtable<Class<?>, Class<?>> s_boxClassMap;
+  private static Hashtable<String, String>     s_encodingMap;
 }
