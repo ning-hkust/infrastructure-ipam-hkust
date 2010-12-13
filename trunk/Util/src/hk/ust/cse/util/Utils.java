@@ -65,10 +65,14 @@ public class Utils {
   
   private static String getClassTypeForNameStr(String classType) {
     if (classType.startsWith("[")) {
-      // [Ljava/lang/String -> [Ljava.lang.String;
-      // [[Ljava/lang/Object -> [[Ljava.lang.Object;
       if (classType.contains("[L")) {
-        return classType.replace('/', '.') + ";";
+        // [Ljava/lang/String -> [Ljava.lang.String;
+        // [[Ljava/lang/Object -> [[Ljava.lang.Object;
+        classType = classType.replace('/', '.');
+        if (!classType.endsWith(";")) {
+          classType += ";";
+        }
+        return classType;
       }
       else {
         // [I, [C etc, leave them unchanged
