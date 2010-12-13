@@ -1,18 +1,13 @@
 package hk.ust.cse.Prevision.Wala;
 
-import hk.ust.cse.Prevision.Utils;
-
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 
 import com.ibm.wala.cfg.ShrikeCFG;
 import com.ibm.wala.classLoader.IBytecodeMethod;
-import com.ibm.wala.classLoader.IClass;
-import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrikeBT.ConstantInstruction;
 import com.ibm.wala.shrikeBT.IInstruction;
 import com.ibm.wala.shrikeCT.InvalidClassFileException;
@@ -86,48 +81,6 @@ public class MethodMetaData {
       }
     }
     return var;
-  }
-
-  public List<String> getSubClasses(String className) {
-    IClassHierarchy classHierarchy = m_ir.getMethod().getClassHierarchy();
-    List<String> subClassList = new ArrayList<String>();
-
-    // find class first
-    IClass targetClass = null;
-    Iterator<IClass> classes = classHierarchy.iterator();
-    while (classes.hasNext()) {
-      IClass aClass = (IClass) classes.next();
-
-      // class name matches?
-      String aClassName = aClass.getName().toString();
-      aClassName = Utils.getClassTypeJavaStr(aClassName);
-      if (className.equals(aClassName)) {
-        targetClass = aClass;
-        break;
-      }
-    }
-
-    if (targetClass != null) {
-      Collection<IClass> subClasses = null;
-      if (targetClass.isInterface()) {
-        subClasses = classHierarchy.getImplementors(targetClass.getReference());
-      }
-      else {
-        subClasses = classHierarchy.getImmediateSubclasses(targetClass);
-      }
-
-      // add to result
-      if (subClasses != null) {
-        Iterator<IClass> allSubClasses = subClasses.iterator();
-        while (allSubClasses.hasNext()) {
-          IClass subClass = (IClass) allSubClasses.next();
-
-          String subClassName = subClass.getName().toString();
-          subClassList.add(Utils.getClassTypeJavaStr(subClassName));
-        }
-      }
-    }
-    return subClassList;
   }
 
   private String getConstantPrefix(int varID) {
