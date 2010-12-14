@@ -3,12 +3,31 @@ package hk.ust.cse.util;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 
 public class Properties {
 
-  public Properties(String propFile) throws IOException, FileNotFoundException {
+  /**
+   * @param propFile: properties file path or properties file name in classpath
+   */
+  public Properties(String propFile) throws IOException {
     m_properties = new java.util.Properties();
-    m_properties.load(new FileInputStream(propFile));
+    
+    // try to find properties file 
+    InputStream in = null;
+    try {
+      in = new FileInputStream(propFile);
+    } catch (FileNotFoundException e) {
+      in = this.getClass().getClassLoader().getResourceAsStream(propFile);
+    }
+    
+    // load properties file
+    if (in != null) {
+      m_properties.load(in);
+    }
+    else {
+      throw new FileNotFoundException("properties file: " + propFile + " not found!");
+    }
   }
   
   public String readKey(String key) {
