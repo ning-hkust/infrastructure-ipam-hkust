@@ -111,6 +111,21 @@ public class Utils {
     return fields;
   }
   
+  public static List<Method> getInheritedMethods(Class<?> cls) {
+    List<Method> methods = new ArrayList<Method>();
+    for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
+      Method[] declMethods = c.getDeclaredMethods();
+      // sort, because getDeclaredMethods() does not guarantee order
+      Arrays.sort(declMethods, new Comparator<Method>() {
+        public int compare(Method o1, Method o2) {
+          return o1.getName().compareTo(o2.getName());
+        }
+      });
+      methods.addAll(Arrays.asList(declMethods));
+    }
+    return methods;
+  }
+  
   public static Class<?> findClass(String clsName) {
     clsName = Utils.getClassTypeForNameStr(clsName);
     Class<?> cls = null;
