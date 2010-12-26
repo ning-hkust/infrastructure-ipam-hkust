@@ -8,6 +8,7 @@ import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
@@ -378,6 +379,49 @@ public class ObjCapture {
       try {
         Object obj = Serializer.loadObject(reader);
         retSet.add(obj);
+      } catch (Exception e) {
+        // do nothing, try next one
+      }
+      reader.close();
+
+      if (retSet.size() >= maxObjectCount) {
+        break;
+      }
+    }
+
+    return retSet;
+  }
+  
+  /**
+   * Read instances from a folder (not zipped), include file paths
+   */
+  public static Set<SimpleEntry<Object, String>> getFromFolderWithFilePath(Class<?> clazz, int maxObjectCount)
+      throws IOException {
+
+    if (clazz == null && maxObjectCount <= 0) {
+      return null;
+    }
+
+    File folder = getOutoutFileName(clazz);
+
+    if (!folder.exists() || !folder.isDirectory()) {
+      return null;
+    }
+
+    Set<SimpleEntry<Object, String>> retSet = new HashSet<SimpleEntry<Object, String>>();
+    String files[] = folder.list(new FilenameFilter() {
+      @Override
+      public boolean accept(File arg0, String arg1) {
+        return arg1.startsWith("hash_");
+      }
+    });
+
+    for (int i = 0; i < files.length; i++) {
+      String filePath = folder.getAbsolutePath() + "/" + files[i];
+      FileReader reader = new FileReader(filePath);
+      try {
+        Object obj = Serializer.loadObject(reader);
+        retSet.add(new SimpleEntry<Object, String>(obj, filePath));
       } catch (Exception e) {
         // do nothing, try next one
       }
