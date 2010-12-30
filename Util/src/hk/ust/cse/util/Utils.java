@@ -376,6 +376,21 @@ public class Utils {
     return ret;
   }
   
+  public static boolean isPrimitiveType(Class<?> cls) {
+    return cls.isPrimitive();
+  }
+  
+  public static boolean isPrimitiveBagType(Class<?> cls) {
+    return (cls.equals(Boolean.class) || 
+            cls.equals(Integer.class) || 
+            cls.equals(Short.class) || 
+            cls.equals(Long.class) || 
+            cls.equals(Float.class) || 
+            cls.equals(Double.class) || 
+            cls.equals(Character.class) || 
+            cls.equals(Byte.class));
+  }
+  
   public static Object castToBoxClass(Class<?> cls, String str) {
     cls = toBoxClass(cls);
     
