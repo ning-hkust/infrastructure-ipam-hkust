@@ -1,8 +1,8 @@
 package hk.ust.cse.StaticAnalysis.SetterAnalyzer;
 
-import hk.ust.cse.Prevision.Utils;
 import hk.ust.cse.Prevision.Wala.Jar2IR;
 import hk.ust.cse.Prevision.Wala.WalaAnalyzer;
+import hk.ust.cse.util.Utils;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
