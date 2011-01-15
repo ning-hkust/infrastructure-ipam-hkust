@@ -423,7 +423,8 @@ public class ObjCapture {
         Object obj = Serializer.loadObject(reader);
         retSet.add(new SimpleEntry<Object, String>(obj, filePath));
       } catch (Exception e) {
-        // do nothing, try next one
+        System.err.println("Exception \"" + e.getClass().getName() + "\" occurred when loading: " + filePath);
+        // try next one
       }
       reader.close();
 
