@@ -1,19 +1,19 @@
 package hk.ust.cse.Prevision;
 
+import hk.ust.cse.Prevision.WeakestPrecondition.BBorInstInfo;
+import hk.ust.cse.Prevision.WeakestPrecondition.GlobalOptionsAndStates;
 import hk.ust.cse.Prevision.Solver.ISolverLoader;
 import hk.ust.cse.Prevision.Solver.SMTStatementList;
 import hk.ust.cse.Prevision.Solver.SMTTerm;
 import hk.ust.cse.Prevision.Solver.SMTVariableMap;
 import hk.ust.cse.Prevision.Solver.Yices.YicesLoader;
-import hk.ust.cse.Prevision.WeakestPrecondition.BBorInstInfo;
-import hk.ust.cse.Prevision.WeakestPrecondition.GlobalOptionsAndStates;
 
 import java.lang.reflect.Method;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.List;
-import java.util.AbstractMap.SimpleEntry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -168,9 +168,9 @@ public class Predicate {
     
     return smtResult;
   }
-  
+
+  // clear everything except solver data, they are taking too much memory!
   public void clearNonSolverData() {
-    // clear everything except solver results, they are taking too much memory!
     m_SMTStatements    = null;
     m_varMap           = null;
     m_phiMap           = null;
@@ -178,7 +178,10 @@ public class Predicate {
     m_SMTStatementList = null;
     m_SMTVariableMap   = null;
     m_visitedRecord    = null;
-    
+  }
+
+  // clear solver data
+  public void clearSolverData() {
     m_lastSolverInput  = null;
     m_lastSolverOutput = null;
   }

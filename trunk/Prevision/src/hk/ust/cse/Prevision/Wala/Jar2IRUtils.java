@@ -4,9 +4,9 @@ import hk.ust.cse.Prevision.Utils;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.Hashtable;
 import java.util.Iterator;
-import java.util.AbstractMap.SimpleEntry;
 
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
@@ -92,7 +92,7 @@ class Jar2IRUtils {
             break;
           }
           else {
-            System.out.println("Method " + methName + " found, but cannot verify line number");
+            //System.out.println("Method " + methName + " found, but cannot verify line number");
           }
         }
       }
