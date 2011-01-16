@@ -11,6 +11,6 @@
 	<classpathentry kind="lib" path="lib/com.ibm.wala.shrike.jar" sourcepath="D:/Projects/SnuggleBug/wala_trunk/trunk/com.ibm.wala.shrike"/>
 	<classpathentry kind="lib" path="lib/com.ibm.wala.core.jar" sourcepath="D:/Projects/SnuggleBug/wala_trunk/trunk"/>
 	<classpathentry kind="lib" path="lib/com.ibm.wala.core.tests.jar"/>
-	<classpathentry kind="lib" path="/YicesWrapper/bin"/>
+	<classpathentry kind="lib" path="/YicesWrapper/bin" sourcepath="/YicesWrapper"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
