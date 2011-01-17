@@ -452,6 +452,31 @@ public class Utils {
     return list;
   }
   
+  public static String[] splitRecursive(String str, char opening, char closing, char splitWith) {
+    List<String> splits = new ArrayList<String>();
+    
+    int openingCount = 0;
+    int nextSplitPos = 0;
+    for (int i = 0, size = str.length(); i < size; i++) {
+      if (str.charAt(i) == opening) {
+        openingCount++;
+      }
+      else if (str.charAt(i) == closing && openingCount > 0) {
+        openingCount--;
+      }
+      else if (str.charAt(i) == splitWith && openingCount == 0) {
+        splits.add(str.substring(nextSplitPos, i));
+        nextSplitPos = i + 1;
+      }
+    }
+    // the rest of the strings
+    if (nextSplitPos < str.length()) {
+      splits.add(str.substring(nextSplitPos));
+    }
+    
+    return splits.toArray(new String[0]);
+  }
+  
   private static Hashtable<Class<?>, Class<?>> s_boxClassMap;
   private static Hashtable<String, String>     s_encodingMap;
 }
