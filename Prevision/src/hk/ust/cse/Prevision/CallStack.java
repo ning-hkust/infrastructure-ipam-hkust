@@ -130,7 +130,7 @@ public class CallStack implements Cloneable {
         int index            = frames[i].indexOf(":");
         String methNameOrSig = frames[i].substring(0, index);
         int lineNo           = Integer.parseInt(frames[i].substring(index + 1));
-        cs.addStackTrace(methNameOrSig, lineNo);
+        cs.addStackTrace(methNameOrSig.intern(), lineNo);
       }
     } catch (Exception e) {
       e.printStackTrace();

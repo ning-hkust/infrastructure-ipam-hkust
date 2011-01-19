@@ -54,6 +54,10 @@ public class SMTStatement {
 
     return yicesStr.toString();
   }
+  
+  public List<SMTTerm> getSMTTerms() {
+    return m_terms;
+  }
 
   private final List<SMTTerm> m_terms;
 }
