@@ -3,8 +3,10 @@ package hk.ust.cse.Prevision;
 import hk.ust.cse.Prevision.WeakestPrecondition.BBorInstInfo;
 import hk.ust.cse.Prevision.WeakestPrecondition.GlobalOptionsAndStates;
 import hk.ust.cse.Prevision.Solver.ISolverLoader;
+import hk.ust.cse.Prevision.Solver.SMTStatement;
 import hk.ust.cse.Prevision.Solver.SMTStatementList;
 import hk.ust.cse.Prevision.Solver.SMTTerm;
+import hk.ust.cse.Prevision.Solver.SMTVariable;
 import hk.ust.cse.Prevision.Solver.SMTVariableMap;
 import hk.ust.cse.Prevision.Solver.Yices.YicesLoader;
 
@@ -134,30 +136,35 @@ public class Predicate {
       solverCmd.append(m_SMTVariableMap.genYicesInput());
       solverCmd.append(m_SMTStatementList.genYicesInput(m_SMTVariableMap.getFinalVarMap()));
       
-      // check with an smt solver instance
-      ISolverLoader.SOLVER_COMP_PROCESS solverResult = 
-        s_solverLoader.check(solverCmd.toString(), m_SMTVariableMap.getDefFinalVarMap());
-      switch (solverResult) {
-      case SAT:
-        smtResult = SMT_RESULT.SAT;
-        break;
-      case UNSAT:
+      if (isContradicted() /* try simplify() first */) {
         smtResult = SMT_RESULT.UNSAT;
-        break;
-      case ERROR:
-        smtResult = SMT_RESULT.ERROR;
-        break;
-      case TIMEOUT:
-        smtResult = SMT_RESULT.TIMEOUT;
-        break;
+        m_lastSolverOutput = "unsat\nProven contradicted by simplify().";
       }
-      
-      // save smt solver input and output right away, because s_solverLoader only  
-      // keeps the last one, so it might change from time to time
-      m_lastSolverInput  = s_solverLoader.getLastInput();
-      m_lastSolverOutput = s_solverLoader.getLastOutput();
-      m_lastSatModel     = s_solverLoader.getLastResult().getSatModel();
-      
+      else {
+        // check with an smt solver instance
+        ISolverLoader.SOLVER_COMP_PROCESS solverResult = 
+          s_solverLoader.check(solverCmd.toString(), m_SMTVariableMap.getDefFinalVarMap());
+        switch (solverResult) {
+        case SAT:
+          smtResult = SMT_RESULT.SAT;
+          break;
+        case UNSAT:
+          smtResult = SMT_RESULT.UNSAT;
+          break;
+        case ERROR:
+          smtResult = SMT_RESULT.ERROR;
+          break;
+        case TIMEOUT:
+          smtResult = SMT_RESULT.TIMEOUT;
+          break;
+        }
+        
+        // save smt solver input and output right away, because s_solverLoader only  
+        // keeps the last one, so it might change from time to time
+        m_lastSolverInput  = s_solverLoader.getLastInput();
+        m_lastSolverOutput = s_solverLoader.getLastOutput();
+        m_lastSatModel     = s_solverLoader.getLastResult().getSatModel();
+      } 
     } catch (StackOverflowError e) {
       System.err.println("Stack overflowed when generating SMT statements, skip!");
       smtResult = SMT_RESULT.STACK_OVERFLOW;
@@ -325,7 +332,79 @@ public class Predicate {
   }
 
   private void simplify() {
-    m_contradicted = Boolean.valueOf(false);
+    m_contradicted = false;
+    
+    List<SMTStatement> smtStatements = m_SMTStatementList.getSMTStatements();
+    for (int i = 0, size = smtStatements.size(); i < size && !m_contradicted; i++) {
+      if (smtStatements.get(i).getSMTTerms().size() != 1) {
+        continue;
+      }
+      
+      SMTTerm smtTerm = smtStatements.get(i).getSMTTerms().get(0);
+      SMTTerm.Operator op = smtTerm.getOp();
+      SMTVariable var1 = smtTerm.getVar1();
+      SMTVariable var2 = smtTerm.getVar2();
+      
+      // simplify rule 1: 
+      String var1Str = var1.toYicesExprString(0);
+      String var2Str = var2.toYicesExprString(0);
+      if (var1Str.equals(var2Str) && 
+         (op == SMTTerm.Operator.OP_GREATER || 
+          op == SMTTerm.Operator.OP_INEQUAL || 
+          op == SMTTerm.Operator.OP_SMALLER)) {
+        m_contradicted = true;
+        continue;
+      }
+      
+      // simplify rule 2: 
+      List<String> key = new ArrayList<String>();
+      key.add(var1Str);
+      key.add(var2Str);
+      
+      Hashtable<List<String>, List<SMTTerm.Operator>> statements = 
+        new Hashtable<List<String>, List<SMTTerm.Operator>>();
+      List<SMTTerm.Operator> previousOps = statements.get(key);
+      if (previousOps == null) {
+        previousOps = new ArrayList<SMTTerm.Operator>();
+        statements.put(key, previousOps);
+      }
+      
+      for (int j = 0, size2 = previousOps.size(); j < size2 && !m_contradicted; j++) {
+        SMTTerm.Operator previousOp = previousOps.get(j);
+        
+        if (previousOp == SMTTerm.Operator.OP_EQUAL && 
+           (op == SMTTerm.Operator.OP_GREATER || 
+            op == SMTTerm.Operator.OP_INEQUAL || 
+            op == SMTTerm.Operator.OP_SMALLER)) {
+          m_contradicted = true;
+        }
+        else if (previousOp == SMTTerm.Operator.OP_GREATER && 
+                (op == SMTTerm.Operator.OP_EQUAL || 
+                 op == SMTTerm.Operator.OP_SMALLER || 
+                 op == SMTTerm.Operator.OP_SMALLER_EQUAL)) {
+          m_contradicted = true;
+        }     
+        else if (previousOp == SMTTerm.Operator.OP_GREATER_EQUAL && 
+                (op == SMTTerm.Operator.OP_SMALLER)) {
+          m_contradicted = true;
+        }
+        else if (previousOp == SMTTerm.Operator.OP_INEQUAL && 
+                (op == SMTTerm.Operator.OP_EQUAL)) {
+          m_contradicted = true;
+        }       
+        else if (previousOp == SMTTerm.Operator.OP_SMALLER && 
+                (op == SMTTerm.Operator.OP_EQUAL || 
+                 op == SMTTerm.Operator.OP_GREATER || 
+                 op == SMTTerm.Operator.OP_GREATER_EQUAL)) {
+          m_contradicted = true;
+        } 
+        else if (previousOp == SMTTerm.Operator.OP_SMALLER_EQUAL && 
+                (op == SMTTerm.Operator.OP_GREATER)) {
+          m_contradicted = true;
+        }
+      }
+      previousOps.add(op);
+    }
   }
   
   private Boolean                            m_contradicted;

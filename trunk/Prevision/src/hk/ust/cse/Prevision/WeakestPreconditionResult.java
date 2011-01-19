@@ -63,6 +63,12 @@ public class WeakestPreconditionResult {
     }
   }
   
+  public void clearAllCheckedSolverData() {
+    for (Predicate checked : m_allChecked) {
+      checked.clearSolverData();
+    }
+  }
+  
   private boolean         m_overLimit;
   private boolean         m_reachMaximum;
   private List<Predicate> m_allChecked;

@@ -100,5 +100,9 @@ public class SMTStatementList {
     }
   }
   
+  public List<SMTStatement> getSMTStatements() {
+    return m_smtStatements;
+  }
+  
   private List<SMTStatement> m_smtStatements;
 }

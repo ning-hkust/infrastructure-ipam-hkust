@@ -4,6 +4,7 @@ import hk.ust.cse.Prevision.Wala.Jar2IR;
 import hk.ust.cse.Prevision.Wala.MethodMetaData;
 import hk.ust.cse.Prevision.Wala.WalaAnalyzer;
 
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -14,7 +15,6 @@ import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Stack;
-import java.util.AbstractMap.SimpleEntry;
 
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ssa.IR;
@@ -354,7 +354,8 @@ public class WeakestPrecondition {
       BBorInstInfo infoItem = dfsStack.pop();
 
       // if postCond is still satisfiable
-      if (!infoItem.postCond.isContradicted()) {
+      //if (!infoItem.postCond.isContradicted()) {
+      if (true) {
         System.out.println("Computing BB" + infoItem.currentBB.getNumber());
         
         // get visited records
