@@ -2,10 +2,10 @@ package hk.ust.cse.Prevision.Solver.Yices;
 
 import hk.ust.cse.Prevision.Solver.ISolverResult;
 import hk.ust.cse.Prevision.Solver.SMTTerm;
-import hk.ust.cse.Prevision.Solver.SMTVariable;
-import hk.ust.cse.Prevision.Solver.Utils;
 import hk.ust.cse.Prevision.Solver.SMTTerm.Operator;
+import hk.ust.cse.Prevision.Solver.SMTVariable;
 import hk.ust.cse.Prevision.Solver.SMTVariable.VarCategory;
+import hk.ust.cse.Prevision.Solver.Utils;
 
 import java.util.ArrayList;
 import java.util.Hashtable;
@@ -37,10 +37,9 @@ public class YicesResult implements ISolverResult {
       m_bSatisfactory = true;
       
       // analyze each model line
-      Hashtable<SMTVariable, SMTVariable> convHelperMap = new Hashtable<SMTVariable, SMTVariable>();
       for (int i = 1; i < outLines.length; i++) {
         if (outLines[i].length() > 0) {
-          SMTTerm term = toSMTTerm(outLines[i], defFinalVarMap, convHelperMap);
+          SMTTerm term = toSMTTerm(outLines[i], defFinalVarMap);
           if (term != null) {
             m_satModel.add(term);
           }
@@ -50,8 +49,11 @@ public class YicesResult implements ISolverResult {
         }
       }
       
-      // substitute conversion helper variables
-      substConvHelper(convHelperMap);
+      // substitute embedded final vars
+      substEmbeddedFinalVars();
+      
+      // remove conversion helpers
+      removeConvHelperTerm();
     }
   }
 
@@ -66,13 +68,10 @@ public class YicesResult implements ISolverResult {
   public List<SMTTerm> getSatModel() {
     return m_satModel;
   }
-
-  private boolean isConversionHelper(String modelLine) {
-    return s_pattern2.matcher(modelLine).matches();
-  }
   
-  private SMTTerm toSMTTerm(String str, Hashtable<String, SMTVariable> defFinalVarMap, 
-      Hashtable<SMTVariable, SMTVariable> convHelperMap) {
+  private SMTTerm toSMTTerm(String str, Hashtable<String, SMTVariable> defFinalVarMap) {
+    SMTTerm smtTerm = null;
+    
     Matcher matcher = null;
     if ((matcher = s_pattern1.matcher(str)).find()) {
       SMTVariable var1 = defFinalVarMap.get(matcher.group(1));
@@ -86,34 +85,44 @@ public class YicesResult implements ISolverResult {
       }
       
       if (var1 != null) {
-        if (isConversionHelper(matcher.group(1))) {
-          convHelperMap.put(var1, var2);
-        }
-        return new SMTTerm(var1, Operator.OP_EQUAL, var2);
-      }
-      else {
-        return null;
+        smtTerm = new SMTTerm(var1, Operator.OP_EQUAL, var2);
       }
     }
-    else {
-      return null;
+    return smtTerm;
+  }
+  
+  private void removeConvHelperTerm() {
+    if (m_satModel != null) {
+      for (int i = 0; i < m_satModel.size(); i++) {
+        String var1Name = m_satModel.get(i).getVar1().getVarName();
+        if (s_pattern2.matcher(var1Name).matches()) {
+          m_satModel.remove(i--);
+        }
+      }
     }
   }
   
-  private void substConvHelper(Hashtable<SMTVariable, SMTVariable> convHelperMap) {
+  private void substEmbeddedFinalVars() {
     if (m_satModel != null) {
-      for (int i = 0; i < m_satModel.size(); i++) {
-        SMTVariable var1 = m_satModel.get(i).getVar1();
-        SMTVariable var2 = m_satModel.get(i).getVar2();
-        if (convHelperMap.containsKey(var1)) {
-          // var1 is a conversion helper, remove this term
-          m_satModel.remove(i--);
+      // create a map
+      Hashtable<SMTVariable, SMTVariable> finalVarValueMap = new Hashtable<SMTVariable, SMTVariable>();
+      for (SMTTerm term : m_satModel) {
+        SMTVariable var1 = term.getVar1();
+        SMTVariable var2 = term.getVar2();
+        
+        // only substitute with numbers and booleans
+        if (var2.getVarCategory() == VarCategory.VAR_CONST && 
+            var2.getVarType().equals("#ConstantNumber") && 
+           !var2.getVarName().equals("notnull") && 
+           !var2.getVarName().equals("null")) {
+          finalVarValueMap.put(var1, var2);
         }
-        else {
-          // substitute conversion helper variables with concrete values
-          var1.substExtraVars(convHelperMap);
-          var2.substExtraVars(convHelperMap);
-        }
+      }
+      
+      // substitute all embedded final vars with concrete model values
+      for (SMTTerm term : m_satModel) {
+        term.getVar1().substExtraVars(finalVarValueMap);
+        term.getVar2().substExtraVars(finalVarValueMap);
       }
     }
   }
