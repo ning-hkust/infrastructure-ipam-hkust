@@ -255,7 +255,16 @@ public class ObjCapture {
 			for (Object obj : objSet) {
 				if (obj == null)
 					continue; 
-				File instrumentedFile = new File(outputFile, "/hash_" + obj.hashCode()); 
+				
+				// create file to save
+				File instrumentedFile = null;
+				try {
+				  instrumentedFile = new File(outputFile, "/hash_" + obj.hashCode());
+				} catch (Exception e) {
+          // may be hashCode() thrown an exception, save next one
+				  continue;
+        }
+				
 				if (instrumentedFile.exists())
 					instrumentedFile.delete();
 				// File instrumentedFile = new File(outputFile, "\\hash_" +
