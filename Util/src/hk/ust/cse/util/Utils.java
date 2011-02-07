@@ -477,6 +477,17 @@ public class Utils {
     return splits.toArray(new String[0]);
   }
   
+  public static String concatStrings(List<String> strings, String concatBy, boolean appendLast) {
+    StringBuilder str = new StringBuilder();
+    for (int i = 0, size = strings.size(); i < size; i++) {
+      str.append(strings.get(i));
+      if (appendLast || i < size - 1) {
+        str.append(concatBy);
+      }
+    }
+    return str.toString();
+  }
+  
   private static Hashtable<Class<?>, Class<?>> s_boxClassMap;
   private static Hashtable<String, String>     s_encodingMap;
 }
