@@ -220,6 +220,9 @@ public class WeakestPrecondition {
 
       // create dfs
       m_dfsStacks = new Hashtable<SimpleEntry<String, Predicate>, Stack<BBorInstInfo>>();
+      
+      // clear wpResult
+      m_wpResult = null;
     }
 
     // stack for depth first search, try to start from previous end point
