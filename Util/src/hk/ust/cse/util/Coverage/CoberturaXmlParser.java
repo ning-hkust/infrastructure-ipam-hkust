@@ -110,7 +110,7 @@ public class CoberturaXmlParser {
           }
 
           int number     = Integer.parseInt(elmn.attributeValue("number"));
-          int hits       = Integer.parseInt(elmn.attributeValue("hits"));
+          long hits      = Long.parseLong(elmn.attributeValue("hits"));
           boolean branch = Boolean.parseBoolean(elmn.attributeValue("branch"));
           String condCov = elmn.attributeValue("condition-coverage");
           Line line      = new Line(number, hits, branch, condCov, curMethod);

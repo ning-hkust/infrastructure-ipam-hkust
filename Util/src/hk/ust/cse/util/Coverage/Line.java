@@ -6,7 +6,7 @@ import java.util.List;
 
 public class Line {
 
-  public Line(int nLineNo, int nHits, boolean isBranch, String condCoverage, 
+  public Line(int nLineNo, long nHits, boolean isBranch, String condCoverage, 
       Method parentMethod) {
     m_nLineNo           = nLineNo;
     m_nHits             = nHits;
@@ -51,7 +51,7 @@ public class Line {
     return m_nLineNo;
   }
 
-  public int getHitCount() {
+  public long getHitCount() {
     return m_nHits;
   }
 
@@ -76,7 +76,7 @@ public class Line {
   }
 
   private final int     m_nLineNo;
-  private final int     m_nHits;
+  private final long    m_nHits;
   private final int     m_conditionCovered;
   private final int     m_conditionCount;
   private final boolean m_isBranch;
