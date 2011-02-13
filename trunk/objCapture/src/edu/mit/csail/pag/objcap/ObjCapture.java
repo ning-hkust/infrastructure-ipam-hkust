@@ -299,7 +299,8 @@ public class ObjCapture {
 			//System.out.println("!!!!!!!!" + className + " " + clazz.getName());
 			className = clazz.getName(); 
 		}
-		String objCapturePath = System.getenv("OBJ_CAPTURE_DIR");
+		//String objCapturePath = System.getenv("OBJ_CAPTURE_DIR");
+		String objCapturePath = System.getProperty("OBJ_CAPTURE_DIR");
 
 		if (objCapturePath == null) {
 			// objCapturePath = Util.getTmpDirectory() + "/" + "ObjCapture";
