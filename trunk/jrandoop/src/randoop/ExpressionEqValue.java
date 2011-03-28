@@ -105,10 +105,15 @@ public class ExpressionEqValue implements Observation, Serializable {
 				
 				
 
-			} else {
+			} else if (value == null || value.getClass().isPrimitive()) {  // altered by Ning
 				b.append(var);
 				b.append(".equals(");
 				b.append(PrimitiveTypes.toCodeString(value));
+				b.append(")");
+			} else {  // altered by Ning
+				b.append(var);
+				b.append(".equals(");
+				b.append(var);
 				b.append(")");
 			}
 		} else {
