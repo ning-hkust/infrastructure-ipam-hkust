@@ -404,6 +404,12 @@ public class Predicate {
         }
       }
       previousOps.add(op);
+      
+      // simplify rule 3: 
+      // there is a bug in yices: when (assert (= #somestr null)) is input, yices will crash.
+      if (var1Str.startsWith("#") && var2Str.equals("null") && op == SMTTerm.Operator.OP_EQUAL) {
+        m_contradicted = true;
+      }
     }
   }
   
