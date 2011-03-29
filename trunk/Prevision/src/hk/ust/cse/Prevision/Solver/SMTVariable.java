@@ -43,6 +43,16 @@ public class SMTVariable implements Cloneable {
     else if (m_varType.equals("#BinaryOp")) {
       return binaryOpToYicesDefStr();
     }
+    else if (m_extraVars != null && m_extraVars.size() == 1 && 
+             m_extraVars.get(0).m_varType.startsWith("[") && 
+             m_varName.equals("($extraVar1).length")) {
+     return arrayLengthToYicesDefStr();
+    }
+    else if (m_extraVars != null && m_extraVars.size() == 1 && 
+             m_extraVars.get(0).m_varType.equals("#ConstantString") && 
+             m_varName.equals("($extraVar1).count")) {
+      return stringCountToYicesDefStr();
+    }
     else {
       return normalToYicesDefStr();
     }
@@ -289,15 +299,35 @@ public class SMTVariable implements Cloneable {
     yicesStr.append(Utils.filterChars(m_varName));
     yicesStr.append("::(bitvector ");
     yicesStr.append(binaryStr.length());
-    yicesStr.append("))\n");
+    yicesStr.append(")");
+    yicesStr.append(" 0b" + binaryStr);
+    yicesStr.append(")");
+    return yicesStr.toString();
+  }
+  
+  private String stringCountToYicesDefStr() {
+    StringBuilder yicesStr = new StringBuilder();
     
-    // limit string constant
-    yicesStr.append("(assert (= ");
-    yicesStr.append(Utils.filterChars(m_varName));;
-    yicesStr.append(" 0b");
-    yicesStr.append(binaryStr);
-    yicesStr.append("))");
+    // define the count of the string
+    yicesStr.append("(define ");
+    yicesStr.append(toYicesExprString(0));
+    yicesStr.append("::I ");
+    yicesStr.append(m_extraVars.get(0).m_varName.length() - 1);
+    yicesStr.append(")");
+    return yicesStr.toString();
+  }
+  
+  private String arrayLengthToYicesDefStr() {
+    StringBuilder yicesStr = new StringBuilder();
+    
+    // define the array length field
+    yicesStr.append(normalToYicesDefStr());
+    yicesStr.append("\n");
 
+    // assert .length >= 0
+    yicesStr.append("(assert (>= ");
+    yicesStr.append(toYicesExprString(0));
+    yicesStr.append(" 0))");
     return yicesStr.toString();
   }
 
