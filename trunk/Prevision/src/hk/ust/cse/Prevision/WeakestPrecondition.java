@@ -3,6 +3,7 @@ package hk.ust.cse.Prevision;
 import hk.ust.cse.Prevision.Wala.Jar2IR;
 import hk.ust.cse.Prevision.Wala.MethodMetaData;
 import hk.ust.cse.Prevision.Wala.WalaAnalyzer;
+import hk.ust.cse.Prevision.Wala.WalaUtils;
 
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
@@ -31,14 +32,14 @@ import com.ibm.wala.util.heapTrace.HeapTracer.Result;
 public class WeakestPrecondition {
   public class GlobalOptionsAndStates {
     public GlobalOptionsAndStates(boolean inclInnerMostLine, boolean inclStartingInst, 
-        boolean useSummary, boolean compDispatchTargets, int maxRetrieve, 
+        boolean useSummary, int maxDispatchTargets, int maxRetrieve, 
         int maxSmtCheck, int maxInvokeDepth, int maxLoop, int startingInst, 
         int[] startingInstBranchesTo, CallStack fullCallStack) {
       
       // options
       this.inclInnerMostLine      = inclInnerMostLine;
       this.inclStartingInst       = inclStartingInst;
-      this.compDispatchTargets    = compDispatchTargets;
+      this.maxDispatchTargets     = (maxDispatchTargets < 0) ? Integer.MAX_VALUE : maxDispatchTargets;
       this.maxRetrieve            = maxRetrieve;
       this.maxSmtCheck            = maxSmtCheck;
       this.maxInvokeDepth         = maxInvokeDepth;
@@ -76,7 +77,7 @@ public class WeakestPrecondition {
     // global options
     public final boolean   inclInnerMostLine;
     public final boolean   inclStartingInst;
-    public final boolean   compDispatchTargets;
+    public final int       maxDispatchTargets;
     public final int       maxRetrieve;
     public final int       maxSmtCheck;
     public final int       maxInvokeDepth;
@@ -103,6 +104,15 @@ public class WeakestPrecondition {
       this.valPrefix    = valPrefix;
       this.wp           = wp;
     }
+    
+    public BBorInstInfo clone() {
+      BBorInstInfo newInfo = new BBorInstInfo(currentBB, postCond, sucessorType, 
+          sucessorBB, sucessorInfo, methData, valPrefix, wp);
+      newInfo.target = target;
+      return newInfo;
+    }
+    
+    public SimpleEntry<SSAInvokeInstruction, CGNode> target;
     
     public final Predicate postCond;
     public final int sucessorType;
@@ -160,7 +170,7 @@ public class WeakestPrecondition {
       
     // get the initial cgNode
     CGNode cgNode = null;
-    if (optAndStates.compDispatchTargets) {
+    if (optAndStates.maxDispatchTargets > 0) {
       cgNode = m_walaAnalyzer.getCallGraph().getNode(ir.getMethod());
     }
     
@@ -365,15 +375,21 @@ public class WeakestPrecondition {
         Hashtable<ISSABasicBlock, Integer> visitedBB = infoItem.postCond.getVisitedRecord();
         
         // compute for this BB
+        int oriStackSize = dfsStack.size();
         List<SimpleEntry<String, Predicate>> usedPredicates = new ArrayList<SimpleEntry<String, Predicate>>();
         Predicate precond = computeBB(optAndStates, cgNode, methData, infoItem, 
             startLine, startingInst, inclLine, callStack, starting, curInvokeDepth, 
-            valPrefix, usedPredicates);
+            valPrefix, dfsStack, usedPredicates);
 
         if (precond == null) {
           break;
         }
 
+        // if invocation targets have been pushed into stack, skip the current inst
+        if (dfsStack.size() != oriStackSize) {
+          continue;
+        }
+        
         // out put for debug
         //System.out.println(precond.getVarMap().toString());
         //System.out.println(precond.getPhiMap().toString());
@@ -499,7 +515,8 @@ public class WeakestPrecondition {
   private Predicate computeBB(GlobalOptionsAndStates optAndStates, CGNode cgNode, 
       MethodMetaData methData, BBorInstInfo infoItem, int startLine, int startingInst, 
       boolean inclLine, CallStack callStack, boolean[] starting, int curInvokeDepth, 
-      String valPrefix, List<SimpleEntry<String, Predicate>> usedPredicates) throws InvalidStackTraceException {
+      String valPrefix, Stack<BBorInstInfo> dfsStack, 
+      List<SimpleEntry<String, Predicate>> usedPredicates) throws InvalidStackTraceException {
     
     Predicate preCond = infoItem.postCond;
     SSAInstruction[] allInsts = methData.getcfg().getInstructions();
@@ -521,9 +538,45 @@ public class WeakestPrecondition {
       // get instruction
       SSAInstruction inst = allInsts[currInstIndex];
 
-      int currLine = methData.getLineNumber(currInstIndex);
+      IR ir = null;
+      if (inst instanceof SSAInvokeInstruction && (infoItem.target == null || !infoItem.target.getKey().equals(inst))) {
+        SSAInvokeInstruction invokeInst = (SSAInvokeInstruction)inst;
+        MethodReference mr = invokeInst.getDeclaredTarget();
+        
+        if (cgNode != null) {
+          // find the potential targets of this invocation
+          SimpleEntry<IR[], CGNode[]> ret = WalaUtils.findInvocationTargets(
+              m_walaAnalyzer, cgNode, invokeInst.getCallSite(), optAndStates.maxDispatchTargets);
+          IR[] targetIRs       = ret.getKey();
+          CGNode[] targetNodes = ret.getValue();
+        
+          // if found new targets, add them
+          if (targetIRs.length > 0 && !targetIRs[0].getMethod().getSignature().equals(mr.getSignature())) {
+            for (int i = 0; i < targetNodes.length; i++) {
+              BBorInstInfo newInfo = infoItem.clone();
+              newInfo.target = new SimpleEntry<SSAInvokeInstruction, CGNode>(invokeInst, targetNodes[i]);
+              dfsStack.add(newInfo);
+            }
+            return infoItem.postCond;
+          }
+          else if (targetIRs.length > 0) {
+            infoItem.target = new SimpleEntry<SSAInvokeInstruction, CGNode>(invokeInst, targetNodes[0]);
+          }
+          else {
+            infoItem.target = new SimpleEntry<SSAInvokeInstruction, CGNode>(invokeInst, null);
+          }
+        }
+        else {
+          infoItem.target = new SimpleEntry<SSAInvokeInstruction, CGNode>(invokeInst, null);
+        }
+      }
+      else if (inst instanceof SSAInvokeInstruction && infoItem.target != null && infoItem.target.getValue() != null) {
+        ir = infoItem.target.getValue().getIR();
+      }
+      
       
       // determine if entering call stack is still correct
+      int currLine = methData.getLineNumber(currInstIndex);
       if (optAndStates.isEnteringCallStack()) {
         // determine if entering call stack is still correct
         if (callStack.getCurLineNo() == currLine) {
@@ -531,7 +584,7 @@ public class WeakestPrecondition {
             String methodNameOrSign = callStack.getNextMethodNameOrSign();
             
             SSAInvokeInstruction invokeInst = (SSAInvokeInstruction)inst;
-            MethodReference mr = invokeInst.getDeclaredTarget();
+            MethodReference mr = (ir == null) ? invokeInst.getDeclaredTarget() : ir.getMethod().getReference();
             
             // FIXME: Should handle polymorphism! mr could be a method
             // of an interface while methodNameOrSign is the concrete method
@@ -919,7 +972,7 @@ public class WeakestPrecondition {
       
       // set options
       GlobalOptionsAndStates optAndStates = wp.new GlobalOptionsAndStates(
-          false, false, false, false, 10, 5000, 1, 3, -1, null, callStack);
+          false, false, false, 2, 10, 5000, 1, 3, -1, null, callStack);
       
       wp.compute(optAndStates, null);
       // wp.heapTracer();

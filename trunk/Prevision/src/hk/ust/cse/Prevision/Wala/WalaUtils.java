@@ -2,13 +2,17 @@ package hk.ust.cse.Prevision.Wala;
 
 import hk.ust.cse.Prevision.Utils;
 
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
+import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ssa.IR;
 
 public class WalaUtils {
   
@@ -52,5 +56,23 @@ public class WalaUtils {
       }
     }
     return subClassList;
+  }
+  
+  public static SimpleEntry<IR[], CGNode[]> findInvocationTargets(
+      WalaAnalyzer walaAnalyzer, CGNode caller, CallSiteReference callSite, int maxToGet) {
+    
+    // get target CGNodes
+    CallGraph callGraph = walaAnalyzer.getCallGraph();
+    CGNode[] targets = callGraph.getDispatchTargets(caller, callSite);
+    
+    // get target IRs
+    int size = targets.length < maxToGet ? targets.length : maxToGet;
+    IR[] targetIRs       = new IR[size];
+    CGNode[] targetNodes = new CGNode[size];
+    for (int i = 0; i < size; i++) {
+      targetIRs[i]   = Jar2IR.getIR(walaAnalyzer, targets[i].getMethod().getSignature());
+      targetNodes[i] = targets[i];
+    }
+    return new SimpleEntry<IR[], CGNode[]>(targetIRs, targetNodes);
   }
 }

@@ -1,17 +1,15 @@
 package hk.ust.cse.Prevision;
 
-import hk.ust.cse.Prevision.Wala.CallGraph;
-import hk.ust.cse.Prevision.Wala.MethodMetaData;
 import hk.ust.cse.Prevision.WeakestPrecondition.BBorInstInfo;
 import hk.ust.cse.Prevision.WeakestPrecondition.GlobalOptionsAndStates;
+import hk.ust.cse.Prevision.Wala.MethodMetaData;
 
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.List;
-import java.util.AbstractMap.SimpleEntry;
 
-import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrikeBT.IComparisonInstruction;
@@ -22,6 +20,7 @@ import com.ibm.wala.ssa.SSAArrayLengthInstruction;
 import com.ibm.wala.ssa.SSAArrayLoadInstruction;
 import com.ibm.wala.ssa.SSAArrayStoreInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
+import com.ibm.wala.ssa.SSACFG.ExceptionHandlerBasicBlock;
 import com.ibm.wala.ssa.SSACheckCastInstruction;
 import com.ibm.wala.ssa.SSAComparisonInstruction;
 import com.ibm.wala.ssa.SSAConditionalBranchInstruction;
@@ -39,7 +38,6 @@ import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SSASwitchInstruction;
 import com.ibm.wala.ssa.SSAThrowInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
-import com.ibm.wala.ssa.SSACFG.ExceptionHandlerBasicBlock;
 import com.ibm.wala.types.TypeReference;
 
 public class InstHandler {
@@ -954,204 +952,38 @@ public class InstHandler {
     return preCond;
   }
   
-  // simple implementation, do not consider call graph
-  @SuppressWarnings("unchecked")
   public static Predicate handle_invokeinterface(Predicate postCond,
       SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
-    Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAInvokeInstruction invokeinterfaceInst = (SSAInvokeInstruction) inst;
-
-    // the variable(result) define by the invokeinterfaceInst instruction
-    String def = methData.getSymbol(invokeinterfaceInst.getDef(), instInfo.valPrefix, newDefMap);
-    String ref = methData.getSymbol(invokeinterfaceInst.getUse(0), instInfo.valPrefix, newDefMap);
-    List<String> params = new ArrayList<String>();
-    int count = invokeinterfaceInst.getNumberOfParameters();
-    for (int i = 1; i < count; i++) {
-      params.add(methData.getSymbol(invokeinterfaceInst.getUse(i), instInfo.valPrefix, newDefMap));
-    }
-
-    List<String> smtStatement = null;
-    List<List<String>> smtStatements = new ArrayList<List<String>>();
-    switch (instInfo.sucessorType) {
-    case Predicate.NORMAL_SUCCESSOR:
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(ref);
-      smtStatement.add("!=");
-      smtStatement.add("null");
-      smtStatements.add(smtStatement);
-
-      // assign concrete variable to phi variable
-      List<Hashtable<String, ?>> rets =
-        assignPhiValue(postCond, methData, newVarMap, def);
-      newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-      newPhiMap = (Hashtable<String, String>) rets.get(1);
-      newDefMap = (Hashtable<String, Integer>) rets.get(2);
-      
-      // add new variables to varMap
-      newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-
-      // the variable define by the invokeinterfaceInst instruction
-      if (newVarMap.containsKey(def)) {
-        StringBuilder invocation = new StringBuilder();
-        // get the fieldType of the declared field of the invokevirtual instruction
-        invocation.append("(" + invokeinterfaceInst.getDeclaredResultType().getName() + ")");
-        // get the class type that declared this field
-        invocation.append(ref);
-        // get the name of the field
-        invocation.append("." + invokeinterfaceInst.getDeclaredTarget().getSelector().getName());
-        // get the parameters
-        invocation.append("(");
-        for (int i = 0; i < params.size(); i++) {
-          invocation.append(params.get(i));
-          if (i != params.size() - 1) {
-            invocation.append(", ");
-          }
-        }
-        invocation.append(");");
-        
-        // def is not exist before invokeinterfaceInst Instruction
-        newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, invocation.toString());
-        // add new variables to varMap
-        newVarMap = addVars2VarMap(postCond, methData, newVarMap, params);
-      }
-      break;
-    case Predicate.EXCEPTIONAL_SUCCESSOR:
-      /* can only be NPE */
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(ref);
-      smtStatement.add("==");
-      smtStatement.add("null");
-      smtStatements.add(smtStatement);
-
-      // add new variables to varMap
-      newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-      
-      // set caught variable into triggered variable, 
-      // indicating the caught exception is trigger by the instruction
-      newVarMap = setExceptionTriggered(postCond, newVarMap, "Ljava/lang/NullPointerException");
-      break;
-    }
-
-    // add smtStatments to smtStatement list
-    List<List<String>> newSMTStatements = addSMTStatments(
-        postCond.getSMTStatements(), smtStatements);
-
-    preCond = new Predicate(newSMTStatements, newVarMap, newPhiMap, newDefMap);
-    return preCond;
+    return handle_invokenonstatic(postCond, inst, instInfo);
   }
 
-  // simple implementation, do not consider call graph
-  @SuppressWarnings("unchecked")
   public static Predicate handle_invokevirtual(Predicate postCond,
       SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
-    Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAInvokeInstruction invokevirtualInst = (SSAInvokeInstruction) inst;
-
-    // the variable(result) define by the invokevirtual instruction
-    String def = methData.getSymbol(invokevirtualInst.getDef(), instInfo.valPrefix, newDefMap);
-    String ref = methData.getSymbol(invokevirtualInst.getUse(0), instInfo.valPrefix, newDefMap);
-    List<String> params = new ArrayList<String>();
-    int count = invokevirtualInst.getNumberOfParameters();
-    for (int i = 1; i < count; i++) {
-      params.add(methData.getSymbol(invokevirtualInst.getUse(i), instInfo.valPrefix, newDefMap));
-    }
-
-    List<String> smtStatement = null;
-    List<List<String>> smtStatements = new ArrayList<List<String>>();
-    switch (instInfo.sucessorType) {
-    case Predicate.NORMAL_SUCCESSOR:
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(ref);
-      smtStatement.add("!=");
-      smtStatement.add("null");
-      smtStatements.add(smtStatement);
-
-      // assign concrete variable to phi variable
-      List<Hashtable<String, ?>> rets =
-        assignPhiValue(postCond, methData, newVarMap, def);
-      newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-      newPhiMap = (Hashtable<String, String>) rets.get(1);
-      newDefMap = (Hashtable<String, Integer>) rets.get(2);
-      
-      // add new variables to varMap
-      newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-
-      // the variable define by the invokevirtual instruction
-      if (newVarMap.containsKey(def)) {
-        StringBuilder invocation = new StringBuilder();
-        // get the fieldType of the declared field of the invokevirtual instruction
-        invocation.append("(" + invokevirtualInst.getDeclaredResultType().getName() + ")");
-        // get the class type that declared this field
-        invocation.append(ref);
-        // get the name of the field
-        invocation.append("." + invokevirtualInst.getDeclaredTarget().getSelector().getName());
-        // get the parameters
-        invocation.append("(");
-        for (int i = 0; i < params.size(); i++) {
-          invocation.append(params.get(i));
-          if (i != params.size() - 1) {
-            invocation.append(", ");
-          }
-        }
-        invocation.append(");");
-        
-        // def is not exist before invokevirtual Instruction
-        newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, invocation.toString());
-        // add new variables to varMap
-        newVarMap = addVars2VarMap(postCond, methData, newVarMap, params);
-      }
-      break;
-    case Predicate.EXCEPTIONAL_SUCCESSOR:
-      /* can only be NPE */
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(ref);
-      smtStatement.add("==");
-      smtStatement.add("null");
-      smtStatements.add(smtStatement);
-
-      // add new variables to varMap
-      newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-      
-      // set caught variable into triggered variable, 
-      // indicating the caught exception is trigger by the instruction
-      newVarMap = setExceptionTriggered(postCond, newVarMap, "Ljava/lang/NullPointerException");
-      break;
-    }
-
-    // add smtStatments to smtStatement list
-    List<List<String>> newSMTStatements = addSMTStatments(
-        postCond.getSMTStatements(), smtStatements);
-
-    preCond = new Predicate(newSMTStatements, newVarMap, newPhiMap, newDefMap);
-    return preCond;
+    return handle_invokenonstatic(postCond, inst, instInfo);
   }
 
-  // simple implementation, do not consider call graph
-  @SuppressWarnings("unchecked")
   public static Predicate handle_invokespecial(Predicate postCond,
+      SSAInstruction inst, BBorInstInfo instInfo) {
+    return handle_invokenonstatic(postCond, inst, instInfo);
+  }
+  
+  @SuppressWarnings("unchecked")
+  private static Predicate handle_invokenonstatic(Predicate postCond,
       SSAInstruction inst, BBorInstInfo instInfo) {
     Predicate preCond = null;
     MethodMetaData methData = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
     Hashtable<String, String> newPhiMap = postCond.getPhiMap();
     Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAInvokeInstruction invokespecialInst = (SSAInvokeInstruction) inst;
+    SSAInvokeInstruction invokeInst = (SSAInvokeInstruction) inst;
 
-    // the variable(result) define by the invokespecial instruction
-    String def = methData.getSymbol(invokespecialInst.getDef(), instInfo.valPrefix, newDefMap);
-    String ref = methData.getSymbol(invokespecialInst.getUse(0), instInfo.valPrefix, newDefMap);
+    // the variable(result) define by the invokeinterface/invokespecial/invokevirtual instruction
+    String def = methData.getSymbol(invokeInst.getDef(), instInfo.valPrefix, newDefMap);
+    String ref = methData.getSymbol(invokeInst.getUse(0), instInfo.valPrefix, newDefMap);
     List<String> params = new ArrayList<String>();
-    int count = invokespecialInst.getNumberOfParameters();
+    int count = invokeInst.getNumberOfParameters();
     for (int i = 1; i < count; i++) {
-      params.add(methData.getSymbol(invokespecialInst.getUse(i), instInfo.valPrefix, newDefMap));
+      params.add(methData.getSymbol(invokeInst.getUse(i), instInfo.valPrefix, newDefMap));
     }
 
     List<String> smtStatement = null;
@@ -1174,15 +1006,15 @@ public class InstHandler {
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
 
-      // the variable define by the invokespecial instruction
+      // the variable define by the invokeinterface/invokespecial/invokevirtual instruction
       if (newVarMap.containsKey(def)) {
         StringBuilder invocation = new StringBuilder();
-        // get the fieldType of the declared field of the invokevirtual instruction
-        invocation.append("(" + invokespecialInst.getDeclaredResultType().getName() + ")");
+        // get the fieldType of the declared field of the invokeinterface/invokespecial/invokevirtual instruction
+        invocation.append("(" + invokeInst.getDeclaredResultType().getName() + ")");
         // get the class type that declared this field
         invocation.append(ref);
         // get the name of the field
-        invocation.append("." + invokespecialInst.getDeclaredTarget().getSelector().getName());
+        invocation.append("." + invokeInst.getDeclaredTarget().getSelector().getName());
         // get the parameters
         invocation.append("(");
         for (int i = 0; i < params.size(); i++) {
@@ -1193,7 +1025,7 @@ public class InstHandler {
         }
         invocation.append(");");
         
-        // def is not exist before invokespecial Instruction
+        // def is not exist before invokeinterface/invokespecial/invokevirtual Instruction
         newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, invocation.toString());
         // add new variables to varMap
         newVarMap = addVars2VarMap(postCond, methData, newVarMap, params);
@@ -1278,136 +1110,30 @@ public class InstHandler {
     return preCond;
   }
   
-  // go into invocation
   public static Predicate handle_invokeinterface_stepin(GlobalOptionsAndStates optionsAndStates, 
       CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
       CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
-    return handle_invokeinterface(postCond, inst, instInfo);
+    return handle_invokenonstatic_stepin(optionsAndStates, caller, postCond, 
+        inst, instInfo, callStack, curInvokeDepth, usedPredicates);
   }
 
-  // go into invocation
-  @SuppressWarnings("unchecked")
   public static Predicate handle_invokevirtual_stepin(GlobalOptionsAndStates optionsAndStates, 
       CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
       CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
-    Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAInvokeInstruction invokevirtualInst = (SSAInvokeInstruction) inst;
-
-    // the variable(result) define by the invokevirtual instruction
-    String def = methData.getSymbol(invokevirtualInst.getDef(), instInfo.valPrefix, newDefMap);
-    String ref = methData.getSymbol(invokevirtualInst.getUse(0), instInfo.valPrefix, newDefMap);
-    List<String> params = new ArrayList<String>();
-    int count = invokevirtualInst.getNumberOfParameters();
-    for (int i = 1; i < count; i++) {
-      params.add(methData.getSymbol(invokevirtualInst.getUse(i), instInfo.valPrefix, newDefMap));
-    }
-    
-    List<String> smtStatement = null;
-    List<List<String>> smtStatements = new ArrayList<List<String>>();
-    switch (instInfo.sucessorType) {
-    case Predicate.NORMAL_SUCCESSOR:
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(ref);
-      smtStatement.add("!=");
-      smtStatement.add("null");
-      smtStatements.add(smtStatement);
-
-      // assign concrete variable to phi variable
-      List<Hashtable<String, ?>> rets =
-        assignPhiValue(postCond, methData, newVarMap, def);
-      newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-      newPhiMap = (Hashtable<String, String>) rets.get(1);
-      newDefMap = (Hashtable<String, Integer>) rets.get(2);
-
-      // add new variables to varMap
-      newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-      
-      // add smtStatments to smtStatement list
-      List<List<String>> newSMTStatements = addSMTStatments(
-          postCond.getSMTStatements(), smtStatements);
-      
-      // compute valPrefix for the new method
-      String newValPrefix = instInfo.valPrefix
-          + String.format("%04d", invokevirtualInst.getProgramCounter());
-
-      // add ref (v1 == this)
-      String newRef = "v" + newValPrefix + "1";
-
-      // map parameters to method
-      List<String> newParams = new ArrayList<String>();
-      newVarMap = mapParamsToMethod(invokevirtualInst, instInfo, methData, ref,
-          def, newValPrefix, newRef, params, newParams, newVarMap, postCond);
-      
-      // create new postCond
-      Predicate newPostCond = new Predicate(newSMTStatements, newVarMap, newPhiMap, newDefMap);
-      
-      // save used postCond, this will be used later to decide whether
-      // or not we can pop the basic block(containing the invoke instruction)
-      SimpleEntry<String, Predicate> used = 
-        new SimpleEntry<String, Predicate>(newValPrefix, newPostCond);
-      usedPredicates.add(used);
-      
-      // different handling mechanisms for ordinary invocations and entering call stacks
-      if (optionsAndStates.isEnteringCallStack()) {
-        // save this invoke instruction
-        instInfo.wp.saveCallStackInvokeInst(instInfo, inst);
-
-        // compute targeting method to enter call stack
-        preCond = computeToEnterCallSite(invokevirtualInst, instInfo, optionsAndStates, 
-            caller, callStack, curInvokeDepth, newValPrefix, newPostCond);
-      }
-      else {
-        // compute targeting method with startLine = -1 (from exit block)
-        preCond = computeAtCallSite(invokevirtualInst, instInfo, optionsAndStates, 
-            caller, callStack, curInvokeDepth, newValPrefix, newPostCond);
-      }
-
-      // if succeed
-      if (preCond != null) {
-        newVarMap = preCond.getVarMap();
-
-        // set params back
-        newVarMap = mapParamsFromMethod(methData, ref, newRef, params, newParams, newVarMap, preCond);
-
-        preCond = new Predicate(preCond.getSMTStatements(), newVarMap, newPhiMap, newDefMap);
-        return preCond;
-      }
-      else {
-        preCond = handle_invokevirtual(postCond, inst, instInfo);
-        return preCond;
-      }
-    case Predicate.EXCEPTIONAL_SUCCESSOR:
-      /* can only be NPE */
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(ref);
-      smtStatement.add("==");
-      smtStatement.add("null");
-      smtStatements.add(smtStatement);
-
-      // add new variables to varMap
-      newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
-      
-      // set caught variable into triggered variable, 
-      // indicating the caught exception is trigger by the instruction
-      newVarMap = setExceptionTriggered(postCond, newVarMap, "Ljava/lang/NullPointerException");
-      break;
-    }
-
-    // add smtStatments to smtStatement list
-    List<List<String>> newSMTStatements = addSMTStatments(
-        postCond.getSMTStatements(), smtStatements);
-
-    preCond = new Predicate(newSMTStatements, newVarMap, newPhiMap, newDefMap);
-    return preCond;
+    return handle_invokenonstatic_stepin(optionsAndStates, caller, postCond, 
+        inst, instInfo, callStack, curInvokeDepth, usedPredicates);
   }
 
+  public static Predicate handle_invokespecial_stepin(GlobalOptionsAndStates optionsAndStates, 
+      CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
+      CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
+    return handle_invokenonstatic_stepin(optionsAndStates, caller, postCond, 
+        inst, instInfo, callStack, curInvokeDepth, usedPredicates);
+  }
+  
   // go into invocation
   @SuppressWarnings("unchecked")
-  public static Predicate handle_invokespecial_stepin(GlobalOptionsAndStates optionsAndStates, 
+  private static Predicate handle_invokenonstatic_stepin(GlobalOptionsAndStates optionsAndStates, 
       CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
       CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     Predicate preCond = null;
@@ -1415,15 +1141,15 @@ public class InstHandler {
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
     Hashtable<String, String> newPhiMap = postCond.getPhiMap();
     Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAInvokeInstruction invokespecialInst = (SSAInvokeInstruction) inst;
+    SSAInvokeInstruction invokeInst = (SSAInvokeInstruction) inst;
 
-    // the variable(result) define by the invokevirtual instruction
-    String def = methData.getSymbol(invokespecialInst.getDef(), instInfo.valPrefix, newDefMap);
-    String ref = methData.getSymbol(invokespecialInst.getUse(0), instInfo.valPrefix, newDefMap);
+    // the variable(result) define by the invokeinterface/invokevirtual/invokespecial instruction
+    String def = methData.getSymbol(invokeInst.getDef(), instInfo.valPrefix, newDefMap);
+    String ref = methData.getSymbol(invokeInst.getUse(0), instInfo.valPrefix, newDefMap);
     List<String> params = new ArrayList<String>();
-    int count = invokespecialInst.getNumberOfParameters();
+    int count = invokeInst.getNumberOfParameters();
     for (int i = 1; i < count; i++) {
-      params.add(methData.getSymbol(invokespecialInst.getUse(i), instInfo.valPrefix, newDefMap));
+      params.add(methData.getSymbol(invokeInst.getUse(i), instInfo.valPrefix, newDefMap));
     }
 
     List<String> smtStatement = null;
@@ -1452,14 +1178,14 @@ public class InstHandler {
       
       // compute valPrefix for the new method
       String newValPrefix = instInfo.valPrefix
-          + String.format("%04d", invokespecialInst.getProgramCounter());
+          + String.format("%04d", invokeInst.getProgramCounter());
 
       // add ref (v1 == this)
       String newRef = "v" + newValPrefix + "1";
 
       // map parameters to method
       List<String> newParams = new ArrayList<String>();
-      newVarMap = mapParamsToMethod(invokespecialInst, instInfo, methData, ref,
+      newVarMap = mapParamsToMethod(invokeInst, instInfo, methData, ref,
           def, newValPrefix, newRef, params, newParams, newVarMap, postCond);
       
       // create new postCond
@@ -1477,12 +1203,12 @@ public class InstHandler {
         instInfo.wp.saveCallStackInvokeInst(instInfo, inst);
 
         // compute targeting method to enter call stack
-        preCond = computeToEnterCallSite(invokespecialInst, instInfo, optionsAndStates, 
+        preCond = computeToEnterCallSite(invokeInst, instInfo, optionsAndStates, 
             caller, callStack, curInvokeDepth, newValPrefix, newPostCond);
       }
       else {
         // compute targeting method with startLine = -1 (from exit block)
-        preCond = computeAtCallSite(invokespecialInst, instInfo, optionsAndStates, 
+        preCond = computeAtCallSite(invokeInst, instInfo, optionsAndStates, 
             caller, callStack, curInvokeDepth, newValPrefix, newPostCond);
       }
 
@@ -1497,7 +1223,7 @@ public class InstHandler {
         return preCond;
       }
       else {
-        preCond = handle_invokespecial(postCond, inst, instInfo);
+        preCond = handle_invokenonstatic(postCond, inst, instInfo);
         return preCond;
       }
     case Predicate.EXCEPTIONAL_SUCCESSOR:
@@ -2125,7 +1851,18 @@ public class InstHandler {
       Predicate newPostCond) {
     Predicate preCond = null;
     
-    String methodSig = invokeInst.getDeclaredTarget().getSignature();
+    // get method signature
+    assert(instInfo.target.getKey().equals(invokeInst));
+    String methodSig  = null;
+    CGNode methodNode = null;
+    if (instInfo.target.getValue() != null) {
+      methodSig  = instInfo.target.getValue().getMethod().getSignature();
+      methodNode = instInfo.target.getValue();
+    }
+    else {
+      methodSig  = invokeInst.getDeclaredTarget().getSignature();
+      methodNode = null;
+    }
     
     // get inner call stack
     CallStack innerCallStack = callStack.getInnerCallStack();
@@ -2139,25 +1876,9 @@ public class InstHandler {
       startingInst = optAndStates.startingInst;
     }
 
-    // get dispatch target
-    CGNode target = null;
-    if (optAndStates.compDispatchTargets) {
-      // get targets
-      CallGraph callGraph = instInfo.wp.getWalaAnalyzer().getCallGraph();
-      CGNode[] targets = getInvokeTargets(callGraph, caller, invokeInst.getCallSite());
-      
-      // TODO: support multiple targets
-      if (targets != null && targets.length > 0) {
-        target = targets[0]; // take the first one
-        if (target != null) {
-          methodSig = target.getMethod().getSignature();
-        }
-      }
-    }
-
     try {
       WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optAndStates, 
-          target, methodSig, lineNo, startingInst, inclLine, innerCallStack, 
+          methodNode, methodSig, lineNo, startingInst, inclLine, innerCallStack, 
           curInvokeDepth, newValPrefix, newPostCond);
       preCond = wpResult.getFirstSatisfiable();
     } catch (InvalidStackTraceException e) {}
@@ -2170,8 +1891,19 @@ public class InstHandler {
       CallStack callStack, int curInvokeDepth, String newValPrefix, 
       Predicate newPostCond) {
     Predicate preCond = null;
-
-    String methodSig = invokeInst.getDeclaredTarget().getSignature();
+  
+    // get method signature
+    assert(instInfo.target.getKey().equals(invokeInst));
+    String methodSig  = null;
+    CGNode methodNode = null;
+    if (instInfo.target.getValue() != null) {
+      methodSig  = instInfo.target.getValue().getMethod().getSignature();
+      methodNode = instInfo.target.getValue();
+    }
+    else {
+      methodSig  = invokeInst.getDeclaredTarget().getSignature();
+      methodNode = null;
+    }
     
     // get from summary
     boolean noMatch = false;
@@ -2185,25 +1917,10 @@ public class InstHandler {
 
     // if no summary, compute
     if (preCond == null) {
-      CGNode target = null;
-      if (optAndStates.compDispatchTargets) {
-        // get targets
-        CallGraph callGraph = instInfo.wp.getWalaAnalyzer().getCallGraph();
-        CGNode[] targets = getInvokeTargets(callGraph, caller, invokeInst.getCallSite());
-        
-        // TODO: support multiple targets
-        if (targets != null && targets.length > 0) {
-          target = targets[0]; // take the first one
-          if (target != null) {
-            methodSig = target.getMethod().getSignature();
-          }
-        }
-      }
-      
       try { 
         // call compute, startLine = -1 (from exit block)
         WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optAndStates, 
-            target, methodSig, -1, -1, false, callStack, curInvokeDepth + 1, 
+            methodNode, methodSig, -1, -1, false, callStack, curInvokeDepth + 1, 
             newValPrefix, newPostCond);
         preCond = wpResult.getFirstSatisfiable();
       } catch (InvalidStackTraceException e) {}
@@ -2221,12 +1938,6 @@ public class InstHandler {
     return preCond;
   }
   
-  private static CGNode[] getInvokeTargets(CallGraph callGraph, CGNode caller, 
-      CallSiteReference callSite) {
-    // find all possible targets
-    return callGraph.getDispatchTargets(caller, callSite);
-  }
-
   private static List<List<String>> addSMTStatments(List<List<String>> oldSMTStatmentList, 
       List<List<String>> smtStatements) {
     // create new list
