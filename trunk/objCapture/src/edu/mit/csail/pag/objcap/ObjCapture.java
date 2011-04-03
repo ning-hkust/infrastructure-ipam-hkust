@@ -293,29 +293,42 @@ public class ObjCapture {
 	 * @return
 	 */
 	private static File getOutoutFileName(Class<?> clazz) {
-		String className = clazz.getCanonicalName();
-		if (className == null)
-		{
-			//System.out.println("!!!!!!!!" + className + " " + clazz.getName());
-			className = clazz.getName(); 
-		}
-		//String objCapturePath = System.getenv("OBJ_CAPTURE_DIR");
-		String objCapturePath = System.getProperty("OBJ_CAPTURE_DIR");
-
-		if (objCapturePath == null) {
-			// objCapturePath = Util.getTmpDirectory() + "/" + "ObjCapture";
-			objCapturePath = System.getProperty("user.dir") + "/" + "Captured";
-		}
-
-		// System.out.format("Object Capture Path ='%s', ", objCapturePath);
-
-		String slashedClassName = Util.transClassNameDotToSlash(className);
-		// File outputFile = new File(objCapturePath + "/" + slashedClassName +
-		// ".zip");
-
-		File outputFile = new File(objCapturePath + "/" + slashedClassName);
-		return outputFile;
+	  return getOutoutFileName(null, clazz);
 	}
+	
+  /**
+   * Get file name from
+   * 
+   * @param clazz
+   * @return
+   */
+  private static File getOutoutFileName(String objCapturePath, Class<?> clazz) {
+    String className = clazz.getCanonicalName();
+    if (className == null)
+    {
+      //System.out.println("!!!!!!!!" + className + " " + clazz.getName());
+      className = clazz.getName(); 
+    }
+    
+    if (objCapturePath == null) {
+      //String objCapturePath = System.getenv("OBJ_CAPTURE_DIR");
+      objCapturePath = System.getProperty("OBJ_CAPTURE_DIR");
+    }
+
+    if (objCapturePath == null) {
+      // objCapturePath = Util.getTmpDirectory() + "/" + "ObjCapture";
+      objCapturePath = System.getProperty("user.dir") + "/" + "Captured";
+    }
+
+    // System.out.format("Object Capture Path ='%s', ", objCapturePath);
+
+    String slashedClassName = Util.transClassNameDotToSlash(className);
+    // File outputFile = new File(objCapturePath + "/" + slashedClassName +
+    // ".zip");
+
+    File outputFile = new File(objCapturePath + "/" + slashedClassName);
+    return outputFile;
+  }
 
 	/**
 	 * Read instances from objects
@@ -325,52 +338,71 @@ public class ObjCapture {
 	 * @throws IOException
 	 */
 	public static Set<Object> get(Class<?> clazz, int maxObjectCount) throws IOException {
-
-		if (clazz == null && maxObjectCount <= 0) {
-			return null;
-		}
-
-		File zipFileName = getOutoutFileName(clazz);
-
-		if (!zipFileName.exists() || !zipFileName.isFile()) {
-			return null;
-		}
-
-		Set<Object> retSet = new HashSet<Object>();
-		ZipInputStream zin = new ZipInputStream(new FileInputStream(zipFileName));
-
-		while (true) {
-			ZipEntry entry = zin.getNextEntry();
-			if (entry == null) {
-				break;
-			}
-
-			// load object from zip input stream
-			Object obj = Serializer.loadObject(zin);
-			retSet.add(obj);
-
-			if (retSet.size() >= maxObjectCount) {
-				break;
-			}
-
-		}
-
-		zin.close();
-
-		return retSet;
+	  return get(null, clazz, maxObjectCount);
 	}
+	
+	 /**
+   * Read instances from objects
+   * 
+   * @param objQualifiedName
+   * @return
+   * @throws IOException
+   */
+  public static Set<Object> get(String objCapturePath, Class<?> clazz, int maxObjectCount) throws IOException {
+
+    if (clazz == null && maxObjectCount <= 0) {
+      return null;
+    }
+
+    File zipFileName = getOutoutFileName(objCapturePath, clazz);
+
+    if (!zipFileName.exists() || !zipFileName.isFile()) {
+      return null;
+    }
+
+    Set<Object> retSet = new HashSet<Object>();
+    ZipInputStream zin = new ZipInputStream(new FileInputStream(zipFileName));
+
+    while (true) {
+      ZipEntry entry = zin.getNextEntry();
+      if (entry == null) {
+        break;
+      }
+
+      // load object from zip input stream
+      Object obj = Serializer.loadObject(zin);
+      retSet.add(obj);
+
+      if (retSet.size() >= maxObjectCount) {
+        break;
+      }
+
+    }
+
+    zin.close();
+
+    return retSet;
+  }
 
   /**
    * Read instances from a folder (not zipped)
    */
   public static Set<Object> getFromFolder(Class<?> clazz, int maxObjectCount)
       throws IOException {
+    return getFromFolder(null, clazz, maxObjectCount);
+  }
+  
+  /**
+   * Read instances from a folder (not zipped)
+   */
+  public static Set<Object> getFromFolder(String objCapturePath, Class<?> clazz, int maxObjectCount)
+      throws IOException {
 
     if (clazz == null && maxObjectCount <= 0) {
       return null;
     }
 
-    File folder = getOutoutFileName(clazz);
+    File folder = getOutoutFileName(objCapturePath, clazz);
 
     if (!folder.exists() || !folder.isDirectory()) {
       return null;
@@ -407,12 +439,20 @@ public class ObjCapture {
    */
   public static Set<SimpleEntry<Object, String>> getFromFolderWithFilePath(Class<?> clazz, int maxObjectCount)
       throws IOException {
+    return getFromFolderWithFilePath(null, clazz, maxObjectCount);
+  }
+  
+  /**
+   * Read instances from a folder (not zipped), include file paths
+   */
+  public static Set<SimpleEntry<Object, String>> getFromFolderWithFilePath(
+      String objCapturePath, Class<?> clazz, int maxObjectCount) throws IOException {
 
     if (clazz == null && maxObjectCount <= 0) {
       return null;
     }
 
-    File folder = getOutoutFileName(clazz);
+    File folder = getOutoutFileName(objCapturePath, clazz);
 
     if (!folder.exists() || !folder.isDirectory()) {
       return null;
