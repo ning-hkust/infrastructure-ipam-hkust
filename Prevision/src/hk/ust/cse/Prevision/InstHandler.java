@@ -6,10 +6,13 @@ import hk.ust.cse.Prevision.Wala.MethodMetaData;
 
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.List;
 
+import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrikeBT.IComparisonInstruction;
@@ -1435,6 +1438,36 @@ public class InstHandler {
       String valSize = methData.getSymbol(newInst.getUse(0), instInfo.valPrefix, newDefMap);
       newVarMap = substituteVarMapKey(postCond, methData, newVarMap, defLength, valSize);
     }
+    // initialize the default values of each member fields
+    else if (newInst.getConcreteType().isClassType()) {
+      
+      IClass newClass = instInfo.wp.getWalaAnalyzer().getClassHierarchy().lookupClass(newInst.getConcreteType());
+      if (newClass != null) {
+        // get the declared type of the new Instruction
+        String declaredType = newInst.getConcreteType().getName().toString();
+        String freshInst    = "FreshInstanceOf(" + declaredType + ")";
+        
+        Collection<IField> fields = newClass.getAllInstanceFields();
+        for (IField field : fields) {
+          // put the default value according to the field type
+          String ref = freshInst;
+          String val = (field.getFieldTypeReference().isPrimitiveType()) ? "#!0" /* number or boolean(false)*/ : "null"; 
+
+          for (String var : newVarMap.get(ref)) {
+            // get the fieldType of the declared field
+            String declaredField = "(" + field.getFieldTypeReference().getName() + ")";
+            // get the class type that declared this field
+            declaredField += var;
+            // get the name of the field
+            declaredField += "." + field.getName();
+            // the member field
+            if (newVarMap.containsKey(declaredField)) {
+              newVarMap = substituteVarMapKey(postCond, methData, newVarMap, declaredField, val);
+            }
+          }
+        }
+      }
+    }
 
     // add smtStatments to smtStatement list
     List<List<String>> newSMTStatements = addSMTStatments(
@@ -1545,16 +1578,18 @@ public class InstHandler {
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
 
-      // get the fieldType of the declared field of the putfield instruction
-      String declaredField = "(" + putfieldInst.getDeclaredFieldType().getName() + ")";
-      // get the class type that declared this field
-      declaredField += ref;
-      // get the name of the field
-      declaredField += "." + putfieldInst.getDeclaredField().getName();
-      // the variable define by the putfield instruction
-      if (newVarMap.containsKey(declaredField)) {
-        // declaredField is not exist before putfield Instruction
-        newVarMap = substituteVarMapKey(postCond, methData, newVarMap, declaredField, val);
+      for (String var : newVarMap.get(ref)) {
+        // get the fieldType of the declared field of the putfield instruction
+        String declaredField = "(" + putfieldInst.getDeclaredFieldType().getName() + ")";
+        // get the class type that declared this field
+        declaredField += var;
+        // get the name of the field
+        declaredField += "." + putfieldInst.getDeclaredField().getName();
+        // the variable define by the putfield instruction
+        if (newVarMap.containsKey(declaredField)) {
+          // declaredField is not exist before putfield Instruction
+          newVarMap = substituteVarMapKey(postCond, methData, newVarMap, declaredField, val);
+        }        
       }
       break;
     case Predicate.EXCEPTIONAL_SUCCESSOR:

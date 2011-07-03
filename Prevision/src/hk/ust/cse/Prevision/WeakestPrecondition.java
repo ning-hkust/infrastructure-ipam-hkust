@@ -31,64 +31,42 @@ import com.ibm.wala.util.heapTrace.HeapTracer.Result;
 
 public class WeakestPrecondition {
   public class GlobalOptionsAndStates {
-    public GlobalOptionsAndStates(boolean inclInnerMostLine, boolean inclStartingInst, 
-        boolean useSummary, int maxDispatchTargets, int maxRetrieve, 
-        int maxSmtCheck, int maxInvokeDepth, int maxLoop, int startingInst, 
-        int[] startingInstBranchesTo, CallStack fullCallStack) {
-      
-      // options
-      this.inclInnerMostLine      = inclInnerMostLine;
-      this.inclStartingInst       = inclStartingInst;
-      this.maxDispatchTargets     = (maxDispatchTargets < 0) ? Integer.MAX_VALUE : maxDispatchTargets;
-      this.maxRetrieve            = maxRetrieve;
-      this.maxSmtCheck            = maxSmtCheck;
-      this.maxInvokeDepth         = maxInvokeDepth;
-      this.maxLoop                = maxLoop;
-      this.fullCallStack          = fullCallStack;
-      
-      // -1 if don't want to specify the starting instruction index
-      this.startingInst           = startingInst;
-      // null if don't want to specify the instructions that the 
-      // starting instruction is branching to
-      this.startingInstBranchesTo = startingInstBranchesTo;
-      
-      
+    public GlobalOptionsAndStates(CallStack fullCallStack, boolean useSummary) {      
+      // set call stack
+      this.fullCallStack = fullCallStack;
       
       // initialize summary
-      if (useSummary) {
-        this.summary = new Summary();
-      }
-      else {
-        this.summary = null;
-      }
+      this.summary = useSummary ? new Summary() : null;
 
       // states
-      this.m_bEnteringCallStack = true; // at the beginning, we are entering call stack
+      this.m_enteringCallStack = true; // at the beginning, we are entering call stack
     }
 
     public boolean isEnteringCallStack() {
-      return m_bEnteringCallStack;
+      return m_enteringCallStack;
     }
 
     public void finishedEnteringCallStack() {
-      m_bEnteringCallStack = false;
+      m_enteringCallStack = false;
     }
 
     // global options
-    public final boolean   inclInnerMostLine;
-    public final boolean   inclStartingInst;
-    public final int       maxDispatchTargets;
-    public final int       maxRetrieve;
-    public final int       maxSmtCheck;
-    public final int       maxInvokeDepth;
-    public final int       maxLoop;
-    public final int       startingInst;
-    public final int[]     startingInstBranchesTo;
+    public boolean   inclInnerMostLine      = false;
+    public boolean   inclStartingInst       = false;
+    public boolean   saveNotSatResults      = false;
+    public int       maxDispatchTargets     = Integer.MAX_VALUE;
+    public int       maxRetrieve            = 1;
+    public int       maxSmtCheck            = 1000;
+    public int       maxInvokeDepth         = 1;
+    public int       maxLoop                = 1;
+    public int       startingInst           = -1;   // -1 if don't want to specify the starting instruction index
+    public int[]     startingInstBranchesTo = null; // null if don't want to specify the instructions that the starting instruction is branching to
+    
     public final CallStack fullCallStack;
     public final Summary   summary;
 
     // global states
-    private boolean m_bEnteringCallStack;
+    private boolean m_enteringCallStack;
   }
 
   public class BBorInstInfo {
@@ -272,7 +250,7 @@ public class WeakestPrecondition {
     // start depth first search
     WeakestPreconditionResult wpResult = computeMethod(optAndStates, cgNode, methMetaData, 
         dfsStack, startLine, startingInst, inclLine, callStack, curInvokeDepth, valPrefix);
-
+    
     // save result if it's not inside an invocation and it's at the out most call
     if (curInvokeDepth == 0 && callStack.isOutMostCall()) {
       m_wpResult = wpResult;
@@ -286,7 +264,7 @@ public class WeakestPrecondition {
       }
       
       // clear non-solver data in each Predicate object
-      m_wpResult.clearAllCheckedNonSolverData();
+      m_wpResult.clearAllSatNonSolverData();
 
       // end timing
       long end = System.currentTimeMillis();
@@ -355,7 +333,7 @@ public class WeakestPrecondition {
     }
 
     // output method name
-    System.out.println("Computing method: " + cfg.getMethod().getName());
+    System.out.println("Computing method: " + cfg.getMethod().getSignature());
 
     // start depth first search
     while (!dfsStack.empty()) {
@@ -369,7 +347,9 @@ public class WeakestPrecondition {
       // if postCond is still satisfiable
       //if (!infoItem.postCond.isContradicted()) {
       if (true) {
-        System.out.println("Computing BB" + infoItem.currentBB.getNumber());
+        int instIndex = infoItem.currentBB.getLastInstructionIndex();
+        String lineNo = (instIndex >= 0) ? " @ line " + methData.getLineNumber(instIndex) : "";
+        System.out.println("Computing BB" + infoItem.currentBB.getNumber() + lineNo);
         
         // get visited records
         Hashtable<ISSABasicBlock, Integer> visitedBB = infoItem.postCond.getVisitedRecord();
@@ -402,9 +382,13 @@ public class WeakestPrecondition {
         boolean canPop = true;
         for (SimpleEntry<String, Predicate> usedPredicate : usedPredicates) {
           Stack<BBorInstInfo> stack = m_dfsStacks.get(usedPredicate);
-          if (stack != null && stack.size() > 0) {
-            canPop = false;
-            break;
+          if (stack != null) {
+            if (stack.size() > 0) {
+              canPop = false;
+            }
+            else {
+              m_dfsStacks.remove(usedPredicate);
+            }
           }
         }
         // unpop it if can't pop
@@ -461,7 +445,7 @@ public class WeakestPrecondition {
           break; // return to InstHandler
         }
         else { // for entry block, no need to go further
-          System.out.println("Performing SMT Check...");
+          System.out.println("Performing " + (smtChecked + 1) + "th SMT Check...");
           
           // output propagation path
           printPropagationPath(infoItem);
@@ -492,10 +476,16 @@ public class WeakestPrecondition {
           }
           else {
             System.out.println("SMT Check failed!\n");
+            
+            // memory consumption may grow overtime as not-sat predicates added
+            if (optAndStates.saveNotSatResults) {
+              // clear non-solver data in the not satisfiable Predicate object
+              precond.clearNonSolverData();
+              
+              // save the not satisfiable precondition
+              wpResult.addNotSatisfiable(precond);
+            }
           }
-          
-          // save the checked predicate
-          wpResult.addChecked(precond);
           
           // break loop if appropriate
           if (canBreak) {
@@ -686,18 +676,26 @@ public class WeakestPrecondition {
       String declaringClass = mr.getDeclaringClass().getName().toString();
       declaringClass = Utils.getClassTypeJavaStr(declaringClass);
       
-      try {
-        // get class object
-        Class<?> cls = Class.forName(declaringClass);
-        for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
-          // get invoking method name
-          String invokingMethod = c.getName() + "." + mr.getName().toString();
-          if (invokingMethod.equals(methodNameOrSign)) {
-            isSame = true;
-            break;
+      // get invoking method name
+      String invokingMethod = declaringClass + "." + mr.getName().toString();
+      // naive compare first, sometimes can avoid including subject jar in the classpath
+      if (invokingMethod.equals(methodNameOrSign)) {
+        isSame = true;
+      }
+      else {
+        try {
+          // get class object
+          Class<?> cls = Class.forName(declaringClass);
+          for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
+            // get invoking method name
+            invokingMethod = c.getName() + "." + mr.getName().toString();
+            if (invokingMethod.equals(methodNameOrSign)) {
+              isSame = true;
+              break;
+            }
           }
-        }
-      } catch (ClassNotFoundException e) {}
+        } catch (ClassNotFoundException e) {}        
+      }
     }
     return isSame;
   }
@@ -971,8 +969,12 @@ public class WeakestPrecondition {
       }
       
       // set options
-      GlobalOptionsAndStates optAndStates = wp.new GlobalOptionsAndStates(
-          false, false, false, 2, 10, 5000, 1, 3, -1, null, callStack);
+      GlobalOptionsAndStates optAndStates = wp.new GlobalOptionsAndStates(callStack, false);
+      optAndStates.maxDispatchTargets = 2;
+      optAndStates.maxRetrieve        = 10;
+      optAndStates.maxSmtCheck        = 5000;
+      optAndStates.maxInvokeDepth     = 2;
+      optAndStates.maxLoop            = 3;
       
       wp.compute(optAndStates, null);
       // wp.heapTracer();

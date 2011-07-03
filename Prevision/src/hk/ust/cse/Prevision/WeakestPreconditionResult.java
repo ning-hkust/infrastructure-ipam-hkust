@@ -6,18 +6,18 @@ import java.util.List;
 public class WeakestPreconditionResult {
   
   public WeakestPreconditionResult() {
-    m_overLimit    = false;
-    m_reachMaximum = false;
-    m_allChecked   = new ArrayList<Predicate>();
-    m_satisfiables = new ArrayList<Predicate>();
+    m_overLimit       = false;
+    m_reachMaximum    = false;
+    m_satisfiables    = new ArrayList<Predicate>();
+    m_notSatisfiables = new ArrayList<Predicate>();
   }
-  
-  public void addChecked(Predicate checked) {
-    m_allChecked.add(checked);
-  }
-  
+
   public void addSatisfiable(Predicate satisfiable) {
     m_satisfiables.add(satisfiable);
+  }
+  
+  public void addNotSatisfiable(Predicate notSatisfiable) {
+    m_notSatisfiables.add(notSatisfiable);
   }
   
   public void setOverLimit(boolean overLimit) {
@@ -40,12 +40,12 @@ public class WeakestPreconditionResult {
     return m_satisfiables.size() > 0;
   }
   
-  public List<Predicate> getAllChecked() {
-    return m_allChecked;
-  }
-
   public List<Predicate> getSatisfiables() {
     return m_satisfiables;
+  }
+  
+  public List<Predicate> getNotSatisfiables() {
+    return m_notSatisfiables;
   }
   
   // return the first satisfiable precondition if exists
@@ -57,20 +57,32 @@ public class WeakestPreconditionResult {
     return precond;
   }
   
-  public void clearAllCheckedNonSolverData() {
-    for (Predicate checked : m_allChecked) {
-      checked.clearNonSolverData();
+  public void clearAllSatNonSolverData() {
+    for (Predicate sat : m_satisfiables) {
+      sat.clearNonSolverData();
     }
   }
   
-  public void clearAllCheckedSolverData() {
-    for (Predicate checked : m_allChecked) {
-      checked.clearSolverData();
+  public void clearAllSatSolverData() {
+    for (Predicate sat : m_satisfiables) {
+      sat.clearSolverData();
+    }
+  }
+  
+  public void clearAllNotSatNonSolverData() {
+    for (Predicate notSat : m_notSatisfiables) {
+      notSat.clearNonSolverData();
+    }
+  }
+  
+  public void clearAllNotSatSolverData() {
+    for (Predicate notSat : m_notSatisfiables) {
+      notSat.clearSolverData();
     }
   }
   
   private boolean         m_overLimit;
   private boolean         m_reachMaximum;
-  private List<Predicate> m_allChecked;
   private List<Predicate> m_satisfiables;
+  private List<Predicate> m_notSatisfiables;
 }
