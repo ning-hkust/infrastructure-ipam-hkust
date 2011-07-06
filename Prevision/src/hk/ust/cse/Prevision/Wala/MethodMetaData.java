@@ -186,6 +186,35 @@ public class MethodMetaData {
     return lineNo;
   }
 
+  public SSAInstruction getFirstInstructionForLine(int lineNo) {
+    SSAInstruction instForLine = null;
+    
+    SSAInstruction[] instructions = m_ir.getInstructions();
+    for (int i = 0; i < instructions.length; i++) {
+      if (instructions[i] != null) {
+        int instLineNo = getLineNumber(i);
+        if (instLineNo == lineNo) {
+          instForLine = instructions[i];
+          break;
+        }
+        else if (instLineNo > lineNo) {
+          break;
+        }
+      }
+    }
+    return instForLine;
+  }
+  
+  public ISSABasicBlock getFirstBasicBlockForLine(int lineNo) {
+    ISSABasicBlock basicBlock = null;
+    
+    SSAInstruction inst = getFirstInstructionForLine(lineNo);
+    if (inst != null) {
+      basicBlock = m_ir.getBasicBlockForInstruction(inst);
+    }
+    return basicBlock;
+  }
+  
   public String getMethodSignature() {
     return m_ir.getMethod().getSignature();
   }

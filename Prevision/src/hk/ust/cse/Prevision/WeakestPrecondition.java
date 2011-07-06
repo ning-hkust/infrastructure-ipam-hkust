@@ -1,5 +1,7 @@
 package hk.ust.cse.Prevision;
 
+import hk.ust.cse.Prevision.InstructionHandler.AbstractHandler;
+import hk.ust.cse.Prevision.InstructionHandler.CompleteBackwardHandler;
 import hk.ust.cse.Prevision.Wala.Jar2IR;
 import hk.ust.cse.Prevision.Wala.MethodMetaData;
 import hk.ust.cse.Prevision.Wala.WalaAnalyzer;
@@ -102,10 +104,13 @@ public class WeakestPrecondition {
     public final WeakestPrecondition wp;
   }
 
-  public WeakestPrecondition(String appJar) throws Exception {
+  public WeakestPrecondition(String appJar, AbstractHandler instHandler) throws Exception {
     // create the wala analyzer which holds all the 
     // wala related information of this wp instance
     m_walaAnalyzer = new WalaAnalyzer(appJar);
+    
+    // set instruction handler
+    m_instHandler = instHandler;
   }
   
   public WeakestPreconditionResult compute(GlobalOptionsAndStates optAndStates, 
@@ -156,7 +161,7 @@ public class WeakestPrecondition {
         fullStack, 0, "", postCond);
   }
   
-  WeakestPreconditionResult computeRec(GlobalOptionsAndStates optAndStates, 
+  public WeakestPreconditionResult computeRec(GlobalOptionsAndStates optAndStates, 
       CGNode cgNode, String methNameOrSig, int startLine, int startingInst, 
       boolean inclLine, CallStack callStack, int curInvokeDepth, String valPrefix, 
       Predicate postCond) throws InvalidStackTraceException {
@@ -184,7 +189,7 @@ public class WeakestPrecondition {
   /**
    * @param cgNode: only useful when we use 'compDispatchTargets' function
    */
-  WeakestPreconditionResult computeRec(GlobalOptionsAndStates optAndStates, 
+  public WeakestPreconditionResult computeRec(GlobalOptionsAndStates optAndStates, 
       CGNode cgNode, IR ir, int startLine, int startingInst, boolean inclLine, 
       CallStack callStack, int curInvokeDepth, String valPrefix, 
       Predicate postCond) throws InvalidStackTraceException {
@@ -286,6 +291,10 @@ public class WeakestPrecondition {
     return false;
   }
 
+  public AbstractHandler getInstructionHandler() {
+    return m_instHandler;
+  }
+  
   public MethodMetaData getMethodMetaData() {
     return m_methMetaData;
   }
@@ -515,8 +524,8 @@ public class WeakestPrecondition {
     for (Iterator<SSAPiInstruction> it = infoItem.currentBB.iteratePis(); it.hasNext();) {
       SSAPiInstruction piInst = (SSAPiInstruction) it.next();
       if (piInst != null) {
-        preCond = preCond.getPrecondtion(optAndStates, cgNode, piInst, infoItem, callStack,
-            curInvokeDepth, usedPredicates);
+        preCond = m_instHandler.handle(optAndStates, cgNode, preCond, piInst, 
+            infoItem, callStack, curInvokeDepth, usedPredicates);
       }
     }
 
@@ -541,7 +550,7 @@ public class WeakestPrecondition {
           CGNode[] targetNodes = ret.getValue();
         
           // if found new targets, add them
-          if (targetIRs.length > 0 && !targetIRs[0].getMethod().getSignature().equals(mr.getSignature())) {
+          if (targetIRs.length > 0 && targetIRs[0] != null && !targetIRs[0].getMethod().getSignature().equals(mr.getSignature())) {
             for (int i = 0; i < targetNodes.length; i++) {
               BBorInstInfo newInfo = infoItem.clone();
               newInfo.target = new SimpleEntry<SSAInvokeInstruction, CGNode>(invokeInst, targetNodes[i]);
@@ -608,16 +617,16 @@ public class WeakestPrecondition {
           
           // get precond for this instruction
           if (lastInst) {
-            preCond = preCond.getPrecondtion(optAndStates, cgNode, inst, infoItem, 
-                callStack, curInvokeDepth, usedPredicates);
+            preCond = m_instHandler.handle(optAndStates, cgNode, preCond, inst, 
+                infoItem, callStack, curInvokeDepth, usedPredicates);
           }
           else {
             // not the last instruction of the block
             BBorInstInfo instInfo = new BBorInstInfo(infoItem.currentBB, preCond, 
                 Predicate.NORMAL_SUCCESSOR, infoItem.sucessorBB,
                 infoItem.sucessorInfo, methData, valPrefix, this);
-            preCond = preCond.getPrecondtion(optAndStates, cgNode, inst, instInfo,
-                callStack, curInvokeDepth, usedPredicates);
+            preCond = m_instHandler.handle(optAndStates, cgNode, preCond, inst, 
+                instInfo, callStack, curInvokeDepth, usedPredicates);
           }
         }
 
@@ -632,7 +641,7 @@ public class WeakestPrecondition {
         // assignment for this constant value!
         String constantStr = methData.getConstantInstructionStr(currInstIndex);
         if (constantStr != null) {
-          preCond = InstHandler.handle_constant(preCond, null, infoItem, constantStr);
+          preCond = m_instHandler.handle_constant(preCond, null, infoItem, constantStr);
         }
       }
 
@@ -643,22 +652,22 @@ public class WeakestPrecondition {
     
     // handle catch instructions at the entry of a catch block
     if (infoItem.currentBB.isCatchBlock()) {
-      preCond = InstHandler.handle_catch(preCond, null, infoItem);
+      preCond = m_instHandler.handle_catch(preCond, null, infoItem);
     }
     
     // handle phi instructions last if any
     for (Iterator<SSAPhiInstruction> it = infoItem.currentBB.iteratePhis(); it.hasNext();) {
       SSAPhiInstruction phiInst = (SSAPhiInstruction) it.next();
       if (phiInst != null) {
-        preCond = preCond.getPrecondtion(optAndStates, cgNode, phiInst, infoItem, 
-            callStack, curInvokeDepth, usedPredicates);
+        preCond = m_instHandler.handle(optAndStates, cgNode, preCond, phiInst, 
+            infoItem, callStack, curInvokeDepth, usedPredicates);
       }
     }
     
     // some wrap up at the entry block
     if (infoItem.currentBB.isEntryBlock()) {
-      preCond = InstHandler.handle_entryblock(preCond, null, infoItem);
-    }
+      preCond = m_instHandler.handle_entryblock(preCond, null, infoItem);
+    }      
 
     return preCond;
   }
@@ -957,7 +966,8 @@ public class WeakestPrecondition {
   
   public static void main(String args[]) {
     try {
-      WeakestPrecondition wp = new WeakestPrecondition(args[0]/*jar file path*/);
+      AbstractHandler instHandler = new CompleteBackwardHandler();
+      WeakestPrecondition wp = new WeakestPrecondition(args[0]/*jar file path*/, instHandler);
       
       // read stack frames
       CallStack callStack = new CallStack(true);
@@ -984,6 +994,7 @@ public class WeakestPrecondition {
   }
 
   private final WalaAnalyzer        m_walaAnalyzer;
+  private final AbstractHandler     m_instHandler;
   private MethodMetaData            m_methMetaData;
   private WeakestPreconditionResult m_wpResult;
 
