@@ -1,7 +1,6 @@
 package hk.ust.cse.Prevision;
 
 import hk.ust.cse.Prevision.WeakestPrecondition.BBorInstInfo;
-import hk.ust.cse.Prevision.WeakestPrecondition.GlobalOptionsAndStates;
 import hk.ust.cse.Prevision.Solver.ISolverLoader;
 import hk.ust.cse.Prevision.Solver.SMTStatement;
 import hk.ust.cse.Prevision.Solver.SMTStatementList;
@@ -10,18 +9,12 @@ import hk.ust.cse.Prevision.Solver.SMTVariable;
 import hk.ust.cse.Prevision.Solver.SMTVariableMap;
 import hk.ust.cse.Prevision.Solver.Yices.YicesLoader;
 
-import java.lang.reflect.Method;
-import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ssa.ISSABasicBlock;
-import com.ibm.wala.ssa.SSAInstruction;
 
 // Predicate instances are immutable
 public class Predicate {
@@ -29,9 +22,6 @@ public class Predicate {
   
   public static final int NORMAL_SUCCESSOR      = 0;
   public static final int EXCEPTIONAL_SUCCESSOR = 1;
-
-  private static final String s_regExpInstStr = "(?:v[\\d]+ = )*([\\p{Alpha}]+[ ]*[\\p{Alpha}]+)(?:\\([\\w]+\\))*(?: <[ \\S]+)*";
-  private static final Pattern s_instPattern  = Pattern.compile(s_regExpInstStr);
   
   // a TRUE predicate
   public Predicate() {
@@ -50,62 +40,6 @@ public class Predicate {
     m_varMap        = varMap;
     m_phiMap        = phiMap;
     m_defMap        = defMap;
-  }
-
-  public Predicate getPrecondtion(GlobalOptionsAndStates optionsAndStates, 
-      CGNode method, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, 
-      int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
-    try {
-      Matcher matcher = s_instPattern.matcher(inst.toString());
-      if (matcher.find()) {
-        String instType = matcher.group(1).toString();
-        if (instType != null && instType.length() > 0) {
-          // a hack to handle checkcast
-          if (instType.startsWith("checkcast")) {
-            instType = "checkcast";
-          }
-          System.out.println("handling " + instType + "...");
-
-          // eliminate spaces in instruction names
-          instType = instType.replace(' ', '_');
-          
-          Predicate preCond = null;
-          if (!instType.startsWith("invoke") || 
-              (!optionsAndStates.isEnteringCallStack() && 
-               curInvokeDepth >= optionsAndStates.maxInvokeDepth && 
-              !instInfo.wp.isCallStackInvokeInst(instInfo, inst))) {
-            // invoke handler for this instruction
-            Method rmethod = InstHandler.class.getMethod("handle_" + instType,
-                Predicate.class, SSAInstruction.class, BBorInstInfo.class);
-            preCond = (Predicate) rmethod.invoke(null, this, inst, instInfo);
-          }
-          else {
-            System.out.println("stepping into " + instType + "...");
-            // invoke handler for this instruction
-            Method rmethod = InstHandler.class.getMethod("handle_" + instType + "_stepin", 
-                GlobalOptionsAndStates.class, CGNode.class, Predicate.class, SSAInstruction.class, 
-                BBorInstInfo.class, CallStack.class, int.class, List.class);
-            preCond = (Predicate) rmethod.invoke(null, optionsAndStates, method, 
-                this, inst, instInfo, callStack, curInvokeDepth, usedPredicates);
-          }
-          return preCond;
-        }
-        else {
-          System.err.println("Unknown instruction string: " + inst.toString());
-          return null;
-        }
-      }
-      else {
-        System.err.println("Unknown instruction string: " + inst.toString());
-        return null;
-      }
-    } catch (NoSuchMethodException e) {
-      System.err.println("No Handler defined for instruction: " + inst.toString());
-      return null;
-    } catch (Exception e2) {
-      e2.printStackTrace();
-      return null;
-    }
   }
 
   public boolean isContradicted() {

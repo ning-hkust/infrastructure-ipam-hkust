@@ -1,5 +1,7 @@
-package hk.ust.cse.Prevision;
+package hk.ust.cse.Prevision.InstructionHandler;
 
+import hk.ust.cse.Prevision.CallStack;
+import hk.ust.cse.Prevision.Predicate;
 import hk.ust.cse.Prevision.WeakestPrecondition.BBorInstInfo;
 import hk.ust.cse.Prevision.WeakestPrecondition.GlobalOptionsAndStates;
 import hk.ust.cse.Prevision.Wala.MethodMetaData;
@@ -43,16 +45,15 @@ import com.ibm.wala.ssa.SSAThrowInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.types.TypeReference;
 
-public class InstHandler {
+public class CompleteBackwardHandler extends AbstractHandler {
   
   @SuppressWarnings("unchecked")
-  public static Predicate handle_arraylength(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_arraylength(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
     SSAArrayLengthInstruction arrayLengthInst = (SSAArrayLengthInstruction) inst;
 
     // the variable(result) define by the arraylength instruction
@@ -73,11 +74,11 @@ public class InstHandler {
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef, null);
 
       // assign concrete variable to phi variable
-      List<Hashtable<String, ?>> rets =
-        assignPhiValue(postCond, methData, newVarMap, def);
-      newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-      newPhiMap = (Hashtable<String, String>) rets.get(1);
-      newDefMap = (Hashtable<String, Integer>) rets.get(2);
+      Hashtable<String, ?>[] rets =
+        (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+      newVarMap = (Hashtable<String, List<String>>) rets[0];
+      newPhiMap = (Hashtable<String, String>) rets[1];
+      newDefMap = (Hashtable<String, Integer>) rets[2];
 
       // substitute def with arrayRef.length, because
       // def is not exist before this instruction
@@ -110,14 +111,13 @@ public class InstHandler {
   }
 
   @SuppressWarnings("unchecked")
-  public static Predicate handle_arrayload(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_arrayload(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAArrayLoadInstruction arrayLoadInst = (SSAArrayLoadInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAArrayLoadInstruction arrayLoadInst     = (SSAArrayLoadInstruction) inst;
 
     // the variable(result) define by the arrayload instruction
     String def        = methData.getSymbol(arrayLoadInst.getDef(), instInfo.valPrefix, newDefMap);
@@ -151,11 +151,11 @@ public class InstHandler {
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, arrayRef + ".length", "#!0");
 
       // assign concrete variable to phi variable
-      List<Hashtable<String, ?>> rets =
-        assignPhiValue(postCond, methData, newVarMap, def);
-      newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-      newPhiMap = (Hashtable<String, String>) rets.get(1);
-      newDefMap = (Hashtable<String, Integer>) rets.get(2);
+      Hashtable<String, ?>[] rets =
+        (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+      newVarMap = (Hashtable<String, List<String>>) rets[0];
+      newPhiMap = (Hashtable<String, String>) rets[1];
+      newDefMap = (Hashtable<String, Integer>) rets[2];
 
       // substitute def with arrayRef[arrayIndex], because
       // def is not exist before this instruction
@@ -236,16 +236,14 @@ public class InstHandler {
         postCond.getSMTStatements(), smtStatements);
 
     preCond = new Predicate(newSMTStatements, newVarMap, newPhiMap, newDefMap);
-
     return preCond;
   }
   
-  public static Predicate handle_arraystore(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_arraystore(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    SSAArrayStoreInstruction arrayStoreInst = (SSAArrayStoreInstruction) inst;
+    SSAArrayStoreInstruction arrayStoreInst   = (SSAArrayStoreInstruction) inst;
 
     String arrayRef   = methData.getSymbol(arrayStoreInst.getArrayRef(), instInfo.valPrefix, postCond.getDefMap());
     String arrayIndex = methData.getSymbol(arrayStoreInst.getIndex(), instInfo.valPrefix, postCond.getDefMap());
@@ -354,20 +352,18 @@ public class InstHandler {
     List<List<String>> newSMTStatements = addSMTStatments(
         postCond.getSMTStatements(), smtStatements);
 
-    preCond = new Predicate(newSMTStatements, newVarMap, postCond.getPhiMap(),
-        postCond.getDefMap());
+    preCond = new Predicate(newSMTStatements, newVarMap, postCond.getPhiMap(), postCond.getDefMap());
     return preCond;
   }
 
   @SuppressWarnings("unchecked")
-  public static Predicate handle_binaryop(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_binaryop(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSABinaryOpInstruction binaryOpInst = (SSABinaryOpInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSABinaryOpInstruction binaryOpInst       = (SSABinaryOpInstruction) inst;
 
     // the variable(result) define by the binaryOp instruction
     String def  = methData.getSymbol(binaryOpInst.getDef(), instInfo.valPrefix, newDefMap);
@@ -375,11 +371,11 @@ public class InstHandler {
     String var2 = methData.getSymbol(binaryOpInst.getUse(1), instInfo.valPrefix, newDefMap);
     
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets =
-      assignPhiValue(postCond, methData, newVarMap, def);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
     
     if (newVarMap.containsKey(def)) {
       // create binaryOp SMTStatement
@@ -441,13 +437,12 @@ public class InstHandler {
   
   // handler for catch instruction
   @SuppressWarnings("unchecked")
-  public static Predicate handle_catch(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
-    Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
+  public Predicate handle_catch(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                          = null;
+    MethodMetaData methData                    = instInfo.methData;
+    Hashtable<String, List<String>> newVarMap  = postCond.getVarMap();
+    Hashtable<String, String> newPhiMap        = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap       = postCond.getDefMap();
     SSAGetCaughtExceptionInstruction catchInst = 
       ((ExceptionHandlerBasicBlock) instInfo.currentBB).getCatchInstruction();
 
@@ -455,22 +450,19 @@ public class InstHandler {
     String def = methData.getSymbol(catchInst.getDef(), instInfo.valPrefix, newDefMap);
 
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets =
-      assignPhiValue(postCond, methData, newVarMap, def);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
     
     // get the declared type of the exception
     TypeReference excepType = methData.getExceptionType(instInfo.currentBB);
     String excepTypeStr = excepType.getName().toString();
     
-    // the variable define by the new instruction
-    if (newVarMap.containsKey(def)) {
-      // def is not exist before catch Instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def,
-          "FreshInstanceOf(" + excepTypeStr + ")");
-    }
+    // def is not exist before catch Instruction
+    newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def,
+        "FreshInstanceOf(" + excepTypeStr + ")");
     
     // add a caught variable to indicate "coming from a catch block of 
     // some exception type", and expect to meet an exception triggering point
@@ -482,14 +474,13 @@ public class InstHandler {
   
   // handler for checkcast instruction
   @SuppressWarnings("unchecked")
-  public static Predicate handle_checkcast(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_checkcast(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSACheckCastInstruction checkcastInst = (SSACheckCastInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSACheckCastInstruction checkcastInst     = (SSACheckCastInstruction) inst;
 
     // the variable(result) define by the getfield instruction
     String def = methData.getSymbol(checkcastInst.getDef(), instInfo.valPrefix, newDefMap);
@@ -512,20 +503,17 @@ public class InstHandler {
       smtStatements.add(smtStatement);
 
       // assign concrete variable to phi variable
-      List<Hashtable<String, ?>> rets =
-        assignPhiValue(postCond, methData, newVarMap, def);
-      newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-      newPhiMap = (Hashtable<String, String>) rets.get(1);
-      newDefMap = (Hashtable<String, Integer>) rets.get(2);
+      Hashtable<String, ?>[] rets =
+        (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+      newVarMap = (Hashtable<String, List<String>>) rets[0];
+      newPhiMap = (Hashtable<String, String>) rets[1];
+      newDefMap = (Hashtable<String, Integer>) rets[2];
       
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, val, subTypeStr);
 
-      // the variable define by the checkcast instruction
-      if (newVarMap.containsKey(def)) {
-        // def is not exist before checkcast Instruction
-        newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, val);
-      }
+      // def is not exist before checkcast Instruction
+      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, val);
       break;
     case Predicate.EXCEPTIONAL_SUCCESSOR:
       /* can only be CCE */
@@ -559,14 +547,13 @@ public class InstHandler {
   }
   
   @SuppressWarnings("unchecked")
-  public static Predicate handle_compare(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_compare(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAComparisonInstruction compareInst = (SSAComparisonInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAComparisonInstruction compareInst      = (SSAComparisonInstruction) inst;
 
     // the variable(result) define by the binaryOp instruction
     String def  = methData.getSymbol(compareInst.getDef(), instInfo.valPrefix, newDefMap);
@@ -574,11 +561,11 @@ public class InstHandler {
     String var2 = methData.getSymbol(compareInst.getUse(1), instInfo.valPrefix, newDefMap);
     
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets =
-      assignPhiValue(postCond, methData, newVarMap, def);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
     
     if (newVarMap.containsKey(def)) {
       // create compareOp SMTStatement
@@ -603,14 +590,13 @@ public class InstHandler {
   }
 
   @SuppressWarnings("unchecked")
-  public static Predicate handle_conversion(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_conversion(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAConversionInstruction convInst = (SSAConversionInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAConversionInstruction convInst         = (SSAConversionInstruction) inst;
 
     // the variable(result) define by the conversion instruction
     String toVal    = methData.getSymbol(convInst.getDef(), instInfo.valPrefix, newDefMap);
@@ -619,11 +605,11 @@ public class InstHandler {
     String toType   = convInst.getToType().getName().toString();    
     
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets =
-      assignPhiValue(postCond, methData, newVarMap, toVal);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, toVal);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
     
     List<List<String>> smtStatements = new ArrayList<List<String>>();
     if (newVarMap.containsKey(toVal)) {
@@ -703,11 +689,10 @@ public class InstHandler {
     return preCond;
   }
   
-  public static Predicate handle_conditional_branch(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_conditional_branch(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                              = null;
+    MethodMetaData methData                        = instInfo.methData;
+    Hashtable<String, List<String>> newVarMap      = postCond.getVarMap();
     SSAConditionalBranchInstruction condBranchInst = (SSAConditionalBranchInstruction) inst;
 
     // check whether or not the conditional branch has been taken
@@ -788,28 +773,26 @@ public class InstHandler {
     conditionalTerm.add(var2);
     smtStatements.add(conditionalTerm);
 
-    // add binaryOp statment
+    // add binaryOp statement
     List<List<String>> newSMTStatements = addSMTStatments(
         postCond.getSMTStatements(), smtStatements);
     
     // add new variables to varMap
     newVarMap = addVars2VarMap(postCond, methData, newVarMap, var1, var2);
 
-    preCond = new Predicate(newSMTStatements, newVarMap, postCond.getPhiMap(), 
-        postCond.getDefMap());
+    preCond = new Predicate(newSMTStatements, newVarMap, postCond.getPhiMap(), postCond.getDefMap());
     return preCond;
   }
 
   // handler for getfield instruction
   @SuppressWarnings("unchecked")
-  public static Predicate handle_getfield(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_getfield(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAGetInstruction getfieldInst = (SSAGetInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAGetInstruction getfieldInst            = (SSAGetInstruction) inst;
 
     // the variable(result) define by the getfield instruction
     String def = methData.getSymbol(getfieldInst.getDef(), instInfo.valPrefix, newDefMap);
@@ -826,11 +809,11 @@ public class InstHandler {
       smtStatements.add(smtStatement);
 
       // assign concrete variable to phi variable
-      List<Hashtable<String, ?>> rets =
-        assignPhiValue(postCond, methData, newVarMap, def);
-      newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-      newPhiMap = (Hashtable<String, String>) rets.get(1);
-      newDefMap = (Hashtable<String, Integer>) rets.get(2);
+      Hashtable<String, ?>[] rets =
+        (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+      newVarMap = (Hashtable<String, List<String>>) rets[0];
+      newPhiMap = (Hashtable<String, String>) rets[1];
+      newDefMap = (Hashtable<String, Integer>) rets[2];
       
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
@@ -874,23 +857,22 @@ public class InstHandler {
 
   // handler for getstatic instruction
   @SuppressWarnings("unchecked")
-  public static Predicate handle_getstatic(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_getstatic(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAGetInstruction getstaticInst = (SSAGetInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAGetInstruction getstaticInst           = (SSAGetInstruction) inst;
 
     String def = methData.getSymbol(getstaticInst.getDef(), instInfo.valPrefix, newDefMap);
 
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets =
-      assignPhiValue(postCond, methData, newVarMap, def);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
     
     // the variable define by the getstatic instruction
     if (newVarMap.containsKey(def)) {
@@ -908,36 +890,30 @@ public class InstHandler {
     return preCond;
   }
 
-  public static Predicate handle_goto(Predicate postCond, SSAInstruction inst,
+  public Predicate handle_goto(Predicate postCond, SSAInstruction inst,
       BBorInstInfo instInfo) {
-    Predicate preCond = null;
-
-    // not implement
-    preCond = new Predicate(postCond.getSMTStatements(), postCond.getVarMap(),
-        postCond.getPhiMap(), postCond.getDefMap());
-    return preCond;
+    return defaultHandler(postCond, inst, instInfo);
   }
   
   // handler for instanceof instruction
   @SuppressWarnings("unchecked")
-  public static Predicate handle_instanceof(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_instanceof(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAInstanceofInstruction instanceofInst = (SSAInstanceofInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAInstanceofInstruction instanceofInst   = (SSAInstanceofInstruction) inst;
 
     String def = methData.getSymbol(instanceofInst.getDef(), instInfo.valPrefix, newDefMap);
     String ref = methData.getSymbol(instanceofInst.getRef(), instInfo.valPrefix, newDefMap);
 
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets =
-      assignPhiValue(postCond, methData, newVarMap, def);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
 
     // the variable define by the instanceofInst instruction
     if (newVarMap.containsKey(def)) {
@@ -955,30 +931,26 @@ public class InstHandler {
     return preCond;
   }
   
-  public static Predicate handle_invokeinterface(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
+  public Predicate handle_invokeinterface(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
     return handle_invokenonstatic(postCond, inst, instInfo);
   }
 
-  public static Predicate handle_invokevirtual(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
+  public Predicate handle_invokevirtual(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
     return handle_invokenonstatic(postCond, inst, instInfo);
   }
 
-  public static Predicate handle_invokespecial(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
+  public Predicate handle_invokespecial(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
     return handle_invokenonstatic(postCond, inst, instInfo);
   }
   
   @SuppressWarnings("unchecked")
-  private static Predicate handle_invokenonstatic(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  private Predicate handle_invokenonstatic(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAInvokeInstruction invokeInst = (SSAInvokeInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAInvokeInstruction invokeInst           = (SSAInvokeInstruction) inst;
 
     // the variable(result) define by the invokeinterface/invokespecial/invokevirtual instruction
     String def = methData.getSymbol(invokeInst.getDef(), instInfo.valPrefix, newDefMap);
@@ -1000,11 +972,11 @@ public class InstHandler {
       smtStatements.add(smtStatement);
 
       // assign concrete variable to phi variable
-      List<Hashtable<String, ?>> rets =
-        assignPhiValue(postCond, methData, newVarMap, def);
-      newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-      newPhiMap = (Hashtable<String, String>) rets.get(1);
-      newDefMap = (Hashtable<String, Integer>) rets.get(2);
+      Hashtable<String, ?>[] rets =
+        (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+      newVarMap = (Hashtable<String, List<String>>) rets[0];
+      newPhiMap = (Hashtable<String, String>) rets[1];
+      newDefMap = (Hashtable<String, Integer>) rets[2];
       
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
@@ -1061,14 +1033,13 @@ public class InstHandler {
 
   // simple implementation, do not consider call graph
   @SuppressWarnings("unchecked")
-  public static Predicate handle_invokestatic(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_invokestatic(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAInvokeInstruction invokestaticInst = (SSAInvokeInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAInvokeInstruction invokestaticInst     = (SSAInvokeInstruction) inst;
 
     String def = methData.getSymbol(invokestaticInst.getDef(), instInfo.valPrefix, newDefMap);
     List<String> params = new ArrayList<String>();
@@ -1078,11 +1049,11 @@ public class InstHandler {
     }
 
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets =
-      assignPhiValue(postCond, methData, newVarMap, def);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
 
     // the variable define by the invokestatic instruction
     if (newVarMap.containsKey(def)) {
@@ -1113,21 +1084,21 @@ public class InstHandler {
     return preCond;
   }
   
-  public static Predicate handle_invokeinterface_stepin(GlobalOptionsAndStates optionsAndStates, 
+  public Predicate handle_invokeinterface_stepin(GlobalOptionsAndStates optionsAndStates, 
       CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
       CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     return handle_invokenonstatic_stepin(optionsAndStates, caller, postCond, 
         inst, instInfo, callStack, curInvokeDepth, usedPredicates);
   }
 
-  public static Predicate handle_invokevirtual_stepin(GlobalOptionsAndStates optionsAndStates, 
+  public Predicate handle_invokevirtual_stepin(GlobalOptionsAndStates optionsAndStates, 
       CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
       CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     return handle_invokenonstatic_stepin(optionsAndStates, caller, postCond, 
         inst, instInfo, callStack, curInvokeDepth, usedPredicates);
   }
 
-  public static Predicate handle_invokespecial_stepin(GlobalOptionsAndStates optionsAndStates, 
+  public Predicate handle_invokespecial_stepin(GlobalOptionsAndStates optionsAndStates, 
       CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
       CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
     return handle_invokenonstatic_stepin(optionsAndStates, caller, postCond, 
@@ -1136,15 +1107,15 @@ public class InstHandler {
   
   // go into invocation
   @SuppressWarnings("unchecked")
-  private static Predicate handle_invokenonstatic_stepin(GlobalOptionsAndStates optionsAndStates, 
+  private Predicate handle_invokenonstatic_stepin(GlobalOptionsAndStates optionsAndStates, 
       CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
       CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAInvokeInstruction invokeInst = (SSAInvokeInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAInvokeInstruction invokeInst           = (SSAInvokeInstruction) inst;
 
     // the variable(result) define by the invokeinterface/invokevirtual/invokespecial instruction
     String def = methData.getSymbol(invokeInst.getDef(), instInfo.valPrefix, newDefMap);
@@ -1166,11 +1137,11 @@ public class InstHandler {
       smtStatements.add(smtStatement);
 
       // assign concrete variable to phi variable
-      List<Hashtable<String, ?>> rets =
-        assignPhiValue(postCond, methData, newVarMap, def);
-      newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-      newPhiMap = (Hashtable<String, String>) rets.get(1);
-      newDefMap = (Hashtable<String, Integer>) rets.get(2);
+      Hashtable<String, ?>[] rets =
+        (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+      newVarMap = (Hashtable<String, List<String>>) rets[0];
+      newPhiMap = (Hashtable<String, String>) rets[1];
+      newDefMap = (Hashtable<String, Integer>) rets[2];
 
       // add new variables to varMap
       newVarMap = addVars2VarMap(postCond, methData, newVarMap, ref, null);
@@ -1256,16 +1227,16 @@ public class InstHandler {
 
   // go into invocation
   @SuppressWarnings("unchecked")
-  public static Predicate handle_invokestatic_stepin(GlobalOptionsAndStates optionsAndStates, 
+  public Predicate handle_invokestatic_stepin(GlobalOptionsAndStates optionsAndStates, 
       CGNode caller, Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, 
       CallStack callStack, int curInvokeDepth, List<SimpleEntry<String, Predicate>> usedPredicates) {
 
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAInvokeInstruction invokestaticInst = (SSAInvokeInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAInvokeInstruction invokestaticInst     = (SSAInvokeInstruction) inst;
 
     // the variable(result) define by the invokespecial instruction
     String def = methData.getSymbol(invokestaticInst.getDef(), instInfo.valPrefix, newDefMap);
@@ -1276,11 +1247,11 @@ public class InstHandler {
     }
 
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets =
-      assignPhiValue(postCond, methData, newVarMap, def);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
     
     // compute valPrefix for the new method
     String newValPrefix = instInfo.valPrefix
@@ -1330,46 +1301,33 @@ public class InstHandler {
     }
   }
   
-  public static Predicate handle_monitorenter(Predicate postCond, 
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-
-    // not implement
-    preCond = new Predicate(postCond.getSMTStatements(), postCond.getVarMap(),
-        postCond.getPhiMap(), postCond.getDefMap());
-    return preCond;
+  public Predicate handle_monitorenter(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    return defaultHandler(postCond, inst, instInfo);
   }
   
-  public static Predicate handle_monitorexit(Predicate postCond, 
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-
-    // not implement
-    preCond = new Predicate(postCond.getSMTStatements(), postCond.getVarMap(),
-        postCond.getPhiMap(), postCond.getDefMap());
-    return preCond;
+  public Predicate handle_monitorexit(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    return defaultHandler(postCond, inst, instInfo);
   }
   
   @SuppressWarnings("unchecked")
-  public static Predicate handle_neg(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_neg(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAUnaryOpInstruction unaryInst = (SSAUnaryOpInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAUnaryOpInstruction unaryInst           = (SSAUnaryOpInstruction) inst;
 
     // the variable(result) define by the binaryOp instruction
     String def = methData.getSymbol(unaryInst.getDef(), instInfo.valPrefix, newDefMap);
     String var = methData.getSymbol(unaryInst.getUse(0), instInfo.valPrefix, newDefMap);
     
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets =
-      assignPhiValue(postCond, methData, newVarMap, def);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
     
     if (newVarMap.containsKey(def)) {
       // create unaryOp SMTStatement
@@ -1392,38 +1350,28 @@ public class InstHandler {
   }
 
   @SuppressWarnings("unchecked")
-  public static Predicate handle_new(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_new(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSANewInstruction newInst = (SSANewInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSANewInstruction newInst                 = (SSANewInstruction) inst;
     
     String def = methData.getSymbol(newInst.getDef(), instInfo.valPrefix, newDefMap);
-
-    List<String> smtStatement = null;
-    List<List<String>> smtStatements = new ArrayList<List<String>>();
     
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets =
-      assignPhiValue(postCond, methData, newVarMap, def);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
 
     // the variable define by the new instruction
     if (newVarMap.containsKey(def)) {
       // get the declared type of the new Instruction
       String declaredType = newInst.getConcreteType().getName().toString();
       String freshInst    = "FreshInstanceOf(" + declaredType + ")";
-      
-      smtStatement = new ArrayList<String>();
-      smtStatement.add(freshInst);
-      smtStatement.add("!=");
-      smtStatement.add("null");
-      smtStatements.add(smtStatement);
 
       // def is not exist before new Instruction
       newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, freshInst);
@@ -1461,40 +1409,33 @@ public class InstHandler {
             // get the name of the field
             declaredField += "." + field.getName();
             // the member field
-            if (newVarMap.containsKey(declaredField)) {
-              newVarMap = substituteVarMapKey(postCond, methData, newVarMap, declaredField, val);
-            }
+            newVarMap = substituteVarMapKey(postCond, methData, newVarMap, declaredField, val);
           }
         }
       }
     }
-
-    // add smtStatments to smtStatement list
-    List<List<String>> newSMTStatements = addSMTStatments(
-        postCond.getSMTStatements(), smtStatements);
     
-    preCond = new Predicate(newSMTStatements, newVarMap, newPhiMap, newDefMap);
+    preCond = new Predicate(postCond.getSMTStatements(), newVarMap, newPhiMap, newDefMap);
     return preCond;
   }
 
   @SuppressWarnings("unchecked")
-  public static Predicate handle_phi(Predicate postCond, SSAInstruction inst,
-      BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_phi(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAPhiInstruction phiInst = (SSAPhiInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAPhiInstruction phiInst                 = (SSAPhiInstruction) inst;
 
     String def = methData.getSymbol(phiInst.getDef(), instInfo.valPrefix, newDefMap);
 
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets = 
-      assignPhiValue(postCond, methData, newVarMap, def);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
 
     if (newVarMap.containsKey(def)) {
       int len = phiInst.getNumberOfUses();
@@ -1524,42 +1465,37 @@ public class InstHandler {
   
   // handler for pi instruction
   @SuppressWarnings("unchecked")
-  public static Predicate handle_pi(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_pi(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
-    SSAPiInstruction piInst = (SSAPiInstruction) inst;
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
+    SSAPiInstruction piInst                   = (SSAPiInstruction) inst;
 
     String def = methData.getSymbol(piInst.getDef(), instInfo.valPrefix, newDefMap);
     String val = methData.getSymbol(piInst.getVal(), instInfo.valPrefix, newDefMap);
 
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets =
-      assignPhiValue(postCond, methData, newVarMap, def);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, def);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
 
-    // the variable define by the getstatic instruction
-    if (newVarMap.containsKey(def)) {
-      // def is not exist before getstatic Instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, val);
-    }
+    // def is not exist before pi Instruction
+    newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, val);
 
     preCond = new Predicate(postCond.getSMTStatements(), newVarMap, newPhiMap, newDefMap);
     return preCond;
   }
   
   // handler for putfield instruction
-  public static Predicate handle_putfield(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_putfield(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    SSAPutInstruction putfieldInst = (SSAPutInstruction) inst;
+    SSAPutInstruction putfieldInst            = (SSAPutInstruction) inst;
 
     // the variable(result) define by the putfield instruction
     String ref = methData.getSymbol(putfieldInst.getUse(0), instInfo.valPrefix, postCond.getDefMap());
@@ -1585,11 +1521,8 @@ public class InstHandler {
         declaredField += var;
         // get the name of the field
         declaredField += "." + putfieldInst.getDeclaredField().getName();
-        // the variable define by the putfield instruction
-        if (newVarMap.containsKey(declaredField)) {
-          // declaredField is not exist before putfield Instruction
-          newVarMap = substituteVarMapKey(postCond, methData, newVarMap, declaredField, val);
-        }        
+        // declaredField is not exist before putfield Instruction
+        newVarMap = substituteVarMapKey(postCond, methData, newVarMap, declaredField, val);      
       }
       break;
     case Predicate.EXCEPTIONAL_SUCCESSOR:
@@ -1613,18 +1546,16 @@ public class InstHandler {
     List<List<String>> newSMTStatements = addSMTStatments(
         postCond.getSMTStatements(), smtStatements);
 
-    preCond = new Predicate(newSMTStatements, newVarMap, postCond.getPhiMap(), 
-        postCond.getDefMap());
+    preCond = new Predicate(newSMTStatements, newVarMap, postCond.getPhiMap(), postCond.getDefMap());
     return preCond;
   }
   
   // handler for putstatic instruction
-  public static Predicate handle_putstatic(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_putstatic(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    SSAPutInstruction putstaticInst = (SSAPutInstruction) inst;
+    SSAPutInstruction putstaticInst           = (SSAPutInstruction) inst;
 
     String val = methData.getSymbol(putstaticInst.getUse(0), instInfo.valPrefix, postCond.getDefMap());
 
@@ -1634,43 +1565,34 @@ public class InstHandler {
     declaredField += putstaticInst.getDeclaredField().getDeclaringClass().getName();
     // get the name of the field
     declaredField += "." + putstaticInst.getDeclaredField().getName();
-    // the variable define by the putstatic instruction
-    if (newVarMap.containsKey(declaredField)) {
-      // def is not exist before putstatic Instruction
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, declaredField, val);
-    }
+    // def is not exist before putstatic Instruction
+    newVarMap = substituteVarMapKey(postCond, methData, newVarMap, declaredField, val);
 
-    preCond = new Predicate(postCond.getSMTStatements(), newVarMap, 
-        postCond.getPhiMap(), postCond.getDefMap());
+    preCond = new Predicate(postCond.getSMTStatements(), newVarMap, postCond.getPhiMap(), postCond.getDefMap());
     return preCond;
   }
 
-  public static Predicate handle_return(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_return(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    SSAReturnInstruction returnInst = (SSAReturnInstruction) inst;
+    SSAReturnInstruction returnInst           = (SSAReturnInstruction) inst;
     
     // the return value of the instruction
     String ret = methData.getSymbol(returnInst.getResult(), instInfo.valPrefix, postCond.getDefMap());
 
     // substitute "RET" given by caller
-    if (newVarMap.containsKey("RET")) {
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, "RET", ret);
-    }
+    newVarMap = substituteVarMapKey(postCond, methData, newVarMap, "RET", ret);
 
-    preCond = new Predicate(postCond.getSMTStatements(), newVarMap, 
-        postCond.getPhiMap(), postCond.getDefMap());
+    preCond = new Predicate(postCond.getSMTStatements(), newVarMap, postCond.getPhiMap(), postCond.getDefMap());
     return preCond;
   }
 
-  public static Predicate handle_switch(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_switch(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    SSASwitchInstruction switchInst = (SSASwitchInstruction) inst;
+    SSASwitchInstruction switchInst           = (SSASwitchInstruction) inst;
 
     // get the variables of the switch statement,
     // the variables might be constant numbers!
@@ -1723,18 +1645,16 @@ public class InstHandler {
     // add new variables to varMap
     newVarMap = addVars2VarMap(postCond, methData, newVarMap, newVars);
 
-    preCond = new Predicate(newSMTStatements, newVarMap, postCond.getPhiMap(), 
-        postCond.getDefMap());
+    preCond = new Predicate(newSMTStatements, newVarMap, postCond.getPhiMap(), postCond.getDefMap());
     return preCond;
   }
   
   // handler for throw instruction
-  public static Predicate handle_throw(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_throw(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    SSAThrowInstruction throwInst = (SSAThrowInstruction) inst;
+    SSAThrowInstruction throwInst             = (SSAThrowInstruction) inst;
 
     // the variable(result) thrown by throw instruction
     String exception = methData.getSymbol(throwInst.getUse(0), instInfo.valPrefix, postCond.getDefMap());
@@ -1761,19 +1681,17 @@ public class InstHandler {
     List<List<String>> newSMTStatements = addSMTStatments(
         postCond.getSMTStatements(), smtStatements);
 
-    preCond = new Predicate(newSMTStatements, newVarMap, postCond.getPhiMap(), 
-        postCond.getDefMap());
+    preCond = new Predicate(newSMTStatements, newVarMap, postCond.getPhiMap(), postCond.getDefMap());
     return preCond;
   }
 
   @SuppressWarnings("unchecked")
-  public static Predicate handle_entryblock(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_entryblock(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
 
     // at the entry block, all parameters are defined
     Hashtable<String, String> paramMap = methData.getParamMap();
@@ -1785,11 +1703,11 @@ public class InstHandler {
       valnum = "v" + instInfo.valPrefix + valnum.substring(1);
 
       // assign concrete variable to phi variable
-      List<Hashtable<String, ?>> rets =
-        assignPhiValue(postCond, methData, newVarMap, valnum);
-      newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-      newPhiMap = (Hashtable<String, String>) rets.get(1);
-      newDefMap = (Hashtable<String, Integer>) rets.get(2);
+      Hashtable<String, ?>[] rets =
+        (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, valnum);
+      newVarMap = (Hashtable<String, List<String>>) rets[0];
+      newPhiMap = (Hashtable<String, String>) rets[1];
+      newDefMap = (Hashtable<String, Integer>) rets[2];
     }
     
     // at the entry block, check if the caught exception is thrown
@@ -1801,522 +1719,21 @@ public class InstHandler {
   
   // handler for ShrikeCFG ConstantInstruction instruction
   @SuppressWarnings("unchecked")
-  public static Predicate handle_constant(Predicate postCond,
-      SSAInstruction inst, BBorInstInfo instInfo, String constantStr) {
-    Predicate preCond = null;
-    MethodMetaData methData = instInfo.methData;
+  public Predicate handle_constant(Predicate postCond, SSAInstruction inst, BBorInstInfo instInfo, String constantStr) {
+    Predicate preCond                         = null;
+    MethodMetaData methData                   = instInfo.methData;
     Hashtable<String, List<String>> newVarMap = postCond.getVarMap();
-    Hashtable<String, String> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap = postCond.getDefMap();
+    Hashtable<String, String> newPhiMap       = postCond.getPhiMap();
+    Hashtable<String, Integer> newDefMap      = postCond.getDefMap();
 
     // assign concrete variable to phi variable
-    List<Hashtable<String, ?>> rets =
-      assignPhiValue(postCond, methData, newVarMap, constantStr);
-    newVarMap = (Hashtable<String, List<String>>) rets.get(0);
-    newPhiMap = (Hashtable<String, String>) rets.get(1);
-    newDefMap = (Hashtable<String, Integer>) rets.get(2);
+    Hashtable<String, ?>[] rets =
+      (Hashtable<String, ?>[]) assignPhiValue(postCond, methData, newVarMap, constantStr);
+    newVarMap = (Hashtable<String, List<String>>) rets[0];
+    newPhiMap = (Hashtable<String, String>) rets[1];
+    newDefMap = (Hashtable<String, Integer>) rets[2];
 
     preCond = new Predicate(postCond.getSMTStatements(), newVarMap, newPhiMap, newDefMap);
     return preCond;
-  }
-  
-  private static Hashtable<String, List<String>> mapParamsToMethod(
-      SSAInvokeInstruction invokeInst, BBorInstInfo instInfo,
-      MethodMetaData methData, String ref, String def, String newValPrefix, 
-      String newRef, List<String> params, List<String> newParams,
-      Hashtable<String, List<String>> newVarMap, Predicate postCond) {
-
-    // if not static
-    boolean isStatic = ref == null;
-    if (!isStatic) {
-      // add ref (v1 == this)
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, ref, newRef);
-    }
-
-    // add params
-    for (int i = 0; i < params.size(); i++) {
-      String valnum = params.get(i);
-
-      // valnum inside invocation
-      String newParam = "v" + newValPrefix + (i + (isStatic ? 1 : 2));
-      newParams.add(newParam);
-      if (valnum.startsWith("v")) {
-        newVarMap = substituteVarMapKey(postCond, methData, newVarMap, valnum, newParam);
-
-        // this is necessary, because when wp.computeRec returns, it is possible
-        // that its smtStatements contain statements that have newParam elements
-        newVarMap = addVars2VarMap(postCond, methData, newVarMap, newParam, null);
-      }
-    }
-
-    // substitute def with a "RET", which will be replaced with a
-    // real return variable in the exit block
-    if (invokeInst.getDef() != -1) {
-      newVarMap = substituteVarMapKey(postCond, methData, newVarMap, def, "RET");
-    }
-    
-    return newVarMap;
-  }
-  
-  private static Hashtable<String, List<String>> mapParamsFromMethod(
-      MethodMetaData methData, String ref, String newRef, List<String> params, 
-      List<String> newParams, Hashtable<String, List<String>> newVarMap, 
-      Predicate preCond) {
-
-    // if not static
-    boolean isStatic = ref == null;
-    if (!isStatic) {
-      newVarMap = substituteVarMapKey(preCond, methData, newVarMap, newRef, ref);
-    }
-
-    // set params back
-    for (int i = 0; i < newParams.size(); i++) {
-      String valnum = params.get(i);
-      String newParam = newParams.get(i);
-      
-      newVarMap = substituteVarMapKey(preCond, methData, newVarMap, newParam, valnum);
-    }
-    
-    return newVarMap;
-  }
-
-  private static Predicate computeToEnterCallSite(SSAInvokeInstruction invokeInst,
-      BBorInstInfo instInfo, GlobalOptionsAndStates optAndStates, CGNode caller, 
-      CallStack callStack, int curInvokeDepth, String newValPrefix, 
-      Predicate newPostCond) {
-    Predicate preCond = null;
-    
-    // get method signature
-    assert(instInfo.target.getKey().equals(invokeInst));
-    String methodSig  = null;
-    CGNode methodNode = null;
-    if (instInfo.target.getValue() != null) {
-      methodSig  = instInfo.target.getValue().getMethod().getSignature();
-      methodNode = instInfo.target.getValue();
-    }
-    else {
-      methodSig  = invokeInst.getDeclaredTarget().getSignature();
-      methodNode = null;
-    }
-    
-    // get inner call stack
-    CallStack innerCallStack = callStack.getInnerCallStack();
-    int lineNo = innerCallStack.getCurLineNo();
-    
-    // we only consider inclLine & starting instruction at the innermost call
-    boolean inclLine = true;
-    int startingInst = -1;
-    if (innerCallStack.getDepth() == 1) {
-      inclLine     = optAndStates.inclInnerMostLine;
-      startingInst = optAndStates.startingInst;
-    }
-
-    try {
-      WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optAndStates, 
-          methodNode, methodSig, lineNo, startingInst, inclLine, innerCallStack, 
-          curInvokeDepth, newValPrefix, newPostCond);
-      preCond = wpResult.getFirstSatisfiable();
-    } catch (InvalidStackTraceException e) {}
-    
-    return preCond;
-  }
-  
-  private static Predicate computeAtCallSite(SSAInvokeInstruction invokeInst,
-      BBorInstInfo instInfo, GlobalOptionsAndStates optAndStates, CGNode caller, 
-      CallStack callStack, int curInvokeDepth, String newValPrefix, 
-      Predicate newPostCond) {
-    Predicate preCond = null;
-  
-    // get method signature
-    assert(instInfo.target.getKey().equals(invokeInst));
-    String methodSig  = null;
-    CGNode methodNode = null;
-    if (instInfo.target.getValue() != null) {
-      methodSig  = instInfo.target.getValue().getMethod().getSignature();
-      methodNode = instInfo.target.getValue();
-    }
-    else {
-      methodSig  = invokeInst.getDeclaredTarget().getSignature();
-      methodNode = null;
-    }
-    
-    // get from summary
-    boolean noMatch = false;
-    if (optAndStates.summary != null) {
-      preCond = optAndStates.summary.getSummary(methodSig, curInvokeDepth + 1,
-          newValPrefix, newPostCond);
-      if (preCond == null) {
-        noMatch = true;
-      }
-    }
-
-    // if no summary, compute
-    if (preCond == null) {
-      try { 
-        // call compute, startLine = -1 (from exit block)
-        WeakestPreconditionResult wpResult = instInfo.wp.computeRec(optAndStates, 
-            methodNode, methodSig, -1, -1, false, callStack, curInvokeDepth + 1, 
-            newValPrefix, newPostCond);
-        preCond = wpResult.getFirstSatisfiable();
-      } catch (InvalidStackTraceException e) {}
-    }
-    
-    // save to summary
-    if (noMatch && preCond != null) {
-      // use the original method signature
-      methodSig = invokeInst.getDeclaredTarget().getSignature();
-      
-      optAndStates.summary.putSummary(methodSig, curInvokeDepth + 1,
-          newValPrefix, newPostCond, preCond);
-    }
-    
-    return preCond;
-  }
-  
-  private static List<List<String>> addSMTStatments(List<List<String>> oldSMTStatmentList, 
-      List<List<String>> smtStatements) {
-    // create new list
-    int len1 = oldSMTStatmentList.size();
-    int len2 = smtStatements.size();
-    List<List<String>> newSMTStatements = new ArrayList<List<String>>(len1 + len2);
-
-    // copy elements from old list
-    newSMTStatements.addAll(oldSMTStatmentList);
-
-    // add new statements
-    newSMTStatements.addAll(smtStatements);
-
-    return newSMTStatements;
-  }
-  
-  /**
-   * create a new varMap clone only when necessary
-   */
-  private static Hashtable<String, List<String>> addVars2VarMap(
-      Predicate postCond, MethodMetaData methData, 
-      Hashtable<String, List<String>> varMap, String newVar1, String newVar2) {
-
-    boolean isNewClone = false;
-    if (newVar1 != null/* && 
-        (newVar1.startsWith("v") || newVar1.startsWith("#"))*/) {
-      // clone only when necessary
-      if (varMap == postCond.getVarMap()) {
-        varMap = postCond.getVarMapClone();
-      }
-      isNewClone = true;
-
-      // if newVar1 it's a parameter, substitute with
-      // the parameter name right away!
-      // because we're using valPrefix, a param name will be returned only
-      // when it's not inside an invocation(curInvokeDepth == 0, so valPrefix == "")
-      // we don't want to replace with a param name if it's still inside some
-      // invocation, because it's hard to replace a param at the outter handle_invoke*_stepin
-      String param = methData.getParamStr(newVar1);
-      String key = (param == null) ? newVar1 : param;
-      List<String> varList = varMap.get(key);
-      if (varList != null) {
-        // add new var to varlist
-        varList.add(newVar1);
-      }
-      else {
-        varList = new ArrayList<String>();
-        varList.add(newVar1);
-        varMap.put(key, varList);
-      }
-    }
-
-    if (newVar2 != null/* && 
-        (newVar2.startsWith("v") || newVar2.startsWith("#"))*/) {
-      if (!isNewClone) {
-        // clone only when necessary
-        if (varMap == postCond.getVarMap()) {
-          varMap = postCond.getVarMapClone();
-        }
-        isNewClone = true;
-      }
-
-      // if newVar2 it's a parameter, substitute with
-      // the parameter name right away!
-      // because we're using valPrefix, a param name will be returned only
-      // when it's not inside an invocation(curInvokeDepth == 0, so valPrefix == "")
-      // we don't want to replace with a param name if it's still inside some
-      // invocation, because it's hard to replace a param at the outter handle_invoke*_stepin
-      String param = methData.getParamStr(newVar2);
-      String key = (param == null) ? newVar2 : param;
-      List<String> varList = varMap.get(key);
-      if (varList != null) {
-        // add new var to varlist
-        varList.add(newVar2);
-      }
-      else {
-        varList = new ArrayList<String>();
-        varList.add(newVar2);
-        varMap.put(key, varList);
-      }
-    }
-
-    return varMap;
-  }
-
-  /**
-   * create a new varMap clone only when necessary
-   */
-  private static Hashtable<String, List<String>> addVars2VarMap(
-      Predicate postCond, MethodMetaData methData,
-      Hashtable<String, List<String>> varMap, List<String> newVars) {
-    
-    boolean isNewClone = false;
-    for (String var : newVars) {
-      if (var != null/* && 
-          (var.startsWith("v") || var.startsWith("#"))*/) {
-        if (!isNewClone) {
-          // clone only when necessary
-          if (varMap == postCond.getVarMap()) {
-            varMap = postCond.getVarMapClone();
-          }
-          isNewClone = true;
-        }
-
-        // if var it's a parameter, substitute with
-        // the parameter name right away!
-        // because we're using valPrefix, a param name will be returned only
-        // when it's not inside an invocation(curInvokeDepth == 0, so valPrefix
-        // == "")
-        // we don't want to replace with a param name if it's still inside some
-        // invocation, because it's hard to replace a param at the outter
-        // handle_invoke*_stepin
-        String param = methData.getParamStr(var);
-        String key = (param == null) ? var : param;
-        // add new var to varlist
-        List<String> varList = varMap.get(key);
-        if (varList != null) {
-          varList.add(var);
-        }
-        else {
-          varList = new ArrayList<String>();
-          varList.add(var);
-          varMap.put(key, varList);
-        }
-      }
-    }
-
-    return varMap;
-  }
-
-  /**
-   * might create a new phiMap and a new varMap clone
-   */
-  private static List<Hashtable<String, ?>> assignPhiValue(
-      Predicate postCond, MethodMetaData methData, 
-      Hashtable<String, List<String>> varMap, String def) {
-    Hashtable<String, String> newPhiMap   = postCond.getPhiMap();
-    Hashtable<String, Integer> newDefMap  = postCond.getDefMap();
-
-    // whenever 
-    if (def.startsWith("v")) {
-      newDefMap = addDef2DefMap(postCond, newDefMap, def);
-    }
-
-    // check if the newly def variable is a
-    // potential concrete value to any phi variables
-    String phiVar = newPhiMap.get(def);
-    if (phiVar != null) {
-      // assign concrete value to the phi variable
-      // modify directly on this varMap
-      varMap = substituteVarMapKey(postCond, methData, varMap, phiVar, def);
-      
-      // remove phiVar from phiList because it
-      // is concrete now
-      newPhiMap = postCond.getPhiMapClone();
-      Enumeration<String> keys = newPhiMap.keys();
-      while (keys.hasMoreElements()) {
-        String key = (String) keys.nextElement();
-        if (newPhiMap.get(key).equals(phiVar)) {
-          newPhiMap.remove(key);
-        }
-      }
-    }
-    
-    // create return
-    ArrayList<Hashtable<String, ?>> rets = new ArrayList<Hashtable<String, ?>>();
-    rets.add(varMap);
-    rets.add(newPhiMap);
-    rets.add(newDefMap);
-    return rets;
-  }
-
-  /**
-   * create a new varMap clone only when necessary
-   */
-  private static Hashtable<String, List<String>> substituteVarMapKey(
-      Predicate postCond, MethodMetaData methData, 
-      Hashtable<String, List<String>> varMaptoSub,
-      String oldKey, String newKey) {
-
-    // value never change
-    List<String> varList1 = varMaptoSub.get(oldKey);
-    if (varList1 != null) {
-      // create clone on demand
-      if (varMaptoSub == postCond.getVarMap()) {
-        varMaptoSub = postCond.getVarMapClone();
-      }
-      varMaptoSub.remove(oldKey);
-      
-      // if newKey it's a parameter, substitute with
-      // the parameter name right away!
-      // because we're using valPrefix, a param name will be returned only
-      // when it's not inside an invocation(curInvokeDepth == 0, so valPrefix == "")
-      // we don't want to replace with a param name if it's still inside some
-      // invocation, because it's hard to replace a param at the outter handle_invoke*_stepin
-      String param = methData.getParamStr(newKey);
-      String key = (param == null) ? newKey : param;
-      List<String> varList2 = varMaptoSub.get(key);
-      if (varList2 != null) {
-        for (String var1 : varList1) {
-          varList2.add(var1);
-        }
-      }
-      else {
-        varList2 = new ArrayList<String>();
-        for (String var1 : varList1) {
-          varList2.add(var1);
-        }
-        varMaptoSub.put(key, varList2);
-      }
-    }
-
-    return varMaptoSub;
-  }
-
-  private static Hashtable<String, Integer> addDef2DefMap(
-      Predicate postCond, Hashtable<String, Integer> defMap, String def) {
-
-    if (def.startsWith("v")) {
-      // get a clone
-      if (defMap == postCond.getDefMap()) {
-        defMap = postCond.getDefMapClone();
-      }
-
-      // change back to the original form
-      int cut = def.lastIndexOf('@');
-      if (cut >= 0) {
-        def = def.substring(0, cut);
-      }
-
-      Integer count = defMap.get(def);
-      if (count != null) {
-        defMap.put(def, count + 1);
-      }
-      else {
-        defMap.put(def, 1);
-      }
-    }
-    
-    return defMap;
-  }
-  
-  /**
-   * Assuming there is at most one 'Caught ...' at a time.
-   */
-  private static String findCaughtExceptionTypeStr(Predicate predicate) {
-    String caughtStr = null;
-    if (predicate.getVarMap().containsKey("Caught")) {
-      caughtStr = predicate.getVarMap().get("Caught").get(0);
-    }
-    return caughtStr;
-  }
-  
-  private static Hashtable<String, List<String>> setExceptionCaught(
-      Predicate predicate, Hashtable<String, List<String>> varMapToSet, String caughtExcepTypeStr) {
-    // create clone on demand
-    if (varMapToSet == predicate.getVarMap()) {
-      varMapToSet = predicate.getVarMapClone();
-    }
-    
-    // put "Caught"
-    List<String> caught = new ArrayList<String>();
-    caught.add(caughtExcepTypeStr);
-    varMapToSet.put("Caught", caught);
-    return varMapToSet;
-  }
-  
-  private static Hashtable<String, List<String>> setExceptionTriggered(
-      Predicate predicate, Hashtable<String, List<String>> varMapToSet, String triggeredExcepTypeStr) {
-    if (varMapToSet.containsKey("Caught")) {
-      List<String> caughtExcepTypeStr = varMapToSet.get("Caught");
-      
-      if (caughtExcepTypeStr.get(0).equals(triggeredExcepTypeStr)) {
-        // create clone on demand
-        if (varMapToSet == predicate.getVarMap()) {
-          varMapToSet = predicate.getVarMapClone();
-        }
-        
-        // replace "Caught" with "Triggered"
-        varMapToSet.put("Triggered", caughtExcepTypeStr);
-        varMapToSet.remove("Caught");
-      }
-    }
-    return varMapToSet;
-  }
-  
-  private static Hashtable<String, List<String>> setExceptionThrownCurrent(
-      Predicate predicate, Hashtable<String, List<String>> varMapToSet, String exceptionVal) {
-    // create clone on demand
-    if (varMapToSet == predicate.getVarMap()) {
-      varMapToSet = predicate.getVarMapClone();
-    }
-    
-    // put "ThrownInstCurrent"
-    List<String> thrownInst = new ArrayList<String>();
-    thrownInst.add(exceptionVal);
-    varMapToSet.put("ThrownInstCurrent", thrownInst);
-    return varMapToSet;
-  }
-  
-  private static Hashtable<String, List<String>> checkExceptionThrown(
-      Predicate predicate, Hashtable<String, List<String>> varMapToSet) {
-    if (varMapToSet.containsKey("Caught") && varMapToSet.containsKey("ThrownInstCurrent")) {
-      String caughtExcepTypeStr = varMapToSet.get("Caught").get(0);
-      
-      // get the corresponding final variable
-      String excepVar = varMapToSet.get("ThrownInstCurrent").get(0);
-      String finalExcepVar = null;
-      Enumeration<String> finalvars = varMapToSet.keys();
-      while (finalvars.hasMoreElements()) {
-        String finalvar = (String) finalvars.nextElement();
-        
-        if (!finalvar.equals("ThrownInstCurrent")) {
-          List<String> midVars = predicate.getVarMap().get(finalvar);
-          if (midVars.contains(excepVar)) {
-            finalExcepVar = finalvar;
-            break;
-          }
-        }
-      }
-      
-      if (finalExcepVar != null) {
-        // very sloppy! Cannot deal with super class. Only 
-        // works if the exact exception type is used.
-        if (finalExcepVar.contains("(" + caughtExcepTypeStr + ")")) {
-          // e.g., FreshInstanceOf(Ljava/lang/NullPointerException), 
-          // (Ljava/lang/NullPointerException) param1, 
-          // (Ljava/lang/NullPointerException) param1.field1
-          
-          // the thrown instance is the same type as the caught exception
-          varMapToSet = setExceptionTriggered(predicate, varMapToSet, caughtExcepTypeStr);
-        }
-      }
-    }
-    
-    // remove "ThrownInstCurrent" no matter how
-    if (varMapToSet.containsKey("ThrownInstCurrent")) {
-      // create clone on demand
-      if (varMapToSet == predicate.getVarMap()) {
-        varMapToSet = predicate.getVarMapClone();
-      }
-      varMapToSet.remove("ThrownInstCurrent");
-    }
-    
-    return varMapToSet;
   }
 }
