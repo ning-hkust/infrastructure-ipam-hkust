@@ -6,7 +6,7 @@ import hk.ust.cse.Prevision.Predicate;
 import hk.ust.cse.Prevision.WeakestPrecondition.BBorInstInfo;
 import hk.ust.cse.Prevision.WeakestPrecondition.GlobalOptionsAndStates;
 import hk.ust.cse.Prevision.WeakestPreconditionResult;
-import hk.ust.cse.Prevision.Wala.MethodMetaData;
+import hk.ust.cse.Wala.MethodMetaData;
 
 import java.lang.reflect.Method;
 import java.util.AbstractMap.SimpleEntry;
