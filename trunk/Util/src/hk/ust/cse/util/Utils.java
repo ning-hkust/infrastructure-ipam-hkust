@@ -425,6 +425,10 @@ public class Utils {
     }
     return boxedObject;
   }
+
+  public static boolean isMethodSignature(String methodNameOrSign) {
+    return methodNameOrSign.contains("(");
+  }
   
   public static StringBuilder replace(StringBuilder str, String fromStr, String toStr) {
     int nLength1 = fromStr.length();
