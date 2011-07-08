@@ -1,8 +1,8 @@
 package hk.ust.cse.StaticAnalysis.BranchAnalyzer;
 
-import hk.ust.cse.Prevision.Wala.Jar2IR;
-import hk.ust.cse.Prevision.Wala.MethodMetaData;
-import hk.ust.cse.Prevision.Wala.WalaAnalyzer;
+import hk.ust.cse.Wala.Jar2IR;
+import hk.ust.cse.Wala.MethodMetaData;
+import hk.ust.cse.Wala.WalaAnalyzer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
