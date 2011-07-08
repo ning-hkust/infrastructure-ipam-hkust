@@ -2,10 +2,11 @@ package hk.ust.cse.Prevision;
 
 import hk.ust.cse.Prevision.InstructionHandler.AbstractHandler;
 import hk.ust.cse.Prevision.InstructionHandler.CompleteBackwardHandler;
-import hk.ust.cse.Prevision.Wala.Jar2IR;
-import hk.ust.cse.Prevision.Wala.MethodMetaData;
-import hk.ust.cse.Prevision.Wala.WalaAnalyzer;
-import hk.ust.cse.Prevision.Wala.WalaUtils;
+import hk.ust.cse.Wala.Jar2IR;
+import hk.ust.cse.Wala.MethodMetaData;
+import hk.ust.cse.Wala.WalaAnalyzer;
+import hk.ust.cse.Wala.WalaUtils;
+import hk.ust.cse.util.Utils;
 
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
