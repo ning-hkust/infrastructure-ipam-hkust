@@ -420,6 +420,14 @@ public class WeakestPrecondition {
             cfg.getNormalPredecessors(infoItem.currentBB);
           Collection<ISSABasicBlock> excpPredBB =
             cfg.getExceptionalPredecessors(infoItem.currentBB);
+          
+          if ((normPredBB.size() > 1 && !infoItem.currentBB.isExitBlock()) || 
+              (precond.getPhiMap().size() != infoItem.postCond.getPhiMap().size())) {
+            if (precond.smtCheck() == Predicate.SMT_RESULT.UNSAT) {
+              System.out.println("Inner contradiction developed, discard block.");
+              continue;
+            }
+          }
 
           // if have specified the optAndStates.startingInstBranchesTo list, 
           // only take the specified branches at the starting basic block
