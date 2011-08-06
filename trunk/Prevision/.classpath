@@ -14,5 +14,6 @@
 	<classpathentry kind="lib" path="/YicesWrapper/bin" sourcepath="/YicesWrapper"/>
 	<classpathentry kind="lib" path="/WalaUtils/bin" sourcepath="/WalaUtils"/>
 	<classpathentry kind="lib" path="/Util/bin" sourcepath="/Util"/>
+	<classpathentry kind="lib" path="/StaticAnalysis/bin" sourcepath="/StaticAnalysis"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
