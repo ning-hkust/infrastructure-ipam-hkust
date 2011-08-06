@@ -2,14 +2,11 @@ package hk.ust.cse.Prevision.Solver.Yices;
 
 import hk.ust.cse.Prevision.Solver.ISolverLoader;
 import hk.ust.cse.Prevision.Solver.ISolverResult;
-import hk.ust.cse.Prevision.Solver.SMTVariable;
 import hk.ust.cse.YicesWrapper.YicesWrapper;
-
-import java.util.Hashtable;
 
 public class YicesLoader implements ISolverLoader {
   
-  public SOLVER_COMP_PROCESS check(String input, Hashtable<String, SMTVariable> defFinalVarMap) {
+  public SOLVER_COMP_PROCESS check(String input) {
     // call YicesWrapper directly
     boolean result = YicesWrapper.check(input);
     String output  = YicesWrapper.getLastOutput();
@@ -22,7 +19,7 @@ public class YicesLoader implements ISolverLoader {
     
     if (output.length() > 0) {       // SMT Check finished
       // parse and save result
-      m_lastResult.parseOutput(output, defFinalVarMap);
+      //m_lastResult.parseOutput(output, defFinalVarMap);
 
       // return satisfactory or not
       return (result) ? SOLVER_COMP_PROCESS.SAT : SOLVER_COMP_PROCESS.UNSAT;

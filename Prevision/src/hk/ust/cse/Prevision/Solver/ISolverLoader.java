@@ -1,13 +1,11 @@
 package hk.ust.cse.Prevision.Solver;
 
 
-import java.util.Hashtable;
 
 public interface ISolverLoader {
   public enum SOLVER_COMP_PROCESS {SAT, UNSAT, ERROR, TIMEOUT}
   
-  public abstract SOLVER_COMP_PROCESS check(String input,
-      Hashtable<String, SMTVariable> defFinalVarMap);
+  public abstract SOLVER_COMP_PROCESS check(String input);
 
   public abstract String getLastOutput();
 
