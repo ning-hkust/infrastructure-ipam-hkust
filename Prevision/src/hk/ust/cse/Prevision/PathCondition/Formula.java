@@ -1,10 +1,10 @@
 package hk.ust.cse.Prevision.PathCondition;
 
 import hk.ust.cse.Prevision.Solver.SMTChecker;
-import hk.ust.cse.Prevision.Solver.SMTTerm;
 import hk.ust.cse.Prevision.VirtualMachine.AbstractMemory;
 import hk.ust.cse.Prevision.VirtualMachine.Executor.BBorInstInfo;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
+import hk.ust.cse.Prevision.deprecated.SMTTerm;
 
 import java.util.ArrayList;
 import java.util.Hashtable;
@@ -69,9 +69,10 @@ public class Formula {
     return m_lastSolverInput;
   }
   
-  public List<SMTTerm> getLastSatModel() {
-    return m_lastSatModel;
-  }
+  //XXX
+//  public List<SMTTerm> getLastSatModel() {
+//    return m_lastSatModel;
+//  }
   
   public SMT_RESULT getLastSolverResult() {
     return m_lastSolverResult;
