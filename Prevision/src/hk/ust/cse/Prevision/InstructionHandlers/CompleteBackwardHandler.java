@@ -1407,7 +1407,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
     return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
   }
 
-  public Formula handle_phi(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+  public Formula handle_phi2(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
     postCond                                                        = postCond.clone(); // we need to modify on a new clone
     String callSites                                                = instInfo.callSites;
     MethodMetaData methData                                         = instInfo.methData;
@@ -1448,6 +1448,45 @@ public class CompleteBackwardHandler extends AbstractHandler {
     // since there is a new def, try to assign phi
     assignPhiReference(defRef, newRefMap, newPhiMap, newDefMap);
 
+    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
+  }
+  
+  public Formula handle_phi(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, int phiVarID, boolean needClone) {
+    postCond                                                        = needClone ? postCond.clone() : postCond;
+    String callSites                                                = instInfo.callSites;
+    MethodMetaData methData                                         = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
+    SSAPhiInstruction phiInst                                       = (SSAPhiInstruction) inst;
+    
+    if (phiVarID > 0) {
+      String def = getSymbol(phiInst.getDef(), methData, callSites, newDefMap);
+      String var = getSymbol(phiVarID, methData, callSites, newDefMap);
+      Reference defRef = findOrCreateReference(def, "Unknown-Type", callSites, newRefMap);
+      Reference phiRef = findOrCreateReference(var, "Unknown-Type", callSites, newRefMap);
+      
+      if (phiRef.getInstance().isBounded()) {
+        defRef.setInstancesValue(phiRef.getInstance());
+        defRef.putInstancesToOld();
+        // defRef not longer useful
+        if (defRef.canReferenceSetValue() && findReference(defRef.getName(), defRef.getCallSites(), newRefMap) != null) {
+          newRefMap.get(defRef.getCallSites()).remove(defRef.getName());
+        }
+      }
+      else {
+        try {
+          phiRef.assignInstance(defRef.getInstances());
+          defRef.putInstancesToOld();
+        } catch (Exception e) {e.printStackTrace();}
+        // put fromRef to refMap if defRef is in refMap
+        if (findReference(defRef.getName(), defRef.getCallSites(), newRefMap) != null) {
+          addRefToRefMap(newRefMap, phiRef);
+          newRefMap.get(defRef.getCallSites()).remove(defRef.getName());
+        }
+      }
+    }
+    
     return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
   }
   

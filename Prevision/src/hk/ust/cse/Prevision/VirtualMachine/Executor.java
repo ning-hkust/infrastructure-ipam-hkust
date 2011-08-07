@@ -668,14 +668,14 @@ public class Executor {
       preCond = m_instHandler.handle_catch(preCond, null, infoItem);
     }
     
-    // handle phi instructions last if any
-    for (Iterator<SSAPhiInstruction> it = infoItem.currentBB.iteratePhis(); it.hasNext();) {
-      SSAPhiInstruction phiInst = (SSAPhiInstruction) it.next();
-      if (phiInst != null) {
-        preCond = m_instHandler.handle(optAndStates, cgNode, preCond, phiInst, 
-            infoItem, callStack, curInvokeDepth);
-      }
-    }
+//    // handle phi instructions last if any
+//    for (Iterator<SSAPhiInstruction> it = infoItem.currentBB.iteratePhis(); it.hasNext();) {
+//      SSAPhiInstruction phiInst = (SSAPhiInstruction) it.next();
+//      if (phiInst != null) {
+//        preCond = m_instHandler.handle(optAndStates, cgNode, preCond, phiInst, 
+//            infoItem, callStack, curInvokeDepth);
+//      }
+//    }
     
     // some wrap up at the entry block
     if (infoItem.currentBB.isEntryBlock()) {
@@ -783,13 +783,10 @@ public class Executor {
       }
       
       Integer count = visitedBB.get(basicBlock);
-      if (count != null) {
-        if (count < maxLoop)
-        {
-          visitedList.add(basicBlock);
-        }
+      if (count != null && count < maxLoop) {
+        visitedList.add(basicBlock);
       }
-      else {
+      else if (count == null) {
         notvisitedList.add(basicBlock);
       }
     }
@@ -804,21 +801,68 @@ public class Executor {
       public int compare(ISSABasicBlock arg0, ISSABasicBlock arg1) { 
         return arg1.getNumber() - arg0.getNumber();
       } 
-    }); 
+    });
+    
+    // decide phis if any
+    Hashtable<ISSABasicBlock, Formula> newPreConds = null;
+    Iterator<SSAPhiInstruction> phiInsts = currentInfo.currentBB.iteratePhis();
+    if (phiInsts.hasNext()) {
+      newPreConds = decidePhis(currentInfo, phiInsts, precond);
+      for (Formula newPreCond : newPreConds.values()) { // put back visited record
+        newPreCond.setVisitedRecord(visitedBB, null);
+      }
+    }
     
     // push the visited ones into the beginning of the stack
     for (ISSABasicBlock visited : visitedList) {
       // we don't check precond at the moment
-      workList.push(new BBorInstInfo(visited, areSkipToBBs, precond, successorType, 
+      Formula newPreCond = newPreConds == null ? precond : newPreConds.get(visited);
+      workList.push(new BBorInstInfo(visited, areSkipToBBs, newPreCond, successorType, 
           currentInfo.currentBB, currentInfo, methData, valPrefix, null, this));
     }
     
     // push the non visited ones into the beginning of the stack
     for (ISSABasicBlock notvisited : notvisitedList) {
       // we don't check precond at the moment
-      workList.push(new BBorInstInfo(notvisited, areSkipToBBs, precond, successorType, 
+      Formula newPreCond = newPreConds == null ? precond : newPreConds.get(notvisited);
+      workList.push(new BBorInstInfo(notvisited, areSkipToBBs, newPreCond, successorType, 
           currentInfo.currentBB, currentInfo, methData, valPrefix, null, this));
     }
+  }
+  
+  private Hashtable<ISSABasicBlock, Formula> decidePhis(BBorInstInfo instInfo, 
+      Iterator<SSAPhiInstruction> phiInsts, Formula postCond) {
+    Hashtable<ISSABasicBlock, Formula> newPreConds = new Hashtable<ISSABasicBlock, Formula>();
+
+    // sort predecessors of the current block
+    List<ISSABasicBlock> predList = new ArrayList<ISSABasicBlock>();
+    Iterator<ISSABasicBlock> predBBs = instInfo.methData.getcfg().getPredNodes(instInfo.currentBB);
+    while (predBBs.hasNext()) {
+      predList.add(predBBs.next());
+    }
+    final int currentBBNum = instInfo.currentBB.getNumber();
+    Collections.sort(predList, new java.util.Comparator<ISSABasicBlock>() {
+      @Override
+      public int compare(ISSABasicBlock o1, ISSABasicBlock o2) {
+        return Math.abs(o2.getNumber() - currentBBNum) - Math.abs(o1.getNumber() - currentBBNum);
+      }
+    });
+    
+    // go through all phi instructions of the block
+    for (Iterator<SSAPhiInstruction> it = phiInsts; it.hasNext();) {
+      SSAPhiInstruction phiInst = (SSAPhiInstruction) it.next();
+      if (phiInst != null) {
+        for (int i = 0; i < predList.size() && i < phiInst.getNumberOfUses(); i++) {
+          ISSABasicBlock pred = predList.get(i);
+          Formula newPreCond = newPreConds.get(pred);
+          newPreCond = m_instHandler.handle_phi(newPreCond == null ? postCond : newPreCond, 
+              phiInst, instInfo, phiInst.getUse(i), newPreCond == null);
+          newPreConds.put(pred, newPreCond);
+        }
+      }
+    }
+    
+    return newPreConds;
   }
 
   // if lineNumber is <= 0, we return the exit block

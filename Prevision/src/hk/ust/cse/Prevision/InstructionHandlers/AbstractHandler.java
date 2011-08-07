@@ -93,7 +93,7 @@ public abstract class AbstractHandler {
 
   public abstract Formula handle_new(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo);
   
-  public abstract Formula handle_phi(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo);
+  public abstract Formula handle_phi(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, int phiVarID, boolean needClone);
   
   public abstract Formula handle_pi(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo);
   
