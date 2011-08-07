@@ -14,7 +14,7 @@ public class YicesLoader implements ISolverLoader {
 
     // create a solver result
     if (m_lastResult == null) {
-      m_lastResult = new YicesResult();
+      //m_lastResult = new YicesResult();
     }
     
     if (output.length() > 0) {       // SMT Check finished

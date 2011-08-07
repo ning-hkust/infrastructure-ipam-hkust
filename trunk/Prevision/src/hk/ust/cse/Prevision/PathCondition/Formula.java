@@ -103,27 +103,21 @@ public class Formula {
   }
 
   @SuppressWarnings("unchecked")
-  public void setVisitedRecord(Hashtable<ISSABasicBlock, Integer> lastRecord,
-      BBorInstInfo newlyVisited) {
-    if (lastRecord != null) {
-      m_visitedRecord = (Hashtable<ISSABasicBlock, Integer>) lastRecord.clone();
+  public void setVisitedRecord(Hashtable<ISSABasicBlock, Integer> lastRecord, BBorInstInfo newlyVisited) {
+    m_visitedRecord = (lastRecord != null) ? (Hashtable<ISSABasicBlock, Integer>) lastRecord.clone() : 
+                                             new Hashtable<ISSABasicBlock, Integer>();
+    if (newlyVisited != null) {
+      // mark as visited
+      Integer count = m_visitedRecord.get(newlyVisited.currentBB);
+      count = (count == null) ? 0 : count;
+      
+      // add loop
+      if (newlyVisited.sucessorBB != null && 
+          newlyVisited.sucessorBB.getNumber() < newlyVisited.currentBB.getNumber()) {
+        count++;
+      }
+      m_visitedRecord.put(newlyVisited.currentBB, count);
     }
-    else {
-      m_visitedRecord = new Hashtable<ISSABasicBlock, Integer>();
-    }
-    
-    // mark as visited
-    Integer count = m_visitedRecord.get(newlyVisited.currentBB);
-    if (count == null) {
-      count = 0;
-    }
-    
-    // add loop
-    if (newlyVisited.sucessorBB != null && 
-        newlyVisited.sucessorBB.getNumber() < newlyVisited.currentBB.getNumber()) {
-      count++;
-    }
-    m_visitedRecord.put(newlyVisited.currentBB, count);
   }
 
   public boolean equals(Object obj) {
