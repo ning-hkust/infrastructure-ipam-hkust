@@ -649,14 +649,6 @@ public class Executor {
           starting[0] = false;
         }
       }
-      else if (inst == null) {
-        // if it's a ShrikeCFG ConstantInstruction, we do phiMap
-        // assignment for this constant value!
-        String constantStr = AbstractHandler.getConstantInstructionStr(currInstIndex, methData);
-        if (constantStr != null) {
-          preCond = m_instHandler.handle_constant(preCond, null, infoItem, constantStr);
-        }
-      }
 
       // get previous inst
       currInstIndex--;
@@ -667,15 +659,6 @@ public class Executor {
     if (infoItem.currentBB.isCatchBlock()) {
       preCond = m_instHandler.handle_catch(preCond, null, infoItem);
     }
-    
-//    // handle phi instructions last if any
-//    for (Iterator<SSAPhiInstruction> it = infoItem.currentBB.iteratePhis(); it.hasNext();) {
-//      SSAPhiInstruction phiInst = (SSAPhiInstruction) it.next();
-//      if (phiInst != null) {
-//        preCond = m_instHandler.handle(optAndStates, cgNode, preCond, phiInst, 
-//            infoItem, callStack, curInvokeDepth);
-//      }
-//    }
     
     // some wrap up at the entry block
     if (infoItem.currentBB.isEntryBlock()) {

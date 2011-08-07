@@ -26,13 +26,12 @@ public class Formula {
 
   public Formula(List<Condition> conditions, 
       Hashtable<String, Hashtable<String, Reference>> refMap, 
-      Hashtable<String, Hashtable<String, List<Reference>>> phiMap, 
       Hashtable<String, Hashtable<String, Integer>> defMap) {
     
     // remember, each Formula instance should own a unique
     // instance of conditions and varMap!
     m_conditionList = conditions;
-    m_abstractMemory = new AbstractMemory(refMap, phiMap, defMap);
+    m_abstractMemory = new AbstractMemory(refMap, defMap);
   }
   
   public Formula(List<Condition> conditions, AbstractMemory absMemory) {
@@ -88,10 +87,6 @@ public class Formula {
   
   public Hashtable<String, Hashtable<String, Reference>> getRefMap() {
     return m_abstractMemory.getRefMap();
-  }
-  
-  public Hashtable<String, Hashtable<String, List<Reference>>> getPhiMap() {
-    return m_abstractMemory.getPhiMap();
   }
 
   public Hashtable<String, Hashtable<String, Integer>> getDefMap() {

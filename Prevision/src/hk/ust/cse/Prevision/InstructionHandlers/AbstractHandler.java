@@ -26,10 +26,7 @@ import java.util.Stack;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.ibm.wala.cfg.ShrikeCFG;
 import com.ibm.wala.ipa.callgraph.CGNode;
-import com.ibm.wala.shrikeBT.ConstantInstruction;
-import com.ibm.wala.shrikeBT.IInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAInvokeInstruction;
 import com.ibm.wala.ssa.SymbolTable;
@@ -108,9 +105,6 @@ public abstract class AbstractHandler {
   public abstract Formula handle_throw(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo);
 
   public abstract Formula handle_entryblock(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo);
-  
-  // handler for ShrikeCFG ConstantInstruction instruction
-  public abstract Formula handle_constant(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, String constantStr);
 
   public final Formula handle(GlobalOptionsAndStates optionsAndStates, CGNode method, 
       Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth) {
@@ -211,12 +205,11 @@ public abstract class AbstractHandler {
   
   /**
    * if we have finished an invocation, remove all references of this method
-   * from refMap and phiMap, re-assign lastRef
+   * from refMap, re-assign lastRef
    */
   protected static final void afterInvocation(SSAInvokeInstruction invokeInst, 
       String callSites, String refName, String defName, List<String> paramNames, 
       Hashtable<String, Hashtable<String, Reference>> refMap, 
-      Hashtable<String, Hashtable<String, List<Reference>>> phiMap, 
       Hashtable<String, Hashtable<String, Integer>> defMap) {
     
     String thisCallSite = String.format("%04d", invokeInst.getProgramCounter());
@@ -285,7 +278,6 @@ public abstract class AbstractHandler {
     }
 
     removeMethodReferences(invokeInst, callSites, refMap);
-    removeMethodPhis(invokeInst, callSites, phiMap);
     removeMethodDefCounts(invokeInst, callSites, defMap);
   }
   
@@ -295,14 +287,6 @@ public abstract class AbstractHandler {
   private static void removeMethodReferences(SSAInvokeInstruction invokeInst, 
       String callSites, Hashtable<String, Hashtable<String, Reference>> refMap) {
     refMap.remove(callSites + String.format("%04d", invokeInst.getProgramCounter()));
-  }
-  
-  /**
-   * would not make a new clone
-   */
-  private static void removeMethodPhis(SSAInvokeInstruction invokeInst, 
-      String callSites, Hashtable<String, Hashtable<String, List<Reference>>> phiMap) {
-    phiMap.remove(callSites + String.format("%04d", invokeInst.getProgramCounter()));
   }
   
   /**
@@ -438,80 +422,6 @@ public abstract class AbstractHandler {
   }
 
   /**
-   * might create a new phiMap and a new varMap clone
-   */
-  protected static final void assignPhiReference(
-      Reference defRef, Hashtable<String, Hashtable<String, Reference>> newRefMap, 
-      Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap, 
-      Hashtable<String, Hashtable<String, Integer>> newDefMap) {
-    // usually we can use the callSites in the defRef
-    assignPhiReference(defRef, defRef.getCallSites(), newRefMap, newPhiMap, newDefMap);
-  }
-  
-  /**
-   * would not make a new clone
-   * for constants, defRef.callSites is null, need to pass callSites
-   */
-  protected static final void assignPhiReference(Reference defRef, String callSites, 
-      Hashtable<String, Hashtable<String, Reference>> newRefMap, 
-      Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap, 
-      Hashtable<String, Hashtable<String, Integer>> newDefMap) {
-    
-    // whenever there is a def, the assignPhiReference method will 
-    // always called so we record defs in this method
-    addDefToDefMap(newDefMap, defRef);
-
-    // check if the newly def reference is a
-    // potential concrete value to any phi references
-    Hashtable<String, List<Reference>> methodPhis = newPhiMap.get(callSites);
-    if (methodPhis != null && methodPhis.containsKey(defRef.getName())) {
-      List<Reference> phiRefs = newPhiMap.get(defRef.getCallSites()).get(defRef.getName());
-      
-      for (Reference phiRef : phiRefs) {
-        if (defRef.getInstance().isBounded()) {
-          phiRef.setInstancesValue(defRef.getInstance());
-          phiRef.putInstancesToOld();
-          // defRef not longer useful
-          if (phiRef.canReferenceSetValue() && findReference(phiRef.getName(), phiRef.getCallSites(), newRefMap) != null) {
-            newRefMap.get(phiRef.getCallSites()).remove(phiRef.getName());
-          }
-        }
-        else {
-          try {
-            defRef.assignInstance(phiRef.getInstances());
-            phiRef.putInstancesToOld();
-          } catch (Exception e) {e.printStackTrace();}
-          // put fromRef to refMap if defRef is in refMap
-          if (findReference(phiRef.getName(), phiRef.getCallSites(), newRefMap) != null) {
-            addRefToRefMap(newRefMap, defRef);
-            newRefMap.get(phiRef.getCallSites()).remove(phiRef.getName());
-          }
-        }
-      }
-      
-      // remove phis from phiList because it is concrete now
-      List<Reference> clonePhiRefs = new ArrayList<Reference>(phiRefs);
-      Enumeration<String> keys = newPhiMap.keys();
-      while (keys.hasMoreElements()) {
-        String key = (String) keys.nextElement();
-        Hashtable<String, List<Reference>> methodPhis2 = newPhiMap.get(key);
-        Enumeration<String> keys2 = methodPhis2.keys();
-        while (keys2.hasMoreElements()) {
-          String key2 = (String) keys2.nextElement();
-          List<Reference> phiRefs2 = methodPhis2.get(key2);
-          phiRefs2.removeAll(clonePhiRefs);
-          if (phiRefs2.isEmpty()) {
-            methodPhis2.remove(key2);
-          }
-        }
-        if (methodPhis2.isEmpty()) {
-          newPhiMap.remove(key);
-        }
-      }
-    }
-  }
-
-  /**
    * would not make a new clone
    */
   protected static final void addDefToDefMap(Hashtable<String, Hashtable<String, Integer>> defMap, Reference def) {
@@ -562,23 +472,18 @@ public abstract class AbstractHandler {
   }
   
   protected static final boolean containsRef(String refName, String callSites, 
-      Hashtable<String, Hashtable<String, Reference>> refMap, 
-      Hashtable<String, Hashtable<String, List<Reference>>> phiMap) {
+      Hashtable<String, Hashtable<String, Reference>> refMap) {
 
     Hashtable<String, Reference> methodRefs = refMap.get(callSites);
-    boolean contains = methodRefs != null && methodRefs.containsKey(refName);
-    
-    if (!contains) {
-      Hashtable<String, List<Reference>> methodPhis = phiMap.get(callSites);
-      contains = methodPhis != null && methodPhis.containsKey(refName);
-    }
-    return contains;
+    return methodRefs != null && methodRefs.containsKey(refName);
   }
   
-  protected static final void assignInstanceAndPhi(Reference defRef, Reference fromRef,
+  protected static final void assignInstance(Reference defRef, Reference fromRef,
       Hashtable<String, Hashtable<String, Reference>> newRefMap, 
-      Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap, 
       Hashtable<String, Hashtable<String, Integer>> newDefMap) {
+    
+    // since there is a new def, add to def
+    addDefToDefMap(newDefMap, defRef);   
     
     // associate the two refs' instance together as the same one
     if (fromRef.getInstance().isBounded()) {
@@ -586,9 +491,6 @@ public abstract class AbstractHandler {
       defRef.putInstancesToOld();
     }
 
-    // since there is a new def, try to assign phi
-    assignPhiReference(defRef, newRefMap, newPhiMap, newDefMap);
-    
     if (fromRef.getInstance().isBounded()) {
       // defRef not longer useful
       if (defRef.canReferenceSetValue() && findReference(defRef.getName(), defRef.getCallSites(), newRefMap) != null) {
@@ -609,13 +511,12 @@ public abstract class AbstractHandler {
     }
   }
   
-  protected static final void assignInstanceAndPhi(Reference defRef, Instance fromInstance,
+  protected static final void assignInstance(Reference defRef, Instance fromInstance,
       Hashtable<String, Hashtable<String, Reference>> newRefMap, 
-      Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap, 
       Hashtable<String, Hashtable<String, Integer>> newDefMap) {
 
-    // since there is a new def, try to assign phi
-    assignPhiReference(defRef, newRefMap, newPhiMap, newDefMap);
+    // since there is a new def, add to def
+    addDefToDefMap(newDefMap, defRef);
     
     // associate the two refs' instance together as the same one
     if (fromInstance.isBounded()) {
@@ -765,23 +666,6 @@ public abstract class AbstractHandler {
       }
     }
     return var;
-  }
-
-  public static final String getConstantInstructionStr(int nInstruction, MethodMetaData methData) {
-    // get ShrikeCFG from SSACFG
-    ShrikeCFG shrikeCFG = methData.getShrikeCFG();
-
-    // get instruction
-    IInstruction[] instructions = shrikeCFG.getInstructions();
-    IInstruction instruction = instructions[nInstruction];
-
-    String constantStr = null;
-    if (instruction != null && instruction instanceof ConstantInstruction) {
-      Object constantObject = ((ConstantInstruction) instruction).getValue();
-      constantStr = getConstantPrefix(constantObject) + 
-        ((constantObject == null) ? "null" : constantObject.toString());
-    }
-    return constantStr;
   }
 
   private static String getConstantPrefix(int varID, MethodMetaData methData) {
@@ -1154,7 +1038,6 @@ public abstract class AbstractHandler {
   
   protected static final Formula defaultHandler(Formula postCond, 
       SSAInstruction inst, BBorInstInfo instInfo) {
-    return new Formula(postCond.getConditionList(), postCond.getRefMap(), 
-        postCond.getPhiMap(), postCond.getDefMap());
+    return new Formula(postCond.getConditionList(), postCond.getRefMap(), postCond.getDefMap());
   }
 }
