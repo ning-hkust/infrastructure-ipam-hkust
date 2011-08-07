@@ -682,21 +682,6 @@ public abstract class AbstractHandler {
       return "#?";
     }
   }
-
-  private static String getConstantPrefix(Object constantObject) {
-    if (constantObject == null) {
-      return "";
-    }
-    else if (constantObject instanceof Number) {
-      return "#!";
-    }
-    else if (constantObject instanceof String) {
-      return "##";
-    }
-    else {
-      return "#?";
-    }
-  }
   
   @SuppressWarnings("unchecked")
   protected static Formula setEquivalentInstances(Formula preCond, String callSites) {
