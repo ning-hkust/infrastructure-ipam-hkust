@@ -50,18 +50,16 @@ import com.ibm.wala.ssa.SSASwitchInstruction;
 import com.ibm.wala.ssa.SSAThrowInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.types.TypeReference;
-import com.ibm.wala.util.intset.IntSet;
 
 public class CompleteBackwardHandler extends AbstractHandler {
   
   public Formula handle_arraylength(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAArrayLengthInstruction arrayLengthInst                       = (SSAArrayLengthInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAArrayLengthInstruction arrayLengthInst                 = (SSAArrayLengthInstruction) inst;
 
     // the variable(result) define by the arraylength instruction
     String def      = getSymbol(arrayLengthInst.getDef(), methData, callSites, newDefMap);
@@ -81,7 +79,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // add new references to refMap
       addRefToRefMap(newRefMap, arrayRefRef);
       
-      if (containsRef(def, callSites, newRefMap, newPhiMap)) {
+      if (containsRef(def, callSites, newRefMap)) {
         // add new references to refMap
         Reference defRef = findOrCreateReference(def, "I", callSites, newRefMap);
         
@@ -104,8 +102,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
           // no need to fieldRef as we can access it through arrayRefRef
         }
 
-        // since there is a new def, try to assign phi
-        assignPhiReference(defRef, newRefMap, newPhiMap, newDefMap);
+        // since there is a new def, add to defMap
+        addDefToDefMap(newDefMap, defRef);
       }
       break;
     case Formula.EXCEPTIONAL_SUCCESSOR:
@@ -128,17 +126,16 @@ public class CompleteBackwardHandler extends AbstractHandler {
     
     // add new conditions to condition list
     List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newPhiMap, newDefMap);
+    return new Formula(newConditions, newRefMap, newDefMap);
   }
 
   public Formula handle_arrayload(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAArrayLoadInstruction arrayLoadInst                           = (SSAArrayLoadInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAArrayLoadInstruction arrayLoadInst                     = (SSAArrayLoadInstruction) inst;
 
     // the variable(result) define by the arrayload instruction
     String def        = getSymbol(arrayLoadInst.getDef(), methData, callSites, newDefMap);
@@ -194,7 +191,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       Reference arrayLoadRef = findOrCreateReference(arrayLoadStr.toString(), elemType, callSites, newRefMap);
 
       // associate the two refs' instance together as the same one
-      assignInstanceAndPhi(defRef, arrayLoadRef, newRefMap, newPhiMap, newDefMap);
+      assignInstance(defRef, arrayLoadRef, newRefMap, newDefMap);
       break;
     case Formula.EXCEPTIONAL_SUCCESSOR:
       TypeReference excepType = methData.getExceptionType(instInfo.currentBB, instInfo.sucessorBB);
@@ -253,7 +250,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
     
     // add new conditions to condition list
     List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newPhiMap, newDefMap);
+    return new Formula(newConditions, newRefMap, newDefMap);
   }
   
   public Formula handle_arraystore(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -316,7 +313,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       Reference arrayStoreRef = findOrCreateReference(arrayStoreStr.toString(), elemType, callSites, newRefMap);
 
       // assign the instance to the def reference
-      assignInstanceAndPhi(arrayStoreRef, storeValRef, newRefMap, postCond.getPhiMap(), postCond.getDefMap());
+      assignInstance(arrayStoreRef, storeValRef, newRefMap, postCond.getDefMap());
       break;
     case Formula.EXCEPTIONAL_SUCCESSOR:
       TypeReference excepType = methData.getExceptionType(instInfo.currentBB, instInfo.sucessorBB);
@@ -375,24 +372,23 @@ public class CompleteBackwardHandler extends AbstractHandler {
     
     // add new conditions to condition list
     List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, postCond.getPhiMap(), postCond.getDefMap());
+    return new Formula(newConditions, newRefMap, postCond.getDefMap());
   }
 
   public Formula handle_binaryop(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSABinaryOpInstruction binaryOpInst                             = (SSABinaryOpInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSABinaryOpInstruction binaryOpInst                       = (SSABinaryOpInstruction) inst;
 
     // the variable(result) define by the binaryOp instruction    
     String def  = getSymbol(binaryOpInst.getDef(), methData, callSites, newDefMap);
     String var1 = getSymbol(binaryOpInst.getUse(0), methData, callSites, newDefMap);
     String var2 = getSymbol(binaryOpInst.getUse(1), methData, callSites, newDefMap);
     
-    if (containsRef(def, callSites, newRefMap, newPhiMap)) {
+    if (containsRef(def, callSites, newRefMap)) {
       Reference defRef = findOrCreateReference(def, "Unknown-Type", callSites, newRefMap); // reference must exist
       Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, newRefMap);
       Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, newRefMap);
@@ -446,21 +442,20 @@ public class CompleteBackwardHandler extends AbstractHandler {
       addRefToRefMap(newRefMap, var2Ref);
       
       // assign the instance to the def reference
-      assignInstanceAndPhi(defRef, binaryOp, newRefMap, newPhiMap, newDefMap);
+      assignInstance(defRef, binaryOp, newRefMap, newDefMap);
     }
     
-    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
+    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
   }
   
   // handler for catch instruction
   public Formula handle_catch(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAGetCaughtExceptionInstruction catchInst                      = 
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAGetCaughtExceptionInstruction catchInst                = 
       ((ExceptionHandlerBasicBlock) instInfo.currentBB).getCatchInstruction();
 
     // the e defined by catch
@@ -479,24 +474,23 @@ public class CompleteBackwardHandler extends AbstractHandler {
     Instance excep   = new Instance(freshInst, excepTypeStr);
     
     // assign the instance to the def reference
-    assignInstanceAndPhi(defRef, excep, newRefMap, newPhiMap, newDefMap);
+    assignInstance(defRef, excep, newRefMap, newDefMap);
     
     // add a caught variable to indicate "coming from a catch block of 
     // some exception type", and expect to meet an exception triggering point
     //newVarMap = setExceptionCaught(postCond, newVarMap, excepTypeStr);
 
-    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
+    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
   }
   
   // handler for checkcast instruction
   public Formula handle_checkcast(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap(); 
-    SSACheckCastInstruction checkcastInst                           = (SSACheckCastInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap(); 
+    SSACheckCastInstruction checkcastInst                     = (SSACheckCastInstruction) inst;
 
     // the variable(result) define by the getfield instruction
     String def = getSymbol(checkcastInst.getDef(), methData, callSites, newDefMap);
@@ -527,7 +521,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       Reference defRef = findOrCreateReference(def, declaredResultType, callSites, newRefMap);
 
       // associate the two refs' instance together as the same one
-      assignInstanceAndPhi(defRef, valRef, newRefMap, newPhiMap, newDefMap);
+      assignInstance(defRef, valRef, newRefMap, newDefMap);
       break;
     case Formula.EXCEPTIONAL_SUCCESSOR:
       /* can only be CCE */
@@ -555,24 +549,23 @@ public class CompleteBackwardHandler extends AbstractHandler {
     
     // add new conditions to condition list
     List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newPhiMap, newDefMap);
+    return new Formula(newConditions, newRefMap, newDefMap);
   }
   
   public Formula handle_compare(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAComparisonInstruction compareInst                            = (SSAComparisonInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAComparisonInstruction compareInst                      = (SSAComparisonInstruction) inst;
 
     // the variable(result) define by the compare instruction    
     String def  = getSymbol(compareInst.getDef(), methData, callSites, newDefMap);
     String var1 = getSymbol(compareInst.getUse(0), methData, callSites, newDefMap);
     String var2 = getSymbol(compareInst.getUse(1), methData, callSites, newDefMap);
     
-    if (containsRef(def, callSites, newRefMap, newPhiMap)) {   
+    if (containsRef(def, callSites, newRefMap)) {   
       Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, newRefMap);
       Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, newRefMap);
       Reference defRef  = findOrCreateReference(def, "Unknown-Type", callSites, newRefMap); // reference must exist
@@ -591,20 +584,19 @@ public class CompleteBackwardHandler extends AbstractHandler {
       addRefToRefMap(newRefMap, var2Ref);
 
       // assign the instance to the def reference
-      assignInstanceAndPhi(defRef, compareOp, newRefMap, newPhiMap, newDefMap);
+      assignInstance(defRef, compareOp, newRefMap, newDefMap);
     }
     
-    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
+    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
   }
 
   public Formula handle_conversion(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAConversionInstruction convInst                               = (SSAConversionInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAConversionInstruction convInst                         = (SSAConversionInstruction) inst;
 
     // the variable(result) define by the conversion instruction
     String toVal    = getSymbol(convInst.getDef(), methData, callSites, newDefMap);
@@ -614,13 +606,13 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
     List<ConditionTerm> conditionTerms = null;
     List<Condition> conditionList = new ArrayList<Condition>();
-    if (containsRef(toVal, callSites, newRefMap, newPhiMap)) {
+    if (containsRef(toVal, callSites, newRefMap)) {
       Reference toValRef   = findOrCreateReference(toVal, toType, callSites, newRefMap);
       Reference fromValRef = findOrCreateReference(fromVal, fromType, callSites, newRefMap);
       
       if (fromType.equals("I") || fromType.equals("J") || fromType.equals("S")) { // from integer to float
         // associate the two refs' instance together as the same one
-        assignInstanceAndPhi(toValRef, fromValRef, newRefMap, newPhiMap, newDefMap);
+        assignInstance(toValRef, fromValRef, newRefMap, newDefMap);
       }
       else if (fromType.equals("D") || fromType.equals("F")) { // from float to integer
         if (toType.equals("I") || toType.equals("J") || toType.equals("S")) {
@@ -636,7 +628,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
             String convVal = fromVal + "$1" /* first kind of conversion */;
             
             convValRef = findOrCreateReference(convVal, "I", callSites, newRefMap);
-            if (containsRef(convVal, callSites, newRefMap, newPhiMap)) {
+            if (containsRef(convVal, callSites, newRefMap)) {
               // the converted integer should be: fromVal - 1 < convVal <= fromVal
               conditionTerms = new ArrayList<ConditionTerm>();
               conditionTerms.add(new ConditionTerm(convValRef.getInstance(), Comparator.OP_SMALLER_EQUAL, fromValRef.getInstance())); 
@@ -653,11 +645,11 @@ public class CompleteBackwardHandler extends AbstractHandler {
             }
           }
           // associate the two refs' instance together as the same one
-          assignInstanceAndPhi(toValRef, convValRef, newRefMap, newPhiMap, newDefMap);
+          assignInstance(toValRef, convValRef, newRefMap, newDefMap);
         }
         else if (toType.equals("D") || toType.equals("F")) {
           // associate the two refs' instance together as the same one
-          assignInstanceAndPhi(toValRef, fromValRef, newRefMap, newPhiMap, newDefMap);
+          assignInstance(toValRef, fromValRef, newRefMap, newDefMap);
         }
       }
       else {
@@ -667,7 +659,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
     
     // add new conditions to condition list
     List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newPhiMap, newDefMap);
+    return new Formula(newConditions, newRefMap, newDefMap);
   }
   
   public Formula handle_conditional_branch(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -766,18 +758,17 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
     // add new conditions to condition list
     List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, postCond.getPhiMap(), postCond.getDefMap());
+    return new Formula(newConditions, newRefMap, postCond.getDefMap());
   }
 
   // handler for getfield instruction
   public Formula handle_getfield(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAGetInstruction getfieldInst                                  = (SSAGetInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAGetInstruction getfieldInst                            = (SSAGetInstruction) inst;
 
     // the variable(result) define by the getfield instruction
     String def = getSymbol(getfieldInst.getDef(), methData, callSites, newDefMap);
@@ -798,14 +789,14 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // add new references to refMap
       addRefToRefMap(newRefMap, refRef);
       
-      if (containsRef(def, callSites, newRefMap, newPhiMap)) {
+      if (containsRef(def, callSites, newRefMap)) {
         // add new references to refMap
         String fieldType = getfieldInst.getDeclaredFieldType().getName().toString();
         String fieldName = getfieldInst.getDeclaredField().getName().toString();
         Reference defRef = findOrCreateReference(def, fieldType, callSites, newRefMap);
 
-        // since there is a new def, try to assign phi
-        assignPhiReference(defRef, newRefMap, newPhiMap, newDefMap);
+        // since there is a new def, add to defMap
+        addDefToDefMap(newDefMap, defRef);
         
         List<Reference> fieldRefs = refRef.getFieldReferences(fieldName);
         if (fieldRefs.size() == 0) {
@@ -848,22 +839,21 @@ public class CompleteBackwardHandler extends AbstractHandler {
     
     // add new conditions to condition list
     List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newPhiMap, newDefMap);
+    return new Formula(newConditions, newRefMap, newDefMap);
   }
 
   // handler for getstatic instruction
   public Formula handle_getstatic(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAGetInstruction getstaticInst                                 = (SSAGetInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAGetInstruction getstaticInst                           = (SSAGetInstruction) inst;
 
     String def = getSymbol(getstaticInst.getDef(), methData, callSites, newDefMap);
 
-    if (containsRef(def, callSites, newRefMap, newPhiMap)) {
+    if (containsRef(def, callSites, newRefMap)) {
       String fieldType = getstaticInst.getDeclaredFieldType().getName().toString();
       // get the class type that declared this field
       String declaredField = getstaticInst.getDeclaredField().getDeclaringClass().getName().toString();
@@ -875,32 +865,30 @@ public class CompleteBackwardHandler extends AbstractHandler {
       Reference fieldRef = findOrCreateReference(declaredField, fieldType, "", newRefMap); // static field also goes to "" callSites
       
       // associate the two refs' instance together as the same one
-      assignInstanceAndPhi(defRef, fieldRef, newRefMap, newPhiMap, newDefMap);
+      assignInstance(defRef, fieldRef, newRefMap, newDefMap);
     }
 
-    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
+    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
   }
 
   public Formula handle_goto(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    IntSet aa = instInfo.methData.getcfg().getSuccNodeNumbers(instInfo.currentBB); //XXX
     return defaultHandler(postCond, inst, instInfo);
   }
   
   // handler for instanceof instruction
   public Formula handle_instanceof(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAInstanceofInstruction instanceofInst                         = (SSAInstanceofInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAInstanceofInstruction instanceofInst                   = (SSAInstanceofInstruction) inst;
 
     String def = getSymbol(instanceofInst.getDef(), methData, callSites, newDefMap);
     String ref = getSymbol(instanceofInst.getRef(), methData, callSites, newDefMap);
 
     // the variable define by the instanceofInst instruction
-    if (containsRef(def, callSites, newRefMap, newPhiMap)) {   
+    if (containsRef(def, callSites, newRefMap)) {   
       Reference refRef = findOrCreateReference(ref, "Unknown-Type", callSites, newRefMap);
       // add new references to refMap
       addRefToRefMap(newRefMap, refRef);
@@ -915,10 +903,10 @@ public class CompleteBackwardHandler extends AbstractHandler {
       Reference defRef   = findOrCreateReference(def, "Z", callSites, newRefMap);
       
       // associate the two refs' instance together as the same one
-      assignInstanceAndPhi(defRef, checkRef, newRefMap, newPhiMap, newDefMap);
+      assignInstance(defRef, checkRef, newRefMap, newDefMap);
     }
 
-    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
+    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
   }
   
   public Formula handle_invokeinterface(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -934,13 +922,12 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
   
   private Formula handle_invokenonstatic(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAInvokeInstruction invokeInst                                 = (SSAInvokeInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAInvokeInstruction invokeInst                           = (SSAInvokeInstruction) inst;
 
     // the variable(result) define by the invokeinterface/invokespecial/invokevirtual instruction
     String def = getSymbol(invokeInst.getDef(), methData, callSites, newDefMap);
@@ -970,7 +957,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
       String invocationType = invokeInst.getDeclaredResultType().getName().toString();
       // the variable define by the invokeinterface/invokespecial/invokevirtual instruction
-      if (containsRef(def, callSites, newRefMap, newPhiMap)) {
+      if (containsRef(def, callSites, newRefMap)) {
         StringBuilder invocation = new StringBuilder();
         // get the fieldType of the declared field of the invokeinterface/invokespecial/invokevirtual instruction
         // get the class type that declared this field
@@ -992,7 +979,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
         Reference defRef        = findOrCreateReference(def, invocationType, callSites, newRefMap);
         
         // associate the two refs' instance together as the same one
-        assignInstanceAndPhi(defRef, invocationRef, newRefMap, newPhiMap, newDefMap);
+        assignInstance(defRef, invocationRef, newRefMap, newDefMap);
 
         // add new variables to varMap
         //newVarMap = addVars2VarMap(postCond, methData, newVarMap, params);
@@ -1018,18 +1005,17 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
     // add new conditions to condition list
     List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newPhiMap, newDefMap);
+    return new Formula(newConditions, newRefMap, newDefMap);
   }
 
   // simple implementation, do not consider call graph
   public Formula handle_invokestatic(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAInvokeInstruction invokestaticInst                           = (SSAInvokeInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAInvokeInstruction invokestaticInst                     = (SSAInvokeInstruction) inst;
 
     String def = getSymbol(invokestaticInst.getDef(), methData, callSites, newDefMap);
     
@@ -1041,7 +1027,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
     // the variable define by the invokestatic instruction
     String invocationType = invokestaticInst.getDeclaredResultType().getName().toString();
-    if (containsRef(def, callSites, newRefMap, newPhiMap)) {
+    if (containsRef(def, callSites, newRefMap)) {
       StringBuilder invocation = new StringBuilder();
       // get the fieldType of the declared field of the invokestatic instruction
       // get the class type that declared this field
@@ -1063,13 +1049,13 @@ public class CompleteBackwardHandler extends AbstractHandler {
       Reference defRef        = findOrCreateReference(def, invocationType, callSites, newRefMap);
 
       // associate the two refs' instance together as the same one
-      assignInstanceAndPhi(defRef, invocationRef, newRefMap, newPhiMap, newDefMap);
+      assignInstance(defRef, invocationRef, newRefMap, newDefMap);
 
       // add new variables to varMap
       //newVarMap = addVars2VarMap(postCond, methData, newVarMap, params);
     }
 
-    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
+    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
   }
   
   public Formula handle_invokeinterface_stepin(GlobalOptionsAndStates optionsAndStates, 
@@ -1094,14 +1080,13 @@ public class CompleteBackwardHandler extends AbstractHandler {
   private Formula handle_invokenonstatic_stepin(GlobalOptionsAndStates optionsAndStates, 
       CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth) {
     
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    Formula preCond                                                 = null;
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAInvokeInstruction invokeInst                                 = (SSAInvokeInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    Formula preCond                                           = null;
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAInvokeInstruction invokeInst                           = (SSAInvokeInstruction) inst;
 
     // the variable(result) define by the invokeinterface/invokevirtual/invokespecial instruction
     String def = getSymbol(invokeInst.getDef(), methData, callSites, newDefMap);
@@ -1131,8 +1116,9 @@ public class CompleteBackwardHandler extends AbstractHandler {
       
       String invocationType = invokeInst.getDeclaredResultType().getName().toString();
       Reference defRef = findOrCreateReference(def, invocationType, callSites, newRefMap);
-      // since there is a new def, try to assign phi
-      assignPhiReference(defRef, newRefMap, newPhiMap, newDefMap);
+      
+      // since there is a new def, add to defMap
+      addDefToDefMap(newDefMap, defRef);
 
       // map parameters to method
       List<Reference> paramRefs = new ArrayList<Reference>();
@@ -1146,7 +1132,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // create new postCond which contains the new mapped references
       // add new conditions to condition list
       List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-      Formula newPostCond = new Formula(newConditions, newRefMap, newPhiMap, newDefMap);
+      Formula newPostCond = new Formula(newConditions, newRefMap, newDefMap);
       
       // different handling mechanisms for ordinary invocations and entering call stacks
       if (optionsAndStates.isEnteringCallStack()) {
@@ -1166,8 +1152,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // if succeed
       if (preCond != null) {
         afterInvocation(invokeInst, callSites, ref, def, params, 
-            preCond.getRefMap(), preCond.getPhiMap(), preCond.getDefMap());
-        return new Formula(preCond.getConditionList(), preCond.getRefMap(), preCond.getPhiMap(), preCond.getDefMap());
+            preCond.getRefMap(), preCond.getDefMap());
+        return new Formula(preCond.getConditionList(), preCond.getRefMap(), preCond.getDefMap());
       }
       else {
         return handle_invokenonstatic(postCond, inst, instInfo);
@@ -1192,21 +1178,20 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
     // add new conditions to condition list
     List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newPhiMap, newDefMap);
+    return new Formula(newConditions, newRefMap, newDefMap);
   }
 
   // go into invocation
   public Formula handle_invokestatic_stepin(GlobalOptionsAndStates optionsAndStates, 
       CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, 
       CallStack callStack, int curInvokeDepth) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    Formula preCond                                                 = null;
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAInvokeInstruction invokestaticInst                           = (SSAInvokeInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    Formula preCond                                           = null;
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAInvokeInstruction invokestaticInst                     = (SSAInvokeInstruction) inst;
     
     // the variable(result) define by the invokestatic instruction
     String def = getSymbol(invokestaticInst.getDef(), methData, callSites, newDefMap);
@@ -1218,8 +1203,9 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
     String invocationType = invokestaticInst.getDeclaredResultType().getName().toString();
     Reference defRef = findOrCreateReference(def, invocationType, callSites, newRefMap);
-    // since there is a new def, try to assign phi
-    assignPhiReference(defRef, newRefMap, newPhiMap, newDefMap);
+
+    // since there is a new def, add to defMap
+    addDefToDefMap(newDefMap, defRef);
 
     // map parameters to method
     List<Reference> paramRefs = new ArrayList<Reference>();
@@ -1231,7 +1217,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
     beforeInvocation(invokestaticInst, null, defRef, paramRefs, newRefMap);
     
     // create new postCond which contains the new mapped references
-    Formula newPostCond = new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
+    Formula newPostCond = new Formula(postCond.getConditionList(), newRefMap, newDefMap);
     
     // different handling mechanisms for ordinary invocations and entering call stacks
     if (optionsAndStates.isEnteringCallStack()) {
@@ -1251,8 +1237,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
     // if succeed
     if (preCond != null) {
       afterInvocation(invokestaticInst, callSites, null, def, params, 
-          preCond.getRefMap(), preCond.getPhiMap(), preCond.getDefMap());
-      return new Formula(preCond.getConditionList(), preCond.getRefMap(), preCond.getPhiMap(), preCond.getDefMap());
+          preCond.getRefMap(), preCond.getDefMap());
+      return new Formula(preCond.getConditionList(), preCond.getRefMap(), preCond.getDefMap());
     }
     else {
       preCond = handle_invokestatic(postCond, inst, instInfo);
@@ -1269,19 +1255,18 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
   
   public Formula handle_neg(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAUnaryOpInstruction unaryInst                                 = (SSAUnaryOpInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAUnaryOpInstruction unaryInst                           = (SSAUnaryOpInstruction) inst;
 
     // the variable(result) define by the binaryOp instruction
     String def = getSymbol(unaryInst.getDef(), methData, callSites, newDefMap);
     String var = getSymbol(unaryInst.getUse(0), methData, callSites, newDefMap);
     
-    if (containsRef(def, callSites, newRefMap, newPhiMap)) {
+    if (containsRef(def, callSites, newRefMap)) {
       Reference varRef = findOrCreateReference(var, "I", callSites, newRefMap);
       Reference defRef = findOrCreateReference(def, "I", callSites, newRefMap); // reference must exist
       
@@ -1296,20 +1281,19 @@ public class CompleteBackwardHandler extends AbstractHandler {
       addRefToRefMap(newRefMap, varRef);
 
       // assign the instance to the def reference
-      assignInstanceAndPhi(defRef, unaryOp, newRefMap, newPhiMap, newDefMap);
+      assignInstance(defRef, unaryOp, newRefMap, newDefMap);
     }
     
-    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
+    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
   }
 
   public Formula handle_new(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSANewInstruction newInst                                       = (SSANewInstruction) inst;
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSANewInstruction newInst                                 = (SSANewInstruction) inst;
 
     String def = getSymbol(newInst.getDef(), methData, callSites, newDefMap);
     
@@ -1396,69 +1380,24 @@ public class CompleteBackwardHandler extends AbstractHandler {
     int instanceID = new Random().nextInt(Integer.MAX_VALUE);
     String freshInst = "FreshInstanceOf(" + newType + "_" + instanceID + ")";
     System.err.println(freshInst);
-    if (containsRef(def, callSites, newRefMap, newPhiMap)) {
+    if (containsRef(def, callSites, newRefMap)) {
       // get the declared type of the new Instruction
       Instance newInstance = new Instance(freshInst, newType);
 
       // assign the instance to the def reference
-      assignInstanceAndPhi(defRef, newInstance, newRefMap, newPhiMap, newDefMap);
+      assignInstance(defRef, newInstance, newRefMap, newDefMap);
     }
 
-    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
+    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
   }
 
-  public Formula handle_phi2(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAPhiInstruction phiInst                                       = (SSAPhiInstruction) inst;
-
-    String def = getSymbol(phiInst.getDef(), methData, callSites, newDefMap);
-    Reference defRef = findOrCreateReference(def, "Unknown-Type", callSites, newRefMap);
-    
-    if (containsRef(def, callSites, newRefMap, newPhiMap)) {
-      for (int i = 0, len = phiInst.getNumberOfUses(); i < len; i++) {
-        int varID = phiInst.getUse(i);
-        if (varID > 0) {
-          // add to phiMap
-          // constants (and null) now are also added to phiMap. phiMap 
-          // assignment for constants will be done in 
-          // WeakestPrecondition.computeBB(), when we find the 
-          // corresponding ShrikeCFG's ConstantInstruction
-          Hashtable<String, List<Reference>> methodPhis = newPhiMap.get(callSites);
-          if (methodPhis == null) {
-            methodPhis = new Hashtable<String, List<Reference>>();
-            newPhiMap.put(callSites, methodPhis);
-          }
-          
-          String var = getSymbol(varID, methData, callSites, newDefMap);
-          List<Reference> phiRefs = methodPhis.get(var);
-          if (phiRefs == null) {
-            phiRefs = new ArrayList<Reference>();
-            methodPhis.put(var, phiRefs);
-          }
-          phiRefs.add(defRef);
-        }
-      }
-    }
-    
-    // since there is a new def, try to assign phi
-    assignPhiReference(defRef, newRefMap, newPhiMap, newDefMap);
-
-    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
-  }
-  
   public Formula handle_phi(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, int phiVarID, boolean needClone) {
-    postCond                                                        = needClone ? postCond.clone() : postCond;
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-    SSAPhiInstruction phiInst                                       = (SSAPhiInstruction) inst;
+    postCond                                                  = needClone ? postCond.clone() : postCond;
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    SSAPhiInstruction phiInst                                 = (SSAPhiInstruction) inst;
     
     if (phiVarID > 0) {
       String def = getSymbol(phiInst.getDef(), methData, callSites, newDefMap);
@@ -1487,7 +1426,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       }
     }
     
-    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
+    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
   }
   
   // handler for pi instruction
@@ -1496,7 +1435,6 @@ public class CompleteBackwardHandler extends AbstractHandler {
     String callSites                                                = instInfo.callSites;
     MethodMetaData methData                                         = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
     Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
     SSAPiInstruction piInst                                         = (SSAPiInstruction) inst;
 
@@ -1509,10 +1447,10 @@ public class CompleteBackwardHandler extends AbstractHandler {
       Reference valRef = findOrCreateReference(val, "Unknown-Type", callSites, newRefMap);
 
       // associate the two refs' instance together as the same one
-      assignInstanceAndPhi(defRef, valRef, newRefMap, newPhiMap, newDefMap);
+      assignInstance(defRef, valRef, newRefMap, newDefMap);
     }
 
-    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
+    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
   }
   
   // handler for putfield instruction
@@ -1598,7 +1536,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
     // add new conditions to condition list
     List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, postCond.getPhiMap(), postCond.getDefMap());
+    return new Formula(newConditions, newRefMap, postCond.getDefMap());
   }
   
   // handler for putstatic instruction
@@ -1622,9 +1560,9 @@ public class CompleteBackwardHandler extends AbstractHandler {
     Reference valRef   = findOrCreateReference(val, fieldType, callSites, newRefMap);
 
     // associate the two refs' instance together as the same one
-    assignInstanceAndPhi(fieldRef, valRef, newRefMap, postCond.getPhiMap(), postCond.getDefMap());
+    assignInstance(fieldRef, valRef, newRefMap, postCond.getDefMap());
 
-    return new Formula(postCond.getConditionList(), newRefMap, postCond.getPhiMap(), postCond.getDefMap());
+    return new Formula(postCond.getConditionList(), newRefMap, postCond.getDefMap());
   }
 
   public Formula handle_return(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -1642,9 +1580,9 @@ public class CompleteBackwardHandler extends AbstractHandler {
     Reference retRef    = findOrCreateReference("RET", "Unknown-Type", callSites, newRefMap);
 
     // associate the two refs' instance together as the same one
-    assignInstanceAndPhi(retRef, returnRef, newRefMap, postCond.getPhiMap(), postCond.getDefMap());
+    assignInstance(retRef, returnRef, newRefMap, postCond.getDefMap());
 
-    return new Formula(postCond.getConditionList(), newRefMap, postCond.getPhiMap(), postCond.getDefMap());
+    return new Formula(postCond.getConditionList(), newRefMap, postCond.getDefMap());
   }
 
   public Formula handle_switch(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -1695,7 +1633,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
     // add new conditions to condition list
     List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, postCond.getPhiMap(), postCond.getDefMap());
+    return new Formula(newConditions, newRefMap, postCond.getDefMap());
   }
   
   // handler for throw instruction
@@ -1730,16 +1668,15 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
     // add new conditions to condition list
     List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, postCond.getPhiMap(), postCond.getDefMap());
+    return new Formula(newConditions, newRefMap, postCond.getDefMap());
   }
 
   public Formula handle_entryblock(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    MethodMetaData methData                                         = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
+    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    String callSites                                          = instInfo.callSites;
+    MethodMetaData methData                                   = instInfo.methData;
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
 
     // at the entry block, all parameters are defined
     Hashtable<String, String> paramMap = methData.getParamMap();
@@ -1749,8 +1686,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
       valnum = "v" + valnum.substring(1);
       Reference valRef = findOrCreateReference(valnum, "Unknown-Type", callSites, newRefMap);
 
-      // since there is a new def, try to assign phi
-      assignPhiReference(valRef, newRefMap, newPhiMap, newDefMap);
+      // since there is a new def, add to defMap
+      addDefToDefMap(newDefMap, valRef);
     }
 
     // at the entry block, check if the caught exception is thrown
@@ -1760,21 +1697,5 @@ public class CompleteBackwardHandler extends AbstractHandler {
     postCond = setEquivalentInstances(postCond, callSites);
 
     return new Formula(postCond.getConditionList(), postCond.getAbstractMemory());
-  }
-  
-  // handler for ShrikeCFG ConstantInstruction instruction
-  public Formula handle_constant(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, String constantStr) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
-    String callSites                                                = instInfo.callSites;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, List<Reference>>> newPhiMap = postCond.getPhiMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = postCond.getDefMap();
-
-    Reference constStrRef = findOrCreateReference(constantStr, "Unknown-Type", callSites, newRefMap);
-    
-    // since there is a new def, try to assign phi
-    assignPhiReference(constStrRef, callSites, newRefMap, newPhiMap, newDefMap);
-
-    return new Formula(postCond.getConditionList(), newRefMap, newPhiMap, newDefMap);
   }
 }
