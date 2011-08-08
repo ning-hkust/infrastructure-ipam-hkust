@@ -129,6 +129,26 @@ public class Reference {
     return longName;
   }
   
+
+  public String getLongNameWithCallSites() {
+    String longName = m_name;
+    if (m_declInstance != null) {
+      if (!m_declInstance.isBounded() && m_declInstance.getLastReference() != null) {
+        longName = m_declInstance.getLastReference().getLongNameWithCallSites() + "." + m_name;
+      }
+      else if (m_declInstance.isConstant()){
+        longName = m_declInstance.getValue() + "." + m_name;
+      }
+      else if (m_declInstance.isBounded()) {
+        longName = m_declInstance + "." + m_name;
+      }
+    }
+    else if (isSSAVariable()) {
+      longName = (m_callSites.length() > 0) ? "<" + m_callSites + ">" + m_name : m_name;
+    }
+    return longName;
+  }
+  
   public String getType() {
     return m_type;
   }

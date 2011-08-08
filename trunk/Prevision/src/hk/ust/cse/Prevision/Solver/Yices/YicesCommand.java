@@ -222,10 +222,11 @@ public class YicesCommand implements ICommand {
     Reference lastRef = instance.getLastReference();
     if (lastRef != null) {
       Reference paramRef = tryCreateParamReference(methData, lastRef.getLongName()); // lastRef may be a parameter
-      String varName = paramRef != null ? paramRef.getName() : lastRef.getLongName();
-      String varType = paramRef != null ? paramRef.getType() : lastRef.getType();
+      String callSites = (lastRef.getCallSites().length() > 0) ? "<" + lastRef.getCallSites() + ">" : "";
+      String varName   = paramRef != null ? callSites + paramRef.getName() : lastRef.getLongNameWithCallSites();
+      String varType   = paramRef != null ? paramRef.getType() : lastRef.getType();
       defString.append("(define ");
-      defString.append(Utils.filterChars(varName));
+      defString.append(Utils.filterChars(varName)); // instance may be from inner method
       defString.append("::");
       defString.append(Utils.filterChars(varType));
       defString.append(")\n");
@@ -409,10 +410,12 @@ public class YicesCommand implements ICommand {
     // if instance is not bound, try to show its last reference name
     if (!instance.isBounded()) {
       String lastRefName = null;
+      String callSites = null;
       Reference lastRef = instance.getLastReference();
       if (lastRef != null) {
         Reference paramRef = tryCreateParamReference(methData, lastRef.getLongName());
-        lastRefName = (paramRef != null) ? paramRef.getName() : lastRef.getLongName();
+        callSites = (lastRef.getCallSites().length() > 0) ? "<" + lastRef.getCallSites() + ">" : "";
+        lastRefName = (paramRef != null) ? callSites + paramRef.getName() : lastRef.getLongNameWithCallSites();
       }
       ret.append(lastRefName == null ? "{Unbounded}" : Utils.filterChars(lastRefName));
     }

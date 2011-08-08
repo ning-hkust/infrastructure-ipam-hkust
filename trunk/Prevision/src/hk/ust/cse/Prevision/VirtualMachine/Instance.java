@@ -291,7 +291,7 @@ public class Instance {
   private String                             m_type;
   private Reference                          m_lastRef;     // the lastRef is only useful when the instance not bounded
   private long                               m_createTime;
-  public long                               m_setValueTime; //XXX
+  private long                               m_setValueTime;
   private final HashSet<Instance>            m_boundValues; // the boundValues is only useful when the instance not bounded
   private final Hashtable<String, Reference> m_fields;
 }
