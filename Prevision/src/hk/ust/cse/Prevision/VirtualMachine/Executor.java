@@ -65,6 +65,7 @@ public class Executor {
     public boolean   inclInnerMostLine      = false;
     public boolean   inclStartingInst       = false;
     public boolean   saveNotSatResults      = false;
+    public boolean   checkOnTheFly          = true;
     public int       maxDispatchTargets     = Integer.MAX_VALUE;
     public int       maxRetrieve            = 1;
     public int       maxSmtCheck            = 1000;
@@ -411,13 +412,12 @@ public class Executor {
           Collection<ISSABasicBlock> excpPredBB =
             cfg.getExceptionalPredecessors(infoItem.currentBB);
           
-//          if ((normPredBB.size() > 1 && !infoItem.currentBB.isExitBlock()) || 
-//              (precond.getPhiMap().size() != infoItem.postCond.getPhiMap().size())) {
-//            if (precond.smtCheck() == Predicate.SMT_RESULT.UNSAT) {
-//              System.out.println("Inner contradiction developed, discard block.");
-//              continue;
-//            }
-//          }
+          if (optAndStates.checkOnTheFly && normPredBB.size() > 1 && !workList.empty() && !infoItem.currentBB.isExitBlock()) {
+            if (m_smtChecker.smtCheck(precond, methData) == Formula.SMT_RESULT.UNSAT) {
+              System.out.println("Inner contradiction developed, discard block.");
+              continue;
+            }
+          }
 
           // if have specified the optAndStates.startingInstBranchesTo list, 
           // only take the specified branches at the starting basic block
@@ -1020,6 +1020,7 @@ public class Executor {
       optAndStates.maxSmtCheck        = 5000;
       optAndStates.maxInvokeDepth     = 1;
       optAndStates.maxLoop            = 7;
+      optAndStates.checkOnTheFly      = true;
       
       executor.compute(optAndStates, null);
       // wp.heapTracer();

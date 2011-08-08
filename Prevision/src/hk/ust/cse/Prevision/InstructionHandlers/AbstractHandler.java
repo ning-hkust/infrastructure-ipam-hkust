@@ -261,7 +261,7 @@ public abstract class AbstractHandler {
             }
             else {
               try {
-                paramRef.assignInstance(newParamRef.getInstance());
+                paramRef.assignInstance(newParamRef.getInstances());
               } catch (Exception e) {e.printStackTrace();}
             }
           }
@@ -702,13 +702,14 @@ public abstract class AbstractHandler {
 
     boolean changed = true;
     for (int i = 0; changed; i++) {
-      System.err.println(i + ": ====================================");
+      //System.err.println(i + ": ====================================");
       
       // phase 1: find all set instances and corresponding paths
       Hashtable<String, Hashtable<Instance, PriorityQueue<Long>>> settedInstances = 
         new Hashtable<String, Hashtable<Instance, PriorityQueue<Long>>>();
+      PriorityQueue<Long> dummy = new PriorityQueue<Long>();
       for (Reference ref : methodRefs) { // sequence is not important in find
-        findSetInstances("", ref, new PriorityQueue<Long>(), settedInstances);
+        findSetInstances("", ref, dummy, settedInstances);
       }
 
       // check for additional setted path after last set
@@ -723,7 +724,7 @@ public abstract class AbstractHandler {
           if (!lastSettedInstances.containsKey(path)) {
             newlySettedPath.add(path);
             newlySettedTime.put(path, settedInstances.get(path).values().iterator().next());
-            System.err.println("Found newly setted value for path: " + path);
+            //System.err.println("Found newly setted value for path: " + path);
           }
           else {
             Hashtable<Instance, PriorityQueue<Long>> lastSets  = lastSettedInstances.get(path);
@@ -734,7 +735,7 @@ public abstract class AbstractHandler {
               if (!lastSets.containsKey(instance)) {
                 newlySettedPath.add(path);
                 newlySettedTime.put(path, newlySets.get(instance));
-                System.err.println("Found newly setted value for path: " + path);
+                //System.err.println("Found newly setted value for path: " + path);
               }
             }
           }
@@ -746,7 +747,7 @@ public abstract class AbstractHandler {
       for (int j = 0, size = prevSets.size(); j < size - 1; j++) {
         if (newlySettedPath.contains(prevSets.get(j)[0])) {
           matchedIndices.add(j);
-          System.out.println("matched: " + prevSets.get(j)[0]);
+          //System.out.println("matched: " + prevSets.get(j)[0]);
         }
       }
       List<Integer> revertingIndices = new ArrayList<Integer>();
@@ -761,11 +762,11 @@ public abstract class AbstractHandler {
               newlySettedTimes.peek() > (Long) ((Long[]) prevSet[3])[0]) {
             revertingIndices.add(prevMatchedIndex);
           }
-          else {
-            System.out.println("pos 1 because: " + newlySettedTimes + " < " + 
-                (PriorityQueue<Long>) prevSet[2] + " && > " +  (Long) ((Long[]) prevSet[3])[0] + 
-                " " + prevSet[0] + " " + lastSet[0] + " " + prevSet[1] + " " + lastSet[1]);
-          }
+//          else {
+//            System.out.println("pos 1 because: " + newlySettedTimes + " < " + 
+//                (PriorityQueue<Long>) prevSet[2] + " && > " +  (Long) ((Long[]) prevSet[3])[0] + 
+//                " " + prevSet[0] + " " + lastSet[0] + " " + prevSet[1] + " " + lastSet[1]);
+//          }
         }
 //        else {
 //          System.out.println("pos 2");
@@ -858,10 +859,17 @@ public abstract class AbstractHandler {
   }
 
   private static void findSetInstances(String lastPath, Reference ref, PriorityQueue<Long> lastAssignTimes, 
-      Hashtable<String, Hashtable<Instance, PriorityQueue<Long>>> settedInstances) {   
-    String path = lastPath + "." + ref.getName();
-
+      Hashtable<String, Hashtable<Instance, PriorityQueue<Long>>> settedInstances) {
+    
+    // build current path
+    StringBuilder str = new StringBuilder();
+    str.append(lastPath);
+    str.append(".");
+    str.append(ref.getName());
+    String path = str.toString();
+    
     // look through all instances and old instances
+    Hashtable<Instance, PriorityQueue<Long>> pathInstances = null;
     List<Instance> refInstances = new ArrayList<Instance>(ref.getInstances());
     refInstances.addAll(ref.getOldInstances());
     for (Instance refInstance : refInstances) {
@@ -876,10 +884,12 @@ public abstract class AbstractHandler {
 
       for (Instance instance : allInstances) {
         if (instance.getSetValueTime() != -1) { // this instance is set/store
-          Hashtable<Instance, PriorityQueue<Long>> pathInstances = settedInstances.get(path);
           if (pathInstances == null) {
-            pathInstances = new Hashtable<Instance, PriorityQueue<Long>>();
-            settedInstances.put(path, pathInstances);
+            pathInstances = settedInstances.get(path);
+            if (pathInstances == null) {
+              pathInstances = new Hashtable<Instance, PriorityQueue<Long>>();
+              settedInstances.put(path, pathInstances);
+            }
           }
 
           // get assign times
@@ -893,7 +903,8 @@ public abstract class AbstractHandler {
         PriorityQueue<Long> nextAssignTimes = null;
         if (instance.isBounded()) {
           nextAssignTimes = new PriorityQueue<Long>();
-          nextAssignTimes.add(Math.min(lifeTime[1], instance.getSetValueTime()));
+          long setValueTime = instance.getSetValueTime();
+          nextAssignTimes.add(lifeTime[1] < setValueTime ? lifeTime[1] : setValueTime);
         }
         else {
           nextAssignTimes = thisAssignTimes;
@@ -924,7 +935,6 @@ public abstract class AbstractHandler {
       }
     }
   }
-  
 
   private static Object[] setEquivalentInstances(Formula preCond, Instance refInstance, 
       Reference ref, List<Instance> preInstances, List<Reference> preReferences, 
@@ -965,13 +975,13 @@ public abstract class AbstractHandler {
         try {
           if (callSites.length() > 0 && !ref.canReferenceSetValue()) {
             ret[0] = refInstance.storeValue(nearestSetted);
-            System.err.println("Store: " + path + ": " + nearestSetted);
+            //System.err.println("Store: " + path + ": " + nearestSetted);
           }
           else {
             Hashtable<Object, Object> cloneMap = new Hashtable<Object, Object>();
             Formula clone = preCond.clone(cloneMap);
             refInstance.setValueInclSetTime(nearestSetted, Math.min(nearestSetted.getSetValueTime(), lifeTime[1]));
-            System.err.println("Set: " + path + ": " + nearestSetted + ". Re-find set values...");
+            //System.err.println("Set: " + path + ": " + nearestSetted + ". Re-find set values...");
             ret = new Object[] {true, path, nearestSetted.getValue(), 
                                 nearestSettedTimes, lifeTime, clone, cloneMap}; // once set, return right away
           }
