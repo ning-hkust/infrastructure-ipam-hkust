@@ -54,7 +54,7 @@ import com.ibm.wala.types.TypeReference;
 public class CompleteBackwardHandler extends AbstractHandler {
   
   public Formula handle_arraylength(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -130,7 +130,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
 
   public Formula handle_arrayload(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -254,7 +254,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
   
   public Formula handle_arraystore(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -376,7 +376,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
 
   public Formula handle_binaryop(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -450,7 +450,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   
   // handler for catch instruction
   public Formula handle_catch(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -485,7 +485,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   
   // handler for checkcast instruction
   public Formula handle_checkcast(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -553,7 +553,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
   
   public Formula handle_compare(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -591,7 +591,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
 
   public Formula handle_conversion(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -663,7 +663,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
   
   public Formula handle_conditional_branch(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -763,7 +763,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
   // handler for getfield instruction
   public Formula handle_getfield(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -844,7 +844,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
   // handler for getstatic instruction
   public Formula handle_getstatic(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -877,7 +877,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   
   // handler for instanceof instruction
   public Formula handle_instanceof(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -922,7 +922,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
   
   private Formula handle_invokenonstatic(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -1010,7 +1010,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
   // simple implementation, do not consider call graph
   public Formula handle_invokestatic(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -1080,7 +1080,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   private Formula handle_invokenonstatic_stepin(GlobalOptionsAndStates optionsAndStates, 
       CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth) {
     
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     Formula preCond                                           = null;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
@@ -1185,7 +1185,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   public Formula handle_invokestatic_stepin(GlobalOptionsAndStates optionsAndStates, 
       CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, 
       CallStack callStack, int curInvokeDepth) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     Formula preCond                                           = null;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
@@ -1255,7 +1255,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
   
   public Formula handle_neg(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -1288,7 +1288,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
 
   public Formula handle_new(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -1431,7 +1431,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   
   // handler for pi instruction
   public Formula handle_pi(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                        = postCond.clone(); // we need to modify on a new clone
+    postCond                                                        = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                                = instInfo.callSites;
     MethodMetaData methData                                         = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap       = postCond.getRefMap();
@@ -1455,7 +1455,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   
   // handler for putfield instruction
   public Formula handle_putfield(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -1541,7 +1541,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   
   // handler for putstatic instruction
   public Formula handle_putstatic(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -1566,7 +1566,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
 
   public Formula handle_return(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -1586,7 +1586,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
 
   public Formula handle_switch(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -1638,7 +1638,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   
   // handler for throw instruction
   public Formula handle_throw(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
@@ -1672,7 +1672,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
   }
 
   public Formula handle_entryblock(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    postCond                                                  = postCond.clone(); // we need to modify on a new clone
+    postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     String callSites                                          = instInfo.callSites;
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();

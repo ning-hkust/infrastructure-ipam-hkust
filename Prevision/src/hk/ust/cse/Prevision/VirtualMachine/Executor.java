@@ -83,12 +83,13 @@ public class Executor {
   }
 
   public class BBorInstInfo {
-    public BBorInstInfo(ISSABasicBlock currentBB, boolean isSkipToBB, Formula postCond,
-        int sucessorType, ISSABasicBlock sucessorBB, BBorInstInfo sucessorInfo, 
+    public BBorInstInfo(ISSABasicBlock currentBB, boolean isSkipToBB, Formula postCond, 
+        Formula postCond4BB, int sucessorType, ISSABasicBlock sucessorBB, BBorInstInfo sucessorInfo, 
         MethodMetaData methData, String callSites, Stack<BBorInstInfo> workList, Executor executor) {
       this.currentBB    = currentBB;
       this.isSkipToBB   = isSkipToBB;
       this.postCond     = postCond;
+      this.postCond4BB  = postCond4BB;
       this.sucessorType = sucessorType;
       this.sucessorBB   = sucessorBB;
       this.sucessorInfo = sucessorInfo;
@@ -99,7 +100,7 @@ public class Executor {
     }
     
     public BBorInstInfo clone() {
-      BBorInstInfo newInfo = new BBorInstInfo(currentBB, isSkipToBB, postCond, 
+      BBorInstInfo newInfo = new BBorInstInfo(currentBB, isSkipToBB, postCond, postCond4BB, 
           sucessorType, sucessorBB, sucessorInfo, methData, callSites, workList, executor);
       newInfo.target = target;
       return newInfo;
@@ -109,6 +110,7 @@ public class Executor {
     public SimpleEntry<SSAInvokeInstruction, CGNode> target;
     
     public final Formula             postCond;
+    public final Formula             postCond4BB;
     public final int                 sucessorType;
     public final boolean             isSkipToBB;
     public final ISSABasicBlock      currentBB;
@@ -255,7 +257,7 @@ public class Executor {
       postCond = (postCond == null) ? new Formula() : postCond;
 
       // push in the first block\
-      workList.push(new BBorInstInfo(startFromBB, false, postCond, 
+      workList.push(new BBorInstInfo(startFromBB, false, postCond, postCond, 
           Formula.NORMAL_SUCCESSOR, null, null, methMetaData, callSites, null, this));
     }
 
@@ -658,7 +660,7 @@ public class Executor {
           else {
             // not the last instruction of the block
             BBorInstInfo instInfo = new BBorInstInfo(infoItem.currentBB, 
-                infoItem.isSkipToBB, preCond, Formula.NORMAL_SUCCESSOR, 
+                infoItem.isSkipToBB, preCond, infoItem.postCond4BB, Formula.NORMAL_SUCCESSOR, 
                 infoItem.sucessorBB, infoItem.sucessorInfo, methData, callSites, infoItem.workList, this);
             preCond = m_instHandler.handle(optAndStates, cgNode, preCond, inst, 
                 instInfo, callStack, curInvokeDepth);
@@ -807,13 +809,13 @@ public class Executor {
     // push the visited ones into the beginning of the stack
     for (Object[] visited : visitedList) {
       workList.push(new BBorInstInfo((ISSABasicBlock) visited[0], areSkipToBBs, (Formula) visited[1], 
-          successorType, currentInfo.currentBB, currentInfo, methData, valPrefix, null, this));
+          (Formula) visited[1], successorType, currentInfo.currentBB, currentInfo, methData, valPrefix, null, this));
     }
     
     // push the non visited ones into the beginning of the stack
     for (Object[] notvisited : notvisitedList) {
       workList.push(new BBorInstInfo((ISSABasicBlock) notvisited[0], areSkipToBBs, (Formula) notvisited[1], 
-          successorType, currentInfo.currentBB, currentInfo, methData, valPrefix, null, this));
+          (Formula) notvisited[1], successorType, currentInfo.currentBB, currentInfo, methData, valPrefix, null, this));
     }
   }
   
