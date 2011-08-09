@@ -21,7 +21,6 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
-import java.util.PriorityQueue;
 import java.util.Stack;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -705,36 +704,35 @@ public abstract class AbstractHandler {
       //System.err.println(i + ": ====================================");
       
       // phase 1: find all set instances and corresponding paths
-      Hashtable<String, Hashtable<Instance, PriorityQueue<Long>>> settedInstances = 
-        new Hashtable<String, Hashtable<Instance, PriorityQueue<Long>>>();
-      PriorityQueue<Long> dummy = new PriorityQueue<Long>();
+      Hashtable<String, List<Instance>> settedInstances = new Hashtable<String, List<Instance>>();
       for (Reference ref : methodRefs) { // sequence is not important in find
-        findSetInstances("", ref, dummy, settedInstances);
+        findSetInstances("", ref, settedInstances);
       }
+//      for (List<Instance> instances : settedInstances.values()) {
+//        Utils.deleteRedundents(instances);
+//      }
 
       // check for additional setted path after last set
-      HashSet<String> newlySettedPath                        = new HashSet<String>();
-      Hashtable<String, PriorityQueue<Long>> newlySettedTime = new Hashtable<String, PriorityQueue<Long>>();
+      HashSet<String> newlySettedPath         = new HashSet<String>();
+      Hashtable<String, Long> newlySettedTime = new Hashtable<String, Long>();
       if (prevSets.size() > 0) {
-        Hashtable<String, Hashtable<Instance, PriorityQueue<Long>>> lastSettedInstances = 
-          (Hashtable<String, Hashtable<Instance, PriorityQueue<Long>>>) prevSets.get(prevSets.size() - 1)[6];
+        Hashtable<String, List<Instance>> lastSettedInstances = 
+          (Hashtable<String, List<Instance>>) prevSets.get(prevSets.size() - 1)[6];
         Enumeration<String> keys = settedInstances.keys();
         while (keys.hasMoreElements()) {
           String path = (String) keys.nextElement();
           if (!lastSettedInstances.containsKey(path)) {
             newlySettedPath.add(path);
-            newlySettedTime.put(path, settedInstances.get(path).values().iterator().next());
+            newlySettedTime.put(path, settedInstances.get(path).iterator().next().getSetValueTime());
             //System.err.println("Found newly setted value for path: " + path);
           }
           else {
-            Hashtable<Instance, PriorityQueue<Long>> lastSets  = lastSettedInstances.get(path);
-            Hashtable<Instance, PriorityQueue<Long>> newlySets = settedInstances.get(path);
-            Enumeration<Instance> keys2 = newlySets.keys();
-            while (keys2.hasMoreElements()) {
-              Instance instance = (Instance) keys2.nextElement();
-              if (!lastSets.containsKey(instance)) {
+            List<Instance> lastSets  = lastSettedInstances.get(path);
+            List<Instance> newlySets = settedInstances.get(path);
+            for (Instance instance : newlySets) {
+              if (!lastSets.contains(instance)) {
                 newlySettedPath.add(path);
-                newlySettedTime.put(path, newlySets.get(instance));
+                newlySettedTime.put(path, instance.getSetValueTime());
                 //System.err.println("Found newly setted value for path: " + path);
               }
             }
@@ -757,14 +755,13 @@ public abstract class AbstractHandler {
         Object[] lastSet = prevSets.get(prevSets.size() - 1);
         // some reverts may not be necessary
         if (!prevSet[0].equals(lastSet[0]) || prevSet[1] == null || !prevSet[1].equals(lastSet[1])) {
-          PriorityQueue<Long> newlySettedTimes = (PriorityQueue<Long>) newlySettedTime.get(prevSet[0]);
-          if (smaller(newlySettedTimes, (PriorityQueue<Long>) prevSet[2]) && 
-              newlySettedTimes.peek() > (Long) ((Long[]) prevSet[3])[0]) {
+          Long time = (Long) newlySettedTime.get(prevSet[0]);
+          if (time < (Long) prevSet[2] && time > (Long) ((Long[]) prevSet[3])[0]) {
             revertingIndices.add(prevMatchedIndex);
           }
 //          else {
 //            System.out.println("pos 1 because: " + newlySettedTimes + " < " + 
-//                (PriorityQueue<Long>) prevSet[2] + " && > " +  (Long) ((Long[]) prevSet[3])[0] + 
+//                (Long) prevSet[2] + " && > " +  (Long) ((Long[]) prevSet[3])[0] + 
 //                " " + prevSet[0] + " " + lastSet[0] + " " + prevSet[1] + " " + lastSet[1]);
 //          }
         }
@@ -804,7 +801,13 @@ public abstract class AbstractHandler {
         
         // roll back preCond
         int revertTo = revertingIndices.get(0);
-        preCond = (Formula) prevSets.get(revertTo)[4];
+        // fine the pos which preCond is not null
+        for (; revertTo >= 0; revertTo--) {
+          preCond = (Formula) prevSets.get(revertTo)[4];
+          if (preCond != null) {
+            break;
+          }
+        }
         methodRefs = preCond.getRefMap().get(callSites).values();
         Hashtable<Object, Object> cloneMap = (Hashtable<Object, Object>) prevSets.get(revertTo)[5];
         
@@ -840,11 +843,11 @@ public abstract class AbstractHandler {
       changed = false;
       for (int j = 0, size = setSequence.size(); j < size; j++) {
         Object[] next = setSequence.get(j);
-        Object[] ret = setEquivalentInstances(preCond, (Instance)next[0], (Reference)next[1], 
-            (List<Instance>)next[2], (List<Reference>)next[3], settedInstances, callSites);
+        Object[] ret = setEquivalentInstances(preCond, (Instance) next[0], (Reference) next[1], 
+            (List<Instance>) next[2], (List<Reference>) next[3], settedInstances, callSites, prevSets.size());
         changed |= (Boolean) ret[0];
         if (ret[1] != null) { // have a set
-          prevSets.add(new Object[]{ret[1], ret[2], ret[3], ret[4], ret[5], ret[6], settedInstances, (Instance)next[0]});
+          prevSets.add(new Object[]{ret[1], ret[2], ret[3], ret[4], ret[5], ret[6], settedInstances, (Instance) next[0]});
           break;
         }
       }
@@ -858,8 +861,8 @@ public abstract class AbstractHandler {
     return preCond;
   }
 
-  private static void findSetInstances(String lastPath, Reference ref, PriorityQueue<Long> lastAssignTimes, 
-      Hashtable<String, Hashtable<Instance, PriorityQueue<Long>>> settedInstances) {
+  private static void findSetInstances(String lastPath, Reference ref, 
+      Hashtable<String, List<Instance>> settedInstances) {
     
     // build current path
     StringBuilder str = new StringBuilder();
@@ -869,14 +872,10 @@ public abstract class AbstractHandler {
     String path = str.toString();
     
     // look through all instances and old instances
-    Hashtable<Instance, PriorityQueue<Long>> pathInstances = null;
+    List<Instance> pathInstances = null;
     List<Instance> refInstances = new ArrayList<Instance>(ref.getInstances());
     refInstances.addAll(ref.getOldInstances());
     for (Instance refInstance : refInstances) {
-      Long[] lifeTime = ref.getLifeTime(refInstance);
-      PriorityQueue<Long> thisAssignTimes = new PriorityQueue<Long>(lastAssignTimes);
-      thisAssignTimes.add(lifeTime[1]);
-      
       List<Instance> allInstances = (refInstance.isBounded()) ? 
                                       new ArrayList<Instance>() : 
                                       new ArrayList<Instance>(refInstance.getBoundedValues());
@@ -887,31 +886,18 @@ public abstract class AbstractHandler {
           if (pathInstances == null) {
             pathInstances = settedInstances.get(path);
             if (pathInstances == null) {
-              pathInstances = new Hashtable<Instance, PriorityQueue<Long>>();
+              pathInstances = new ArrayList<Instance>();
               settedInstances.put(path, pathInstances);
             }
           }
-
-          // get assign times
-          PriorityQueue<Long> setAssignTimes = new PriorityQueue<Long>();
-          setAssignTimes.add(instance.getSetValueTime());
-          pathInstances.put(instance, setAssignTimes);
+          pathInstances.add(instance);
           //System.err.println("Found: " + path + ": " + instance);
         }
 
         // recursive for instance's fields
-        PriorityQueue<Long> nextAssignTimes = null;
-        if (instance.isBounded()) {
-          nextAssignTimes = new PriorityQueue<Long>();
-          long setValueTime = instance.getSetValueTime();
-          nextAssignTimes.add(lifeTime[1] < setValueTime ? lifeTime[1] : setValueTime);
-        }
-        else {
-          nextAssignTimes = thisAssignTimes;
-        }
         String path2 = instance.isBounded() ? instance.getValue() : path;
         for (Reference fieldRef : instance.getFields()) {
-          findSetInstances(path2, fieldRef, nextAssignTimes, settedInstances);
+          findSetInstances(path2, fieldRef, settedInstances);
         }
       }
     }
@@ -938,7 +924,7 @@ public abstract class AbstractHandler {
 
   private static Object[] setEquivalentInstances(Formula preCond, Instance refInstance, 
       Reference ref, List<Instance> preInstances, List<Reference> preReferences, 
-      Hashtable<String, Hashtable<Instance, PriorityQueue<Long>>> settedInstances, String callSites) {
+      Hashtable<String, List<Instance>> settedInstances, String callSites, int setIndex) {
 
     StringBuilder str = new StringBuilder();
     for (int i = preInstances.size() - 1; i >= 0; i--) {
@@ -954,20 +940,18 @@ public abstract class AbstractHandler {
     String path = str.toString();
 
     Object[] ret = new Object[]{false, null, null, null, null, null, null};
-    Hashtable<Instance, PriorityQueue<Long>> pathSettedInstances = settedInstances.get(path);
+    List<Instance> pathSettedInstances = settedInstances.get(path);
     Long[] lifeTime = ref.getLifeTime(refInstance);
     if (pathSettedInstances != null && refInstance.getSetValueTime() == -1 && lifeTime != null) {
       Instance nearestSetted = null;
-      PriorityQueue<Long> nearestSettedTimes = null;
+      Long nearestSettedTime = null;
 
-      Enumeration<Instance> keys = pathSettedInstances.keys();
-      while (keys.hasMoreElements()) {
-        Instance settedInstance = (Instance) keys.nextElement();
-        PriorityQueue<Long> assignTimes = pathSettedInstances.get(settedInstance);
-        if (assignTimes.peek() > lifeTime[0] && assignTimes.peek() < lifeTime[1] && 
-            (nearestSettedTimes == null || smaller(assignTimes, nearestSettedTimes))) {
+      for (Instance settedInstance : pathSettedInstances) {
+        Long setTime = settedInstance.getSetValueTime();
+        if (setTime > lifeTime[0] && setTime < lifeTime[1] && 
+            (nearestSettedTime == null || setTime < nearestSettedTime)) {
           nearestSetted = settedInstance;
-          nearestSettedTimes = assignTimes;
+          nearestSettedTime = setTime;
         }
       }
 
@@ -979,38 +963,18 @@ public abstract class AbstractHandler {
           }
           else {
             Hashtable<Object, Object> cloneMap = new Hashtable<Object, Object>();
-            Formula clone = preCond.clone(cloneMap);
+            //Formula clone = preCond.clone(cloneMap);
+            Formula clone = setIndex % 5 == 0 ? preCond.clone(cloneMap) : null; // clone in 1 out of 5 times
             refInstance.setValueInclSetTime(nearestSetted, Math.min(nearestSetted.getSetValueTime(), lifeTime[1]));
             //System.err.println("Set: " + path + ": " + nearestSetted + ". Re-find set values...");
             ret = new Object[] {true, path, nearestSetted.getValue(), 
-                                nearestSettedTimes, lifeTime, clone, cloneMap}; // once set, return right away
+                                nearestSettedTime, lifeTime, clone, cloneMap}; // once set, return right away
           }
         } catch (Exception e) {e.printStackTrace();}
       }
     }
 
     return ret;
-  }
-  
-  private static boolean smaller(PriorityQueue<Long> o1, PriorityQueue<Long> o2) {
-    // usually the first element can tell
-    if (o1.size() > 1 && o2.size() > 1 && o1.peek().equals(o2.peek())) {
-      o1 = new PriorityQueue<Long>(o1);
-      o2 = new PriorityQueue<Long>(o2);
-      boolean smaller = false;
-      while (o1.size() > 0 && o2.size() > 0) {
-        long long1 = o1.poll();
-        long long2 = o2.poll();
-        if (long1 != long2) {
-          smaller = long1 < long2;
-          break;
-        }
-      }
-      return smaller;
-    }
-    else {
-      return o1.peek() < o2.peek();
-    }
   }
   
   private static void setSoloInstances(List<Condition> conditionList) {
