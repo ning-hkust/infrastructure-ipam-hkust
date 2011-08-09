@@ -66,6 +66,7 @@ public class Executor {
     public boolean   inclStartingInst       = false;
     public boolean   saveNotSatResults      = false;
     public boolean   checkOnTheFly          = true;
+    public boolean   pruneUselessBranches   = true;
     public int       maxDispatchTargets     = Integer.MAX_VALUE;
     public int       maxRetrieve            = 1;
     public int       maxSmtCheck            = 1000;
@@ -434,21 +435,42 @@ public class Executor {
 //                Formula.EXCEPTIONAL_SUCCESSOR, dfsStack, optAndStates.maxLoop, valPrefix);            
 //          }
           
-//          // skip skippable conditional branches
-//          List<ISSABasicBlock>[] preds = m_defAnalyzer.findSkipToBasicBlocks(cfg, infoItem.currentBB, precond);
-//          List<ISSABasicBlock> skipToPreds  = preds[0];
-//          List<ISSABasicBlock> notSkipPreds = preds[1];
-//          int totalSkipped = normPredBB.size() - skipToPreds.size() - notSkipPreds.size();
-//          if (totalSkipped > 0) {
-//            System.out.println(totalSkipped + " branches skipped!");
-//          }
-//          
-//          // iterate all normal predecessors
-//          pushChildrenBlocks(skipToPreds, true, infoItem, precond, methData,
-//              Predicate.NORMAL_SUCCESSOR, dfsStack, optAndStates.maxLoop, valPrefix);
-//          pushChildrenBlocks(notSkipPreds, false, infoItem, precond, methData,
-//              Predicate.NORMAL_SUCCESSOR, dfsStack, optAndStates.maxLoop, valPrefix);
-          pushChildrenBlocks(normPredBB, false, infoItem, precond, methData,
+          // decide phis if any
+          Hashtable<ISSABasicBlock, Formula> phiedPreConds = null;
+          Iterator<SSAPhiInstruction> phiInsts = infoItem.currentBB.iteratePhis();
+          if (phiInsts.hasNext()) {
+            phiedPreConds = decidePhis(infoItem, phiInsts, precond);
+            for (Formula phiedPreCond : phiedPreConds.values()) { // put back visited record
+              phiedPreCond.setVisitedRecord(precond.getVisitedRecord(), null);
+            }
+          }
+          else { // no phiInst, keep the originals
+            phiedPreConds = new Hashtable<ISSABasicBlock, Formula>();
+            for (ISSABasicBlock normPred : normPredBB) {
+              phiedPreConds.put(normPred, precond);
+            }
+          }
+
+          // try to skip branches
+          int totalSkipped = 0;
+          List<Object[]> bbPreConds = new ArrayList<Object[]>();
+          Enumeration<ISSABasicBlock> keys = phiedPreConds.keys();
+          while (keys.hasMoreElements()) {
+            ISSABasicBlock pred  = keys.nextElement();
+            Formula phiedPreCond = phiedPreConds.get(pred);
+            if (optAndStates.pruneUselessBranches) {
+              ISSABasicBlock skipToPred = m_defAnalyzer.findSkipToBasicBlocks(cfg, 
+                  infoItem.currentBB, pred, phiedPreCond, infoItem.callSites);
+              pred = (skipToPred != null) ? skipToPred : pred;
+              totalSkipped += (skipToPred != null) ? 1 : 0;
+            }
+            bbPreConds.add(new Object[] {pred, phiedPreCond});
+          }
+          if (totalSkipped > 0) {
+            System.out.println(totalSkipped + " branches skipped!");
+          }
+          // iterate all normal predecessors
+          pushChildrenBlocks(bbPreConds, false, infoItem, methData,
               Formula.NORMAL_SUCCESSOR, workList, optAndStates.maxLoop, valPrefix);
         }
         else if (optAndStates.isEnteringCallStack()) {
@@ -743,73 +765,55 @@ public class Executor {
     System.out.println();
   }
   
-  private void pushChildrenBlocks(Collection<ISSABasicBlock> allChildrenBlocks,
-      boolean areSkipToBBs, BBorInstInfo currentInfo, Formula precond, 
-      MethodMetaData methData, int successorType, Stack<BBorInstInfo> workList, 
-      int maxLoop, String valPrefix) {
-
-    Iterator<ISSABasicBlock> iterBB = allChildrenBlocks.iterator();
+  private void pushChildrenBlocks(List<Object[]> bbPreconds, boolean areSkipToBBs, 
+      BBorInstInfo currentInfo, MethodMetaData methData, int successorType, 
+      Stack<BBorInstInfo> workList, int maxLoop, String valPrefix) {
     
     // get all visited records
-    Hashtable<ISSABasicBlock, Integer> visitedBB = precond.getVisitedRecord();
+    Hashtable<ISSABasicBlock, Integer> visitedBB = ((Formula) bbPreconds.get(0)[1]).getVisitedRecord();
     
-    List<ISSABasicBlock> visitedList    = new ArrayList<ISSABasicBlock>();
-    List<ISSABasicBlock> notvisitedList = new ArrayList<ISSABasicBlock>();
-    while (iterBB.hasNext()) {
-      ISSABasicBlock basicBlock = iterBB.next();
+    List<Object[]> visitedList    = new ArrayList<Object[]>();
+    List<Object[]> notvisitedList = new ArrayList<Object[]>();
+    for (Object[] bbPrecond : bbPreconds) {
+      ISSABasicBlock basicBlock = (ISSABasicBlock) bbPrecond[0];
       
-      // make sure we are not pushing the current node again.
-      // Sometimes, a monitorexit node can be a child of itself, 
-      // making the search endless.
+      // make sure we are not pushing the current node again. Sometimes, a 
+      // monitorexit node can be a child of itself, making the search endless.
       if (basicBlock.getNumber() == currentInfo.currentBB.getNumber()) {
         continue;
       }
       
       Integer count = visitedBB.get(basicBlock);
       if (count != null && count < maxLoop) {
-        visitedList.add(basicBlock);
+        visitedList.add(bbPrecond);
       }
       else if (count == null) {
-        notvisitedList.add(basicBlock);
+        notvisitedList.add(bbPrecond);
       }
     }
 
     // sort them from large BB number to small BB number
-    Collections.sort(visitedList, new Comparator<ISSABasicBlock>(){ 
-      public int compare(ISSABasicBlock arg0, ISSABasicBlock arg1) { 
-        return arg1.getNumber() - arg0.getNumber();
+    Collections.sort(visitedList, new Comparator<Object[]>(){ 
+      public int compare(Object[] arg0, Object[] arg1) { 
+        return ((ISSABasicBlock) arg1[0]).getNumber() - ((ISSABasicBlock) arg0[0]).getNumber();
       } 
     });
-    Collections.sort(notvisitedList, new Comparator<ISSABasicBlock>(){ 
-      public int compare(ISSABasicBlock arg0, ISSABasicBlock arg1) { 
-        return arg1.getNumber() - arg0.getNumber();
+    Collections.sort(notvisitedList, new Comparator<Object[]>(){ 
+      public int compare(Object[] arg0, Object[] arg1) { 
+        return ((ISSABasicBlock) arg1[0]).getNumber() - ((ISSABasicBlock) arg0[0]).getNumber();
       } 
     });
-    
-    // decide phis if any
-    Hashtable<ISSABasicBlock, Formula> newPreConds = null;
-    Iterator<SSAPhiInstruction> phiInsts = currentInfo.currentBB.iteratePhis();
-    if (phiInsts.hasNext()) {
-      newPreConds = decidePhis(currentInfo, phiInsts, precond);
-      for (Formula newPreCond : newPreConds.values()) { // put back visited record
-        newPreCond.setVisitedRecord(visitedBB, null);
-      }
-    }
     
     // push the visited ones into the beginning of the stack
-    for (ISSABasicBlock visited : visitedList) {
-      // we don't check precond at the moment
-      Formula newPreCond = newPreConds == null ? precond : newPreConds.get(visited);
-      workList.push(new BBorInstInfo(visited, areSkipToBBs, newPreCond, successorType, 
-          currentInfo.currentBB, currentInfo, methData, valPrefix, null, this));
+    for (Object[] visited : visitedList) {
+      workList.push(new BBorInstInfo((ISSABasicBlock) visited[0], areSkipToBBs, (Formula) visited[1], 
+          successorType, currentInfo.currentBB, currentInfo, methData, valPrefix, null, this));
     }
     
     // push the non visited ones into the beginning of the stack
-    for (ISSABasicBlock notvisited : notvisitedList) {
-      // we don't check precond at the moment
-      Formula newPreCond = newPreConds == null ? precond : newPreConds.get(notvisited);
-      workList.push(new BBorInstInfo(notvisited, areSkipToBBs, newPreCond, successorType, 
-          currentInfo.currentBB, currentInfo, methData, valPrefix, null, this));
+    for (Object[] notvisited : notvisitedList) {
+      workList.push(new BBorInstInfo((ISSABasicBlock) notvisited[0], areSkipToBBs, (Formula) notvisited[1], 
+          successorType, currentInfo.currentBB, currentInfo, methData, valPrefix, null, this));
     }
   }
   
@@ -908,19 +912,18 @@ public class Executor {
   private void printPropagationPath(BBorInstInfo entryNode) {
     // output propagation path
     System.out.print("Computation Path: ");
-    Stack<Integer> computePath = new Stack<Integer>();
-    computePath.push(0);
+    StringBuilder computePath = new StringBuilder();
+    computePath.append(0);
     BBorInstInfo currentBB = entryNode;
     while (currentBB.sucessorInfo != null) {
-      computePath.push(currentBB.sucessorBB.getNumber());
+      computePath.append(" >- ");
+      computePath.append(new StringBuilder(String.valueOf(currentBB.sucessorBB.getNumber())).reverse());
       currentBB = currentBB.sucessorInfo;
     }
-    while (!computePath.empty()) {
-      System.out.print(computePath.pop() + " -> ");
-    }
-    System.out.println("SMT Check");
+    System.out.print(computePath.reverse());
+    System.out.println(" -> SMT Check");
   }
-
+  
   private void printResult(Formula preCond) {
     if (preCond != null) {
       System.out.println("SMT Solver Input-----------------------------------");
