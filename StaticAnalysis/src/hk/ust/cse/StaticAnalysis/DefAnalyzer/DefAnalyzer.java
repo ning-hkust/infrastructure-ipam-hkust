@@ -6,6 +6,7 @@ import hk.ust.cse.Wala.MethodMetaData;
 import hk.ust.cse.Wala.WalaAnalyzer;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Hashtable;
@@ -29,13 +30,13 @@ import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
 import com.ibm.wala.ssa.SSAPiInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
+import com.ibm.wala.ssa.SymbolTable;
 
 public class DefAnalyzer {
   
   public DefAnalyzer(String appJar) throws Exception {
     m_walaAnalyzer   = new WalaAnalyzer(appJar);
     m_includingNames = new ArrayList<String>();
-    m_dummy          = new Hashtable<String, Integer>();
   }
   
   public void addIncludeName(String name) {
@@ -54,6 +55,7 @@ public class DefAnalyzer {
         if (!method.isAbstract() && !method.isNative() && containsName(method.getSignature())) {
           IR ir = Jar2IR.getIR(m_walaAnalyzer, method.getSignature()); // getIR
           if (ir != null) {
+            System.out.println(method.getSignature());
             getAllDefs(ir, 0, maxLookDepth, result);
           }
         }
@@ -67,19 +69,18 @@ public class DefAnalyzer {
     SSACFG cfg = methData.getcfg();
     
     List<ConditionalBranchDefs> currentCondBranchDefs = new ArrayList<ConditionalBranchDefs>();
-    Hashtable<String, String> varMappings = new Hashtable<String, String>();
+    Hashtable<String, String[]> varMappings = new Hashtable<String, String[]>();
     
-    SSAInstruction[] insts = getInstructions(ir);
+    Hashtable<SSAInstruction, ISSABasicBlock> instBBMapping = new Hashtable<SSAInstruction, ISSABasicBlock>();
+    SSAInstruction[] insts = getInstructions(ir, instBBMapping);
     for (int i = 0; i < insts.length; i++) {
       if (insts[i] == null) {
         continue;
       }
       
       // check if the current instruction is out of some conditional branches
-      int instIndex = methData.getInstructionIndex(insts[i]);
-      ISSABasicBlock currentBlock = null;
-      if (instIndex >= 0) {
-        currentBlock = cfg.getBlockForInstruction(instIndex);
+      ISSABasicBlock currentBlock = instBBMapping.get(insts[i]);
+      if (currentBlock != null) {
         for (int j = 0; j < currentCondBranchDefs.size(); j++) {
           ConditionalBranchDefs condBranchDefs = currentCondBranchDefs.get(j);
           if (condBranchDefs.endingBlock.getNumber() <= currentBlock.getNumber()) {
@@ -90,24 +91,33 @@ public class DefAnalyzer {
       
       if (insts[i] instanceof SSAPutInstruction) {
         SSAPutInstruction putfieldInst = (SSAPutInstruction) insts[i];
-
-        // get the class type that declared this field
-        String declaredField = putfieldInst.isStatic() ? 
-            putfieldInst.getDeclaredField().getDeclaringClass().getName().toString() : 
-            getVarName(methData, putfieldInst.getUse(0), varMappings);
-        // get the name of the field
-        declaredField += "." + putfieldInst.getDeclaredField().getName();
         
+        List<String> varNames = new ArrayList<String>();
+        if (putfieldInst.isStatic()) {
+          varNames.add(putfieldInst.getDeclaredField().getDeclaringClass().getName().toString());
+        }
+        else {
+          varNames.addAll(Arrays.asList(getVarName(methData, putfieldInst.getUse(0), varMappings)));
+        }
+        List<String> declaredFields = new ArrayList<String>();
+        for (String varName : varNames) {
+          // get the fieldType of the declared field of the putfield instruction
+          String declaredField = "(" + putfieldInst.getDeclaredFieldType().getName() + ")";
+          // get the class type that declared this field
+          declaredField += varName;
+          // get the name of the field
+          declaredField += "." + putfieldInst.getDeclaredField().getName();
+          declaredFields.add(declaredField);
+        }
         // save field to all conditional branches
-        result.addCondBranchDef(currentCondBranchDefs, declaredField);
-        
+        result.addCondBranchDef(currentCondBranchDefs, declaredFields);
         // save field to method defs
-        result.addMethodDef(ir.getMethod(), declaredField);
+        result.addMethodDef(ir.getMethod(), declaredFields);
       }
       else if (insts[i] instanceof SSANewInstruction) {
         SSANewInstruction newInst = (SSANewInstruction) insts[i];
         
-        String def = getVarName(methData, newInst.getDef(), varMappings);
+        String def = getVarName(methData, newInst.getDef(), varMappings)[0];
         
         // for array types, we have ".length" variables
         if (newInst.getConcreteType().isArrayType()) {
@@ -124,15 +134,16 @@ public class DefAnalyzer {
             List<String> defs = new ArrayList<String>();
             Collection<IField> fields = newClass.getAllInstanceFields();
             for (IField field : fields) {
+              // get the fieldType of the declared field
+              String declaredField = "(" + field.getFieldTypeReference().getName() + ")";
               // get the class type that declared this field
-              String declaredField = def;
+              declaredField += def;
               // get the name of the field
               declaredField += "." + field.getName();
               // the member field
               defs.add(declaredField);
             }
             result.addCondBranchDef(currentCondBranchDefs, defs);
-            
             // save fields to method defs
             result.addMethodDef(ir.getMethod(), defs);
           }
@@ -140,14 +151,12 @@ public class DefAnalyzer {
       }
       else if (insts[i] instanceof SSAArrayStoreInstruction) {
         SSAArrayStoreInstruction arrayStoreInst = (SSAArrayStoreInstruction) insts[i];
-
-        String arrayRef = getVarName(methData, arrayStoreInst.getArrayRef(), varMappings);
         
+        String[] arrayRefs = getVarName(methData, arrayStoreInst.getArrayRef(), varMappings);
         // save array ref to all conditional branches
-        result.addCondBranchDef(currentCondBranchDefs, arrayRef);
-        
+        result.addCondBranchDef(currentCondBranchDefs, Arrays.asList(arrayRefs));
         // save array ref to method defs
-        result.addMethodDef(ir.getMethod(), arrayRef);
+        result.addMethodDef(ir.getMethod(), Arrays.asList(arrayRefs));
       }
       else if (insts[i] instanceof SSAInvokeInstruction && curDepth < maxDepth) {
         SSAInvokeInstruction invokeInst = (SSAInvokeInstruction) insts[i];
@@ -162,20 +171,29 @@ public class DefAnalyzer {
           List<String> methodDefs = new ArrayList<String>();
           int count = invokeInst.getNumberOfParameters();
           for (int j = 0; j < count; j++) {
-            String calleeVarName = "v" + (j + 1);
-            String callerVarName = getVarName(methData, invokeInst.getUse(j), varMappings);
+            String calleeVarName    = "v" + (j + 1);
+            String[] callerVarNames = getVarName(methData, invokeInst.getUse(j), varMappings);
             
             HashSet<String> defs = invokeResult.getMethodDefs(ir2.getMethod());
             if (defs != null) {
               for (String def : defs) {
-                if (def.equals(calleeVarName)) {
-                  methodDefs.add(callerVarName);
+                int index = def.indexOf(')');
+                String defVarType = def.substring(0, index + 1);
+                String defVarName = def.substring(index + 1);
+                if (defVarName.equals(calleeVarName)) {
+                  for (String callerVarName : callerVarNames) {
+                    methodDefs.add(defVarType + callerVarName);
+                  }
                 }
-                else if (def.startsWith(calleeVarName + ".")) {
-                  methodDefs.add(callerVarName + def.substring(def.indexOf('.')));
+                else if (defVarName.startsWith(calleeVarName + ".")) {
+                  for (String callerVarName : callerVarNames) {
+                    methodDefs.add(defVarType + callerVarName + defVarName.substring(defVarName.indexOf('.')));
+                  }
                 }                
-                else if (def.startsWith(calleeVarName + "[")) { // the index is not being translated
-                  methodDefs.add(callerVarName + def.substring(def.indexOf('[')));
+                else if (defVarName.startsWith(calleeVarName + "[")) { // the index is not being translated
+                  for (String callerVarName : callerVarNames) {
+                    methodDefs.add(defVarType + callerVarName + defVarName.substring(defVarName.indexOf('[')));
+                  }
                 }
               }
             }
@@ -183,7 +201,6 @@ public class DefAnalyzer {
           
           // save callee defs to all conditional branches
           result.addCondBranchDef(currentCondBranchDefs, methodDefs);
-          
           // save callee defs to method defs
           result.addMethodDef(ir.getMethod(), methodDefs);
         }
@@ -202,66 +219,106 @@ public class DefAnalyzer {
 
       // add def to conditional branches and method
       if (insts[i].getNumberOfDefs() > 0) {
-        String def = getVarName(methData, insts[i].getDef(), varMappings);
-        if (def.startsWith("v") && !def.equals("v-1")) {
-          result.addCondBranchDef(currentCondBranchDefs, def);
-          result.addMethodDef(ir.getMethod(), def);
+        String[] defs = getVarName(methData, insts[i].getDef(), varMappings);
+        for (String def : defs) {
+          if (def.startsWith("v") && !def.equals("v-1")) {
+            result.addCondBranchDef(currentCondBranchDefs, def);
+            result.addMethodDef(ir.getMethod(), def);
+          }
         }
       }
       
       // handle variable transfer
       if (insts[i] instanceof SSAPiInstruction) {
         SSAPiInstruction piInst = (SSAPiInstruction) insts[i];
-        String def = getVarName(methData, piInst.getDef(), varMappings);
-        String val = getVarName(methData, piInst.getVal(), varMappings);
-        varMappings.put(def, val);
+        String def    = getVarName(methData, piInst.getDef(), varMappings)[0];
+        String[] vals = getVarName(methData, piInst.getVal(), varMappings);
+        varMappings.put(def, vals);
+      }
+      else if (insts[i] instanceof SSAPhiInstruction) {
+        SSAPhiInstruction phiInst = (SSAPhiInstruction) insts[i];
+        String def = getVarName(methData, phiInst.getDef(), varMappings)[0];
+        List<String> phiVarList = new ArrayList<String>();
+        for (int j = 0, len = phiInst.getNumberOfUses(); j < len; j++) {
+          String[] phiVars = getVarName(methData, phiInst.getUse(j), varMappings);
+          phiVarList.addAll(Arrays.asList(phiVars));
+        }
+        varMappings.put(def, phiVarList.toArray(new String[0]));
       }
       else if (insts[i] instanceof SSACheckCastInstruction) {
         SSACheckCastInstruction checkcastInst = (SSACheckCastInstruction) insts[i];
-        String def = getVarName(methData, checkcastInst.getDef(), varMappings);
-        String val = getVarName(methData, checkcastInst.getUse(0), varMappings);
-        varMappings.put(def, val);
+        String def    = getVarName(methData, checkcastInst.getDef(), varMappings)[0];
+        String[] vals = getVarName(methData, checkcastInst.getUse(0), varMappings);
+        varMappings.put(def, vals);
       }
       else if (insts[i] instanceof SSAGetInstruction) {
         SSAGetInstruction getfieldInst = (SSAGetInstruction) insts[i];
         if (!getfieldInst.isStatic()) {
-          String def = getVarName(methData, getfieldInst.getDef(), varMappings);
-          String ref = getVarName(methData, getfieldInst.getUse(0), varMappings);
-          String declaredField = ref + "." + getfieldInst.getDeclaredField().getName();
-          varMappings.put(def, declaredField);
+          String def    = getVarName(methData, getfieldInst.getDef(), varMappings)[0];
+          String[] refs = getVarName(methData, getfieldInst.getUse(0), varMappings);
+          List<String> declaredFields = new ArrayList<String>();
+          for (String ref : refs) {
+            String declaredField = ref + "." + getfieldInst.getDeclaredField().getName();
+            declaredFields.add(declaredField);
+          }
+          varMappings.put(def, declaredFields.toArray(new String[0]));
         }
       }
       else if (insts[i] instanceof SSAArrayLoadInstruction) {
         SSAArrayLoadInstruction arrayLoadInst = (SSAArrayLoadInstruction) insts[i];
-        String def        = getVarName(methData, arrayLoadInst.getDef(), varMappings);
-        String arrayRef   = getVarName(methData, arrayLoadInst.getArrayRef(), varMappings);
-        String arrayIndex = getVarName(methData, arrayLoadInst.getIndex(), varMappings);
-        String arrarStr   = getVarName(methData, arrayRef + "[" + arrayIndex + "]", varMappings);
-        varMappings.put(def, arrarStr);
+        String def           = getVarName(methData, arrayLoadInst.getDef(), varMappings)[0];
+        String[] arrayRefs   = getVarName(methData, arrayLoadInst.getArrayRef(), varMappings);
+        String[] arrayIndexs = getVarName(methData, arrayLoadInst.getIndex(), varMappings);
+        
+        List<String> arrayStrList = new ArrayList<String>();
+        for (String arrayRef : arrayRefs) {
+          for (String arrayIndex : arrayIndexs) {
+            String[] arrayStrs = getVarName(methData, arrayRef + "[" + arrayIndex + "]", varMappings);
+            arrayStrList.addAll(Arrays.asList(arrayStrs));
+          }
+        }
+        varMappings.put(def, arrayStrList.toArray(new String[0]));
       }
       else if (insts[i] instanceof SSAArrayStoreInstruction) {
         SSAArrayStoreInstruction arrayStoreInst = (SSAArrayStoreInstruction) insts[i];
-        String arrayRef   = getVarName(methData, arrayStoreInst.getArrayRef(), varMappings);
-        String arrayIndex = getVarName(methData, arrayStoreInst.getIndex(), varMappings);
-        String storeValue = getVarName(methData, arrayStoreInst.getValue(), varMappings);
-        String arrarStr   = getVarName(methData, arrayRef + "[" + arrayIndex + "]", varMappings);
-        varMappings.put(arrarStr, storeValue);
+        String[] arrayRefs   = getVarName(methData, arrayStoreInst.getArrayRef(), varMappings);
+        String[] arrayIndexs = getVarName(methData, arrayStoreInst.getIndex(), varMappings);
+        String[] storeValues = getVarName(methData, arrayStoreInst.getValue(), varMappings);
+        List<String> arrayStrList = new ArrayList<String>();
+        for (String arrayRef : arrayRefs) {
+          for (String arrayIndex : arrayIndexs) {
+            String[] arrayStrs = getVarName(methData, arrayRef + "[" + arrayIndex + "]", varMappings);
+            arrayStrList.addAll(Arrays.asList(arrayStrs));
+          }
+        }
+        for (String arrayStr : arrayStrList) {
+          String[] mapped = varMappings.get(arrayStr);
+          if (mapped == null) {
+            varMappings.put(arrayStr, storeValues);
+          }
+          else {
+            List<String> values = new ArrayList<String>();
+            values.addAll(Arrays.asList(mapped));
+            values.addAll(Arrays.asList(storeValues));
+            varMappings.put(arrayStr, values.toArray(new String[0]));
+          }
+        }
       }
     }
   }
   
-  private String getVarName(MethodMetaData methData, int varID, Hashtable<String, String> varMapping) {
-    String varName = methData.getSymbol(varID, "", m_dummy);
-    String mapped = varMapping.get(varName);
-    return mapped != null ? mapped : varName;
+  private String[] getVarName(MethodMetaData methData, int varID, Hashtable<String, String[]> varMapping) {
+    String varName = getSymbol(varID, methData);
+    String mapped[] = varMapping.get(varName);
+    return mapped != null ? mapped : new String[]{varName};
   }
   
-  private String getVarName(MethodMetaData methData, String varName, Hashtable<String, String> varMapping) {
-    String mapped = varMapping.get(varName);
-    return mapped != null ? mapped : varName;
+  private String[] getVarName(MethodMetaData methData, String varName, Hashtable<String, String[]> varMapping) {
+    String[] mapped = varMapping.get(varName);
+    return mapped != null ? mapped : new String[]{varName};
   }
   
-  private SSAInstruction[] getInstructions(IR ir) {
+  private SSAInstruction[] getInstructions(IR ir, Hashtable<SSAInstruction, ISSABasicBlock> instBBMapping) {
     List<SSAInstruction> insts = new ArrayList<SSAInstruction>();
     
     SSAInstruction[] instSet = ir.getInstructions();
@@ -274,13 +331,17 @@ public class DefAnalyzer {
       while (phis.hasNext()) {
         SSAPhiInstruction phiInst = (SSAPhiInstruction) phis.next();
         insts.add(phiInst);
+        instBBMapping.put(phiInst, basicBlock);
       }
       
       int index1 = basicBlock.getFirstInstructionIndex();
       int index2 = basicBlock.getLastInstructionIndex();
       if (index1 >= 0) {
         for (int j = index1; j <= index2; j++) {
-          insts.add(instSet[j]);
+          if (instSet[j] != null) {
+            insts.add(instSet[j]);
+            instBBMapping.put(instSet[j], basicBlock);
+          }
         }
       }
       
@@ -289,6 +350,7 @@ public class DefAnalyzer {
       while (pis.hasNext()) {
         SSAPiInstruction piInst = (SSAPiInstruction) pis.next();
         insts.add(piInst);
+        instBBMapping.put(piInst, basicBlock);
       }
     }
     return insts.toArray(new SSAInstruction[0]);
@@ -315,6 +377,39 @@ public class DefAnalyzer {
     return mergingBlock;
   }
   
+  /**
+   * @return if variable "varID" is a constant, return the prefixed 
+   * string representing that constant, otherwise return vVarID
+   */
+  private String getSymbol(int varID, MethodMetaData methData) {
+    String var = null;
+    SymbolTable symbolTable = methData.getSymbolTable();
+    
+    if (varID >= 0 && symbolTable.isConstant(varID)) {
+      Object constant = symbolTable.getConstantValue(varID);
+      var = (constant != null) ? getConstantPrefix(varID, methData) + constant.toString() : "null";
+    }
+    else {
+      var = "v" + varID;
+    }
+    return var;
+  }
+  
+  private String getConstantPrefix(int varID, MethodMetaData methData) {
+    if (!methData.getSymbolTable().isConstant(varID)) {
+      return "";
+    }
+    else if (methData.getSymbolTable().isNumberConstant(varID)) {
+      return "#!";
+    }
+    else if (methData.getSymbolTable().isStringConstant(varID)) {
+      return "##";
+    }
+    else {
+      return "#?";
+    }
+  }
+  
   private boolean containsName(String name) {
     boolean ret = false;
     
@@ -330,18 +425,19 @@ public class DefAnalyzer {
   public static void main(String[] args) throws Exception {
     DefAnalyzer defAnalyzer = new DefAnalyzer("./test_programs/test_program.jar");
     defAnalyzer.addIncludeName("test_program.");
-    DefAnalysisResult result = defAnalyzer.findAllDefs(5);
-  
-    Collection<ConditionalBranchDefs> condDefs = result.m_defsForCondBranch.values();
-    for (ConditionalBranchDefs defs : condDefs) {
-      for (String def : defs.defs) {
-        System.out.println(def);
-      }
-      System.out.println("================================");
-    }
+//    DefAnalysisResult result = defAnalyzer.findAllDefs(5);
+//  
+//    Collection<ConditionalBranchDefs> condDefs = result.m_defsForCondBranch.values();
+//    for (ConditionalBranchDefs defs : condDefs) {
+//      for (String def : defs.defs) {
+//        System.out.println(def);
+//      }
+//      System.out.println("================================");
+//    }
     
 //    IR ir = Jar2IR.getIR(defAnalyzer.m_walaAnalyzer, "test_program.func1", 7);
-//    List<String> defs = result.getMethodDefs(ir.getMethod());
+//    System.out.println("Defs for method: " + ir.getMethod().getName().toString());
+//    Collection<String> defs = result.getMethodDefs(ir.getMethod());
 //    for (String def : defs) {
 //      System.out.println(def);
 //    }
@@ -349,5 +445,4 @@ public class DefAnalyzer {
   
   private final WalaAnalyzer m_walaAnalyzer;
   private final List<String> m_includingNames;
-  private final Hashtable<String, Integer> m_dummy;
 }

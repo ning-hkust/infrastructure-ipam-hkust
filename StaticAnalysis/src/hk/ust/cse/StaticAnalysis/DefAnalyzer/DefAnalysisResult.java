@@ -53,8 +53,9 @@ public class DefAnalysisResult {
   }
   
   public DefAnalysisResult() {
-    m_methodDefs        = new Hashtable<IMethod, HashSet<String>>();
-    m_defsForCondBranch = new Hashtable<ISSABasicBlock, ConditionalBranchDefs>();
+    m_methodDefs           = new Hashtable<IMethod, HashSet<String>>();
+    m_defsForCondBranch    = new Hashtable<ISSABasicBlock, ConditionalBranchDefs>();
+    m_condDefsForMergingBB = new Hashtable<ISSABasicBlock, List<ConditionalBranchDefs>>();
   }
   
   void addMethodDef(IMethod method, String def) {
@@ -82,7 +83,17 @@ public class DefAnalysisResult {
     for (ConditionalBranchDefs condBranchDefs : currentCondBranchDefs) {
       ConditionalBranchDefs oriCondBranchDefs = m_defsForCondBranch.get(condBranchDefs.startingBlock);
       if (oriCondBranchDefs == null) {
+        // add ConditionalBranchDefs to m_defsForCondBranch
         m_defsForCondBranch.put(condBranchDefs.startingBlock, condBranchDefs);
+        
+        // add ConditionalBranchDefs to m_condDefsForMergingBB
+        List<ConditionalBranchDefs> condDefsList = m_condDefsForMergingBB.get(condBranchDefs.mergingBlock);
+        if (condDefsList == null) {
+          condDefsList = new ArrayList<ConditionalBranchDefs>();
+          m_condDefsForMergingBB.put(condBranchDefs.mergingBlock, condDefsList);
+        }
+        condDefsList.add(condBranchDefs);
+        
         oriCondBranchDefs = condBranchDefs;
       }
       oriCondBranchDefs.defs.addAll(defs);
@@ -93,11 +104,15 @@ public class DefAnalysisResult {
     return m_defsForCondBranch.get(condBranchBB);
   }
   
+  public List<ConditionalBranchDefs> getCondBranchDefsForMergingBB(ISSABasicBlock mergingBB) {
+    return m_condDefsForMergingBB.get(mergingBB);
+  }
+  
   public HashSet<String> getMethodDefs(IMethod method) {
     return m_methodDefs.get(method);
   }
   
-  private final Hashtable<IMethod, HashSet<String>>             m_methodDefs;
-  public final Hashtable<ISSABasicBlock, ConditionalBranchDefs> m_defsForCondBranch;
-  //private final Hashtable<ISSABasicBlock, List<ConditionalBranchDefs>> m_condDefsForMergingBB;
+  private final Hashtable<IMethod, HashSet<String>>                    m_methodDefs;
+  private final Hashtable<ISSABasicBlock, ConditionalBranchDefs>       m_defsForCondBranch;
+  private final Hashtable<ISSABasicBlock, List<ConditionalBranchDefs>> m_condDefsForMergingBB;
 }
