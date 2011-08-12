@@ -213,6 +213,10 @@ public class DefAnalyzer {
               cfg, currentBlock, currentCondBranchDefs, mergingBB);
           if (condBranchDefs.endingBlock != null) {
             currentCondBranchDefs.add(condBranchDefs);
+            
+            // it is possible that this conditional branch has no defs at 
+            // all, so we always add it first at the beginning
+            result.addCondBranchDef(condBranchDefs);
           }
         }
       }
