@@ -415,10 +415,14 @@ public class Executor {
           Collection<ISSABasicBlock> excpPredBB =
             cfg.getExceptionalPredecessors(infoItem.currentBB);
           
-          if (optAndStates.checkOnTheFly && normPredBB.size() > 1 && !infoItem.currentBB.isExitBlock()) {
-            if (m_smtChecker.smtCheck(precond, methData) == Formula.SMT_RESULT.UNSAT) {
-              System.out.println("Inner contradiction developed, discard block.");
-              continue;
+          // on the fly checks
+          if (optAndStates.checkOnTheFly && normPredBB.size() > 1) {
+            Hashtable<String, Reference> methodRefs = precond.getRefMap().get(infoItem.callSites);
+            if (!infoItem.currentBB.isExitBlock() || methodRefs == null || !methodRefs.containsKey("RET")) {
+              if (m_smtChecker.smtCheck(precond, methData) == Formula.SMT_RESULT.UNSAT) {
+                System.out.println("Inner contradiction developed, discard block.");
+                continue;
+              }
             }
           }
 

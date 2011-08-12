@@ -519,14 +519,12 @@ public abstract class AbstractHandler {
     
     // since there is a new def, add to def
     addDefToDefMap(newDefMap, defRef);   
-    
-    // associate the two refs' instance together as the same one
-    if (fromRef.getInstance().isBounded()) {
-      defRef.setInstancesValue(fromRef.getInstance());
-      defRef.putInstancesToOld();
-    }
 
     if (fromRef.getInstance().isBounded()) {
+      // associate the two refs' instance together as the same one
+      defRef.setInstancesValue(fromRef.getInstance());
+      defRef.putInstancesToOld();
+      
       // defRef not longer useful
       if (defRef.canReferenceSetValue() && findReference(defRef.getName(), defRef.getCallSites(), newRefMap) != null) {
         newRefMap.get(defRef.getCallSites()).remove(defRef.getName());
@@ -552,16 +550,14 @@ public abstract class AbstractHandler {
 
     // since there is a new def, add to def
     addDefToDefMap(newDefMap, defRef);
-    
-    // associate the two refs' instance together as the same one
+
     if (fromInstance.isBounded()) {
+      // associate the two refs' instance together as the same one
       defRef.setInstancesValue(fromInstance);
       defRef.putInstancesToOld();
-    }
-
-    if (fromInstance.isBounded() && defRef.canReferenceSetValue()) {
+      
       // defRef not longer useful
-      if (findReference(defRef.getName(), defRef.getCallSites(), newRefMap) != null) {
+      if (defRef.canReferenceSetValue() && findReference(defRef.getName(), defRef.getCallSites(), newRefMap) != null) {
         newRefMap.get(defRef.getCallSites()).remove(defRef.getName());
       }
     }
