@@ -210,63 +210,58 @@ public class Reference {
   }
   
   public Reference deepClone(Hashtable<Object, Object> cloneMap) {
-    // clone declInstance
-    Instance cloneDeclInstance = m_declInstance;
-    if (m_declInstance != null) {
-      cloneDeclInstance = (Instance) cloneMap.get(m_declInstance);
-      if (cloneDeclInstance == null) {
+    // if it is already cloned, return the cloned instance
+    Reference cloneRef = (Reference) cloneMap.get(this);
+    if (cloneRef == null) {
+      // clone declInstance
+      Instance cloneDeclInstance = m_declInstance;
+      if (m_declInstance != null) {
         cloneDeclInstance = m_declInstance.deepClone(cloneMap);
-        cloneMap.put(m_declInstance, cloneDeclInstance);
       }
+      cloneRef = deepClone(cloneMap, cloneDeclInstance);
     }
-    return deepClone(cloneMap, cloneDeclInstance);
+    return cloneRef;
   }
   
   public Reference deepClone(Hashtable<Object, Object> cloneMap, Instance declInstance) {
-    // create the clone reference with no instance initially
-    Reference cloneRef = new Reference(m_name, m_type, m_callSites, (Instance)null, declInstance);
-    
-    // clone instances
-    for (Instance instance : m_instances) {
-      Instance cloneInstance = (Instance) cloneMap.get(instance);
-      if (cloneInstance == null) {
-        cloneInstance = instance.deepClone(cloneMap);
-        cloneMap.put(instance, cloneInstance);
+    // if it is already cloned, return the cloned instance
+    Reference cloneRef = (Reference) cloneMap.get(this);
+    if (cloneRef == null) {
+      // create the clone reference with no instance initially
+      cloneRef = new Reference(m_name, m_type, m_callSites, (Instance)null, declInstance);
+      
+      // clone instances
+      for (Instance instance : m_instances) {
+        Instance cloneInstance = instance.deepClone(cloneMap);
+  
+        try {
+          Reference oriLastRef = cloneInstance.getLastReference();
+          cloneRef.assignInstance(cloneInstance); // the lastRef of cloneInstance is now set to cloneRef
+          if (instance.getLastReference() != this) {
+            // should not reset by new Reference()
+            cloneInstance.setLastReference(oriLastRef); // wait for the true lastRef
+          }
+        } catch (Exception e) {e.printStackTrace();}
       }
-
-      try {
-        Reference oriLastRef = cloneInstance.getLastReference();
-        cloneRef.assignInstance(cloneInstance); // the lastRef of cloneInstance is now set to cloneRef
-        if (instance.getLastReference() != this) {
-          // should not reset by new Reference()
-          cloneInstance.setLastReference(oriLastRef); // wait for the true lastRef
-        }
-      } catch (Exception e) {e.printStackTrace();}
-    }
-    
-    // clone old instances
-    for (Instance instance : m_oldInstances) {
-      Instance cloneInstance = (Instance) cloneMap.get(instance);
-      if (cloneInstance == null) {
-        cloneInstance = instance.deepClone(cloneMap);
-        cloneMap.put(instance, cloneInstance);
+      
+      // clone old instances
+      for (Instance instance : m_oldInstances) {
+        Instance cloneInstance = instance.deepClone(cloneMap);
+        cloneRef.m_oldInstances.add(cloneInstance);
       }
-      cloneRef.m_oldInstances.add(cloneInstance);
-    }
-    
-    // clone instance life time
-    Enumeration<Instance> keys = m_lifeTimes.keys();
-    while (keys.hasMoreElements()) {
-      Instance instance = (Instance) keys.nextElement();
-      Instance cloneInstance = (Instance) cloneMap.get(instance);
-      if (cloneInstance == null) {
-        cloneInstance = instance.deepClone(cloneMap);
-        cloneMap.put(instance, cloneInstance);
+      
+      // clone instance life time
+      Enumeration<Instance> keys = m_lifeTimes.keys();
+      while (keys.hasMoreElements()) {
+        Instance instance = (Instance) keys.nextElement();
+        Instance cloneInstance = instance.deepClone(cloneMap);
+        Long[] lifeTime = m_lifeTimes.get(instance);
+        cloneRef.m_lifeTimes.put(cloneInstance, new Long[] {lifeTime[0], lifeTime[1]});
       }
-      Long[] lifeTime = m_lifeTimes.get(instance);
-      cloneRef.m_lifeTimes.put(cloneInstance, new Long[] {lifeTime[0], lifeTime[1]});
+      
+      // save the new clone
+      cloneMap.put(this, cloneRef);
     }
-    
     return cloneRef;
   }
   

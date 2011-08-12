@@ -382,7 +382,7 @@ public class Executor {
             startingInst, inclLine, callStack, starting, curInvokeDepth, valPrefix, workList);
 
         if (precond == null) {
-          break;
+          continue; // an inner contradiction has been detected
         }
         
         // if new invocation targets have been pushed into stack due to 
@@ -415,7 +415,7 @@ public class Executor {
           Collection<ISSABasicBlock> excpPredBB =
             cfg.getExceptionalPredecessors(infoItem.currentBB);
           
-          if (optAndStates.checkOnTheFly && normPredBB.size() > 1 && !workList.empty() && !infoItem.currentBB.isExitBlock()) {
+          if (optAndStates.checkOnTheFly && normPredBB.size() > 1 && !infoItem.currentBB.isExitBlock()) {
             if (m_smtChecker.smtCheck(precond, methData) == Formula.SMT_RESULT.UNSAT) {
               System.out.println("Inner contradiction developed, discard block.");
               continue;
@@ -437,11 +437,23 @@ public class Executor {
 //                Formula.EXCEPTIONAL_SUCCESSOR, dfsStack, optAndStates.maxLoop, valPrefix);            
 //          }
           
+          if (infoItem.currentBB.getNumber() == 24) {
+            System.out.println("aa");
+          }
+          if (infoItem.currentBB.getNumber() == 10) {
+            System.out.println("aa");
+          }
+          if (infoItem.currentBB.getNumber() == 4) {
+            System.out.println("aa");
+          }
+          if (infoItem.currentBB.getNumber() == 25) {
+            System.out.println("aa");
+          }
           // decide phis if any
           Hashtable<ISSABasicBlock, Formula> phiedPreConds = null;
-          Iterator<SSAPhiInstruction> phiInsts = infoItem.currentBB.iteratePhis();
-          if (phiInsts.hasNext()) {
-            phiedPreConds = decidePhis(infoItem, phiInsts, precond);
+          boolean phiDefsUseful = phiDefsUseful(infoItem, precond);
+          if (phiDefsUseful) {
+            phiedPreConds = decidePhis(infoItem, precond);
             for (Formula phiedPreCond : phiedPreConds.values()) { // put back visited record
               phiedPreCond.setVisitedRecord(precond.getVisitedRecord(), null);
             }
@@ -460,13 +472,48 @@ public class Executor {
           while (keys.hasMoreElements()) {
             ISSABasicBlock pred  = keys.nextElement();
             Formula phiedPreCond = phiedPreConds.get(pred);
-            if (optAndStates.pruneUselessBranches) {
-              ISSABasicBlock skipToPred = m_defAnalyzer.findSkipToBasicBlocks(cfg, 
+            if (optAndStates.pruneUselessBranches && (!phiDefsUseful || (false && phiedPreConds.size() == 2))) {
+              ISSABasicBlock skipToCondBB = m_defAnalyzer.findSkipToBasicBlocks(cfg, 
                   infoItem.currentBB, pred, phiedPreCond, infoItem.callSites);
-              pred = (skipToPred != null) ? skipToPred : pred;
-              totalSkipped += (skipToPred != null) ? 1 : 0;
+              if (skipToCondBB != null) {
+                if (!phiDefsUseful) {
+                  Collection<ISSABasicBlock> skipToPredBBs =
+                    cfg.getNormalPredecessors(skipToCondBB);
+                  for (ISSABasicBlock skipToPredBB : skipToPredBBs) {
+                    boolean contains = false;
+                    for (Object[] bbPreCond : bbPreConds) {
+                      if (bbPreCond[0] == skipToPredBB && bbPreCond[1] == phiedPreCond) {
+                        contains = true;
+                        break;
+                      }
+                    }
+                    if (!contains) {
+                      bbPreConds.add(new Object[] {skipToPredBB, phiedPreCond});
+                    }
+                  }
+                }
+                else {
+                  List<Object[]> condBBToPush = new ArrayList<Object[]>();
+                  condBBToPush.add(new Object[] {skipToCondBB, phiedPreCond});
+
+                  ISSABasicBlock currentBB = pred.getNumber() + 1 < infoItem.currentBB.getNumber() ? 
+                      cfg.getBasicBlock(skipToCondBB.getNumber() + 1) : infoItem.currentBB;
+                  BBorInstInfo newInfoItem = new BBorInstInfo(currentBB, 
+                      infoItem.isSkipToBB, infoItem.postCond, infoItem.postCond4BB, 
+                      infoItem.sucessorType, infoItem.sucessorBB, infoItem.sucessorInfo, 
+                      infoItem.methData, infoItem.callSites, infoItem.workList, infoItem.executor);
+                  pushChildrenBlocks(condBBToPush, false, newInfoItem, methData,
+                      Formula.NORMAL_SUCCESSOR, workList, optAndStates.maxLoop, valPrefix);
+                }
+                totalSkipped++;
+              }
+              else {
+                bbPreConds.add(new Object[] {pred, phiedPreCond});
+              }
             }
-            bbPreConds.add(new Object[] {pred, phiedPreCond});
+            else {
+              bbPreConds.add(new Object[] {pred, phiedPreCond});
+            }
           }
           if (totalSkipped > 0) {
             System.out.println(totalSkipped + " branches skipped!");
@@ -771,9 +818,6 @@ public class Executor {
       BBorInstInfo currentInfo, MethodMetaData methData, int successorType, 
       Stack<BBorInstInfo> workList, int maxLoop, String valPrefix) {
     
-    // get all visited records
-    Hashtable<ISSABasicBlock, Integer> visitedBB = ((Formula) bbPreconds.get(0)[1]).getVisitedRecord();
-    
     List<Object[]> visitedList    = new ArrayList<Object[]>();
     List<Object[]> notvisitedList = new ArrayList<Object[]>();
     for (Object[] bbPrecond : bbPreconds) {
@@ -785,6 +829,8 @@ public class Executor {
         continue;
       }
       
+      // get all visited records
+      Hashtable<ISSABasicBlock, Integer> visitedBB = ((Formula) bbPrecond[1]).getVisitedRecord();      
       Integer count = visitedBB.get(basicBlock);
       if (count != null && count < maxLoop) {
         visitedList.add(bbPrecond);
@@ -819,8 +865,7 @@ public class Executor {
     }
   }
   
-  private Hashtable<ISSABasicBlock, Formula> decidePhis(BBorInstInfo instInfo, 
-      Iterator<SSAPhiInstruction> phiInsts, Formula postCond) {
+  private Hashtable<ISSABasicBlock, Formula> decidePhis(BBorInstInfo instInfo, Formula postCond) {
     Hashtable<ISSABasicBlock, Formula> newPreConds = new Hashtable<ISSABasicBlock, Formula>();
 
     // sort predecessors of the current block
@@ -838,6 +883,7 @@ public class Executor {
     });
     
     // go through all phi instructions of the block
+    Iterator<SSAPhiInstruction> phiInsts = instInfo.currentBB.iteratePhis();
     for (Iterator<SSAPhiInstruction> it = phiInsts; it.hasNext();) {
       SSAPhiInstruction phiInst = (SSAPhiInstruction) it.next();
       if (phiInst != null) {
@@ -852,6 +898,22 @@ public class Executor {
     }
     
     return newPreConds;
+  }
+  
+  private boolean phiDefsUseful(BBorInstInfo instInfo, Formula postCond) {
+    boolean useful = false;
+    
+    Iterator<SSAPhiInstruction> phiInsts = instInfo.currentBB.iteratePhis();
+    Hashtable<String, Reference> methodRefs = postCond.getRefMap().get(instInfo.callSites);
+    for (Iterator<SSAPhiInstruction> it = phiInsts; it.hasNext() && !useful;) {
+      SSAPhiInstruction phiInst = (SSAPhiInstruction) it.next();
+      if (phiInst != null) {
+        String def = AbstractHandler.getSymbol(phiInst.getDef(), 
+            instInfo.methData, instInfo.callSites, postCond.getDefMap());
+        useful = methodRefs != null && methodRefs.containsKey(def);
+      }
+    }
+    return useful;
   }
 
   // if lineNumber is <= 0, we return the exit block
