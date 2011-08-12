@@ -1405,26 +1405,9 @@ public class CompleteBackwardHandler extends AbstractHandler {
       String var = getSymbol(phiVarID, methData, callSites, newDefMap);
       Reference defRef = findOrCreateReference(def, "Unknown-Type", callSites, newRefMap);
       Reference phiRef = findOrCreateReference(var, "Unknown-Type", callSites, newRefMap);
-      
-      if (phiRef.getInstance().isBounded()) {
-        defRef.setInstancesValue(phiRef.getInstance());
-        defRef.putInstancesToOld();
-        // defRef not longer useful
-        if (defRef.canReferenceSetValue() && findReference(defRef.getName(), defRef.getCallSites(), newRefMap) != null) {
-          newRefMap.get(defRef.getCallSites()).remove(defRef.getName());
-        }
-      }
-      else {
-        try {
-          phiRef.assignInstance(defRef.getInstances());
-          defRef.putInstancesToOld();
-        } catch (Exception e) {e.printStackTrace();}
-        // put fromRef to refMap if defRef is in refMap
-        if (findReference(defRef.getName(), defRef.getCallSites(), newRefMap) != null) {
-          addRefToRefMap(newRefMap, phiRef);
-          newRefMap.get(defRef.getCallSites()).remove(defRef.getName());
-        }
-      }
+
+      // associate the two refs' instance together as the same one
+      assignInstance(defRef, phiRef, newRefMap, newDefMap);
     }
     
     return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
