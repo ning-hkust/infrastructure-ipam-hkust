@@ -73,6 +73,22 @@ public class DefAnalysisResult {
     oriDefs.addAll(defs);
   }
   
+  void addCondBranchDef(ConditionalBranchDefs condBranchDefs) {
+    ConditionalBranchDefs oriCondBranchDefs = m_defsForCondBranch.get(condBranchDefs.startingBlock);
+    if (oriCondBranchDefs == null) {
+      // add ConditionalBranchDefs to m_defsForCondBranch
+      m_defsForCondBranch.put(condBranchDefs.startingBlock, condBranchDefs);
+      
+      // add ConditionalBranchDefs to m_condDefsForMergingBB
+      List<ConditionalBranchDefs> condDefsList = m_condDefsForMergingBB.get(condBranchDefs.mergingBlock);
+      if (condDefsList == null) {
+        condDefsList = new ArrayList<ConditionalBranchDefs>();
+        m_condDefsForMergingBB.put(condBranchDefs.mergingBlock, condDefsList);
+      }
+      condDefsList.add(condBranchDefs);
+    }
+  }
+  
   void addCondBranchDef(List<ConditionalBranchDefs> currentCondBranchDefs, String def) {
     List<String> defs = new ArrayList<String>();
     defs.add(def);
