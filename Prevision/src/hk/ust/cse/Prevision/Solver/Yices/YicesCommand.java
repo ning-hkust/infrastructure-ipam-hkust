@@ -9,6 +9,7 @@ import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
 import hk.ust.cse.Wala.MethodMetaData;
 
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Hashtable;
@@ -168,10 +169,12 @@ public class YicesCommand implements ICommand {
       for (ConditionTerm term : terms) {
         Instance[] instances = new Instance[] {term.getInstance1(), term.getInstance2()};
         for (Instance instance : instances) {
-          String define = translateToDefString(instance, methData);
-          if (define.length() > 0 && !defined.contains(define.toString())) {
-            command.append(define);
-            defined.add(define.toString());
+          List<String> defines = translateToDefString(instance, methData);
+          for (String define : defines) {
+            if (define.length() > 0 && !defined.contains(define)) {
+              command.append(define);
+              defined.add(define);
+            }
           }
         }
       }
@@ -179,10 +182,11 @@ public class YicesCommand implements ICommand {
     return command.toString();
   }
   
-  private String translateToDefString(Instance instance, MethodMetaData methData) {
-    StringBuilder defString = new StringBuilder();
+  private List<String> translateToDefString(Instance instance, MethodMetaData methData) {
+    List<String> defStrings = new ArrayList<String>();
     
     if (instance.isAtomic()) {
+      StringBuilder defString = new StringBuilder();
       if (instance.isConstant()) {
         String value = instance.getValue();
         if (value.startsWith("##")) {
@@ -199,12 +203,16 @@ public class YicesCommand implements ICommand {
           defString.append(freshToDefStr(instance));
         }
       }
+      defStrings.add(defString.toString());
     }
     else if (instance.isBounded() /* not atomic but still bounded */) {
-      defString.append(translateToDefString(instance.getLeft(), methData));
-      defString.append(translateToDefString(instance.getRight(), methData));
+      List<String> defStrings1 = translateToDefString(instance.getLeft(), methData);
+      List<String> defStrings2 = translateToDefString(instance.getRight(), methData);
+      defStrings.addAll(defStrings1);
+      defStrings.addAll(defStrings2);
     }
     else if (!instance.isBounded()){ // field reference
+      StringBuilder defString = new StringBuilder();
       // check if it is a constant string field, some of these fields have known values
       int type = isConstStringField(instance);
       if (type >= 0) {
@@ -213,8 +221,9 @@ public class YicesCommand implements ICommand {
       else {
         defString.append(unboundToDefStr(instance, methData));
       }
+      defStrings.add(defString.toString());
     }
-    return defString.toString();
+    return defStrings;
   }
   
   private String unboundToDefStr(Instance instance, MethodMetaData methData) {

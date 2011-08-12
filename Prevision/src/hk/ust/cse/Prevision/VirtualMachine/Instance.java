@@ -237,50 +237,45 @@ public class Instance {
   }
   
   public Instance deepClone(Hashtable<Object, Object> cloneMap) {
-    Instance clone = null;
-    if (isAtomic()) {
-      clone = new Instance(m_value, m_type);
-    }
-    else if (isBounded()) {
-      Instance cloneLeft = (Instance) cloneMap.get(m_left);
-      if (cloneLeft == null) {
-        cloneLeft = m_left.deepClone(cloneMap);
-        cloneMap.put(m_left, cloneLeft);
+    // if it is already cloned, return the cloned instance
+    Instance clone = (Instance) cloneMap.get(this);
+    if (clone == null) {
+      if (isAtomic()) {
+        clone = new Instance(m_value, m_type);
       }
-      Instance cloneRight = (Instance) cloneMap.get(m_right);
-      if (cloneRight == null) {
-        cloneRight = m_right.deepClone(cloneMap);
-        cloneMap.put(m_right, cloneRight);
+      else if (isBounded()) {
+        clone = new Instance(m_left.deepClone(cloneMap), m_op, m_right.deepClone(cloneMap));
       }
-      clone = new Instance(cloneLeft, m_op, cloneRight);
-    }
-    else {
-      clone = new Instance();
-    }
-    
-    // since it is a clone, we don't use the auto-gen time stamps
-    clone.m_createTime   = m_createTime;
-    clone.m_setValueTime = m_setValueTime;
-    
-    // also clone fields
-    Enumeration<String> keys = m_fields.keys();
-    while (keys.hasMoreElements()) {
-      String key = (String) keys.nextElement();
-      Reference ref = m_fields.get(key).deepClone(cloneMap, clone);  
-      clone.m_fields.put(key, ref);
-    }
-    
-    // also clone the bounded values to this instance if any
-    if (m_boundValues != null) {
-      for (Instance instance : m_boundValues) {
-        // do not need to care about lastRef
-        clone.m_boundValues.add(instance.deepClone(cloneMap));
+      else {
+        clone = new Instance();
       }
-    }
 
-    // keep lastRef as it is already updated in afterInvocation/Reference.deepClone
-    clone.setLastReference(m_lastRef);
-
+      // since it is a clone, we don't use the auto-gen time stamps
+      clone.m_createTime   = m_createTime;
+      clone.m_setValueTime = m_setValueTime;
+      
+      // save the clone before cloning fields
+      cloneMap.put(this, clone);
+      
+      // also clone fields
+      Enumeration<String> keys = m_fields.keys();
+      while (keys.hasMoreElements()) {
+        String key = (String) keys.nextElement();
+        Reference ref = m_fields.get(key).deepClone(cloneMap, clone);  
+        clone.m_fields.put(key, ref);
+      }
+      
+      // also clone the bounded values to this instance if any
+      if (m_boundValues != null) {
+        for (Instance instance : m_boundValues) {
+          // do not need to care about lastRef
+          clone.m_boundValues.add(instance.deepClone(cloneMap));
+        }
+      }
+  
+      // keep lastRef as it is already updated in afterInvocation/Reference.deepClone
+      clone.setLastReference(m_lastRef);
+    }
     return clone;
   }
 

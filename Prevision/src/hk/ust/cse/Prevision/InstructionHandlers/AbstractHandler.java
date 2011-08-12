@@ -167,13 +167,15 @@ public abstract class AbstractHandler {
 
     String thisCallSite = String.format("%04d", invokeInst.getProgramCounter());
     
+    List<Reference> oldReferences = new ArrayList<Reference>();
+    
     // new reference of 'v1' (this) for the new method
     if (!invokeInst.isStatic() && ref != null) {
       if (findReference(ref.getName(), ref.getCallSites(), refMap) != null) {
         // substitute refRef by thisRef for callee method, take over all instances
         Reference thisRef = new Reference("v1", ref.getType(), 
             ref.getCallSites() + thisCallSite, ref.getInstances(), null);
-        ref.putInstancesToOld();
+        oldReferences.add(ref);
         addRefToRefMap(refMap, thisRef);
       }
     }
@@ -185,7 +187,7 @@ public abstract class AbstractHandler {
         String newParamName = "v" + (i + (invokeInst.isStatic() ? 1 : 2));
         Reference newParamRef = new Reference(newParamName, paramRef.getType(), 
             paramRef.getCallSites() + thisCallSite, paramRef.getInstances(), null);
-        paramRef.putInstancesToOld();
+        oldReferences.add(paramRef);
         addRefToRefMap(refMap, newParamRef);
       }
     }
@@ -196,9 +198,14 @@ public abstract class AbstractHandler {
       if (findReference(def.getName(), def.getCallSites(), refMap) != null) {
         Reference returnRef = new Reference("RET", def.getType(), 
             def.getCallSites() + thisCallSite, def.getInstances(), null);
-        def.putInstancesToOld();
+        oldReferences.add(def);
         addRefToRefMap(refMap, returnRef);
       }
+    }
+    
+    // put to old
+    for (Reference oldReference : oldReferences) {
+      oldReference.putInstancesToOld();
     }
   }
   
@@ -477,6 +484,35 @@ public abstract class AbstractHandler {
     return methodRefs != null && methodRefs.containsKey(refName);
   }
   
+  protected static final boolean containsFieldName(String fieldName, Formula formula) {
+    HashSet<String> allFieldNames = findAllFieldNames(formula);
+    return allFieldNames.contains(fieldName);
+  }
+  
+  private static HashSet<String> findAllFieldNames(Formula formula) {
+    List<String> allFieldNames = new ArrayList<String>();
+    Hashtable<String, Hashtable<String, Reference>> refMap = formula.getRefMap();
+    for (Hashtable<String, Reference> methodRefs : refMap.values()) {
+      for (Reference ref : methodRefs.values()) {
+        findAllFieldNames(ref, allFieldNames, false);
+      }
+    }
+    return new HashSet<String>(allFieldNames);
+  }
+  
+  private static void findAllFieldNames(Reference ref, List<String> allFieldNames, boolean isField) {
+    if (isField) {
+      allFieldNames.add(ref.getName());
+    }
+
+    for (Instance refInstance : ref.getInstances()) {
+      // recursive for instance's fields
+      for (Reference fieldRef : refInstance.getFields()) {
+        findAllFieldNames(fieldRef, allFieldNames, true);
+      }
+    }
+  }
+  
   protected static final void assignInstance(Reference defRef, Reference fromRef,
       Hashtable<String, Hashtable<String, Reference>> newRefMap, 
       Hashtable<String, Hashtable<String, Integer>> newDefMap) {
@@ -642,7 +678,7 @@ public abstract class AbstractHandler {
    * @return if variable "varID" is a constant, return the prefixed 
    * string representing that constant, otherwise return vVarID
    */
-  protected static final String getSymbol(int varID, MethodMetaData methData, 
+  public static final String getSymbol(int varID, MethodMetaData methData, 
       String callSites, Hashtable<String, Hashtable<String, Integer>> defCountMap) {
     
     String var = null;
@@ -685,9 +721,10 @@ public abstract class AbstractHandler {
   @SuppressWarnings("unchecked")
   protected static Formula setEquivalentInstances(Formula preCond, String callSites) {
     List<Object[]> prevSets = new ArrayList<Object[]>();
-
+    
     // phase 0: prepare the sequence of set
-    Collection<Reference> methodRefs = preCond.getRefMap().get(callSites).values();
+    Hashtable<String, Reference> callSitesRefs = preCond.getRefMap().get(callSites);
+    Collection<Reference> methodRefs = callSitesRefs != null ? callSitesRefs.values() : new ArrayList<Reference>();
     List<Object[]> setSequence = new ArrayList<Object[]>();
     for (Reference ref : methodRefs) {
       getSetSequence(new ArrayList<Instance>(), new ArrayList<Reference>(), ref, setSequence);
@@ -706,7 +743,7 @@ public abstract class AbstractHandler {
       // phase 1: find all set instances and corresponding paths
       Hashtable<String, List<Instance>> settedInstances = new Hashtable<String, List<Instance>>();
       for (Reference ref : methodRefs) { // sequence is not important in find
-        findSetInstances("", ref, settedInstances);
+        findSetInstances("", new ArrayList<Instance>(), ref, settedInstances);
       }
 //      for (List<Instance> instances : settedInstances.values()) {
 //        Utils.deleteRedundents(instances);
@@ -756,7 +793,7 @@ public abstract class AbstractHandler {
         // some reverts may not be necessary
         if (!prevSet[0].equals(lastSet[0]) || prevSet[1] == null || !prevSet[1].equals(lastSet[1])) {
           Long time = (Long) newlySettedTime.get(prevSet[0]);
-          if (time < (Long) prevSet[2] && time > (Long) ((Long[]) prevSet[3])[0]) {
+          if (time < (Long) prevSet[2] && time > (Long) ((Long[]) prevSet[3])[0] && false) { //XXX
             revertingIndices.add(prevMatchedIndex);
           }
 //          else {
@@ -861,8 +898,8 @@ public abstract class AbstractHandler {
     return preCond;
   }
 
-  private static void findSetInstances(String lastPath, Reference ref, 
-      Hashtable<String, List<Instance>> settedInstances) {
+  private static void findSetInstances(String lastPath, List<Instance> preInstances, 
+      Reference ref, Hashtable<String, List<Instance>> settedInstances) {
     
     // build current path
     StringBuilder str = new StringBuilder();
@@ -875,13 +912,16 @@ public abstract class AbstractHandler {
     List<Instance> pathInstances = null;
     List<Instance> refInstances = new ArrayList<Instance>(ref.getInstances());
     refInstances.addAll(ref.getOldInstances());
+    refInstances.removeAll(preInstances); // avoid recursions
     for (Instance refInstance : refInstances) {
       List<Instance> allInstances = (refInstance.isBounded()) ? 
                                       new ArrayList<Instance>() : 
                                       new ArrayList<Instance>(refInstance.getBoundedValues());
       allInstances.add(refInstance);
 
+      preInstances.add(refInstance);
       for (Instance instance : allInstances) {
+        
         if (instance.getSetValueTime() != -1) { // this instance is set/store
           if (pathInstances == null) {
             pathInstances = settedInstances.get(path);
@@ -897,9 +937,10 @@ public abstract class AbstractHandler {
         // recursive for instance's fields
         String path2 = instance.isBounded() ? instance.getValue() : path;
         for (Reference fieldRef : instance.getFields()) {
-          findSetInstances(path2, fieldRef, settedInstances);
+          findSetInstances(path2, preInstances, fieldRef, settedInstances);
         }
       }
+      preInstances.remove(preInstances.size() - 1);
     }
   }
 
@@ -908,6 +949,7 @@ public abstract class AbstractHandler {
     
     List<Instance> refInstances = new ArrayList<Instance>(ref.getInstances());
     refInstances.addAll(ref.getOldInstances());
+    refInstances.removeAll(preInstances); // avoid recursions
     for (Instance refInstance : refInstances) {
       sequence.add(new Object[] {refInstance, ref, preInstances, preReferences});
         

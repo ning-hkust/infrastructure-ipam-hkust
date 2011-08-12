@@ -1156,7 +1156,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
         return new Formula(preCond.getConditionList(), preCond.getRefMap(), preCond.getDefMap());
       }
       else {
-        return handle_invokenonstatic(postCond, inst, instInfo);
+        // an inner contradiction has been detected
+        return preCond;//handle_invokenonstatic(postCond, inst, instInfo);
       }
     case Formula.EXCEPTIONAL_SUCCESSOR:
       /* can only be NPE */
@@ -1241,8 +1242,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
       return new Formula(preCond.getConditionList(), preCond.getRefMap(), preCond.getDefMap());
     }
     else {
-      preCond = handle_invokestatic(postCond, inst, instInfo);
-      return preCond;
+      // an inner contradiction has been detected
+      return preCond;//handle_invokestatic(postCond, inst, instInfo);
     }
   }
   
@@ -1445,7 +1446,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // add new references to refMap
       Reference defRef = findOrCreateReference(def, "Unknown-Type", callSites, newRefMap);
       Reference valRef = findOrCreateReference(val, "Unknown-Type", callSites, newRefMap);
-
+      
       // associate the two refs' instance together as the same one
       assignInstance(defRef, valRef, newRefMap, newDefMap);
     }
@@ -1484,35 +1485,37 @@ public class CompleteBackwardHandler extends AbstractHandler {
       String fieldName = putfieldInst.getDeclaredField().getName().toString();
       Reference valRef = findOrCreateReference(val, fieldType, callSites, newRefMap);
       
-      // find the fieldRef
-      List<Reference> fieldRefs = refRef.getFieldReferences(fieldName);
-      if (fieldRefs.size() == 0) {
-        Reference fieldRef = new Reference(fieldName, fieldType, callSites, new Instance(), refRef.getInstance());
-        refRef.getInstance().setField(fieldName, fieldType, callSites, fieldRef.getInstances());
-        fieldRefs = refRef.getFieldReferences(fieldName);
-      }
-      // substitute
-      if (valRef.getInstance().isBounded()) {
-        for (Reference fieldRef : fieldRefs) {
-          fieldRef.setInstancesValue(valRef.getInstance());
-          fieldRef.putInstancesToOld();
+      if (containsFieldName(fieldName, postCond)) {
+        // find the fieldRef
+        List<Reference> fieldRefs = refRef.getFieldReferences(fieldName);
+        if (fieldRefs.size() == 0) {
+          Reference fieldRef = new Reference(fieldName, fieldType, callSites, new Instance(), refRef.getInstance());
+          refRef.getInstance().setField(fieldName, fieldType, callSites, fieldRef.getInstances());
+          fieldRefs = refRef.getFieldReferences(fieldName);
         }
-      }
-      else {
-        boolean assignable = findReference(val, callSites, newRefMap) != null;
-        for (Reference fieldRef : fieldRefs) {
-          if (assignable) {
-            try {
-              valRef.assignInstance(fieldRef.getInstances());
-            } catch (Exception e) {e.printStackTrace();}
+        // substitute
+        if (valRef.getInstance().isBounded()) {
+          for (Reference fieldRef : fieldRefs) {
+            fieldRef.setInstancesValue(valRef.getInstance());
+            fieldRef.putInstancesToOld();
           }
-          else {
-            valRef = new Reference(val, fieldType, callSites, fieldRef.getInstances(), null);
-            assignable = true;
-          }
-          fieldRef.putInstancesToOld();
         }
-        addRefToRefMap(newRefMap, valRef);
+        else {
+          boolean assignable = findReference(val, callSites, newRefMap) != null;
+          for (Reference fieldRef : fieldRefs) {
+            if (assignable) {
+              try {
+                valRef.assignInstance(fieldRef.getInstances());
+              } catch (Exception e) {e.printStackTrace();}
+            }
+            else {
+              valRef = new Reference(val, fieldType, callSites, fieldRef.getInstances(), null);
+              assignable = true;
+            }
+            fieldRef.putInstancesToOld();
+          }
+          addRefToRefMap(newRefMap, valRef);
+        }
       }
       break;
     case Formula.EXCEPTIONAL_SUCCESSOR:
@@ -1698,4 +1701,6 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
     return new Formula(postCond.getConditionList(), postCond.getAbstractMemory());
   }
+  
+  static int aa = 0;
 }

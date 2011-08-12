@@ -58,11 +58,13 @@ public class DefAnalyzerWrapper {
     List<ISSABasicBlock> skipToPreds  = new ArrayList<ISSABasicBlock>();
     List<ISSABasicBlock> notSkipPreds = new ArrayList<ISSABasicBlock>();
     
+    Hashtable<String, Reference> methodRefs = formula.getRefMap().get(callSites);
     List<ConditionalBranchDefs> skippables = findSkippableBranches(mergingBB, formula, callSites);
     for (ISSABasicBlock normPred : normPreds) {
       if (mergingBB.isExitBlock() && normPred.getLastInstructionIndex() >= 0 && 
-          normPred.getLastInstruction() instanceof SSAReturnInstruction) {
-        // if it is exit -> return, do not skip!
+          normPred.getLastInstruction() instanceof SSAReturnInstruction && 
+          methodRefs != null && methodRefs.containsKey("RET")) {
+        // if it is exit -> return, do not skip, we want to concretes 'RET' in return
         notSkipPreds.add(normPred);
       }
       else {

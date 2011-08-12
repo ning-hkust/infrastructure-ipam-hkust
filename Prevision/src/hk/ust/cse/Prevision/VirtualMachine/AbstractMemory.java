@@ -27,8 +27,8 @@ public class AbstractMemory {
   }
   
   public AbstractMemory deepClone(Hashtable<Object, Object> cloneMap) {
-    Hashtable<String, Hashtable<String, Reference>> newRefMap       = deepCloneRefMap(cloneMap);
-    Hashtable<String, Hashtable<String, Integer>> newDefMap         = deepCloneDefMap();
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = deepCloneRefMap(cloneMap);
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = deepCloneDefMap();
     return new AbstractMemory(newRefMap, newDefMap);
   }
   
@@ -47,13 +47,7 @@ public class AbstractMemory {
       Enumeration<String> keys2 = newMethodRefs.keys();
       while (keys2.hasMoreElements()) {
         String key2 = (String) keys2.nextElement();
-        Reference ref = newMethodRefs.get(key2);
-        Reference cloneRef = (Reference) cloneMap.get(ref);
-        if (cloneRef == null) {
-          cloneRef = ref.deepClone(cloneMap);
-          cloneMap.put(ref, cloneRef);
-        }
-        newMethodRefs.put(key2, cloneRef);
+        newMethodRefs.put(key2, newMethodRefs.get(key2).deepClone(cloneMap));
       }
       newRefMap.put(key, newMethodRefs);
     }
@@ -91,6 +85,6 @@ public class AbstractMemory {
     return m_refMap.hashCode() + m_defMap.hashCode();
   }
   
-  private Hashtable<String, Hashtable<String, Reference>>       m_refMap; // callSites -> {refName -> reference}
-  private Hashtable<String, Hashtable<String, Integer>>         m_defMap; // callSites -> {defName (no '@') -> defCount}
+  private Hashtable<String, Hashtable<String, Reference>> m_refMap; // callSites -> {refName -> reference}
+  private Hashtable<String, Hashtable<String, Integer>>   m_defMap; // callSites -> {defName (no '@') -> defCount}
 }
