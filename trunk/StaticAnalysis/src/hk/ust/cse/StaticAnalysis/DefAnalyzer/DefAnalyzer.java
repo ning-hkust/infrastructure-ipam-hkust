@@ -163,9 +163,17 @@ public class DefAnalyzer {
         
         IR ir2 = Jar2IR.getIR(m_walaAnalyzer, invokeInst.getDeclaredTarget().getSignature());
         if (ir2 != null) {
-          // recursively call getAllDefs
-          DefAnalysisResult invokeResult = new DefAnalysisResult();
-          getAllDefs(ir2, curDepth + 1, maxDepth, invokeResult);
+          HashSet<String> defs = null;
+          if (curDepth < maxDepth) {
+            // try to get cached result first
+            defs = result.getMethodDefs(ir2.getMethod());
+            if (defs == null) {
+              // recursively call getAllDefs
+              DefAnalysisResult invokeResult = new DefAnalysisResult();
+              getAllDefs(ir2, curDepth + 1, maxDepth, invokeResult);
+              defs = invokeResult.getMethodDefs(ir2.getMethod());
+            }
+          }
           
           // translate result
           List<String> methodDefs = new ArrayList<String>();
@@ -174,7 +182,6 @@ public class DefAnalyzer {
             String calleeVarName    = "v" + (j + 1);
             String[] callerVarNames = getVarName(methData, invokeInst.getUse(j), varMappings);
             
-            HashSet<String> defs = invokeResult.getMethodDefs(ir2.getMethod());
             if (defs != null) {
               for (String def : defs) {
                 int index = def.indexOf(')');
