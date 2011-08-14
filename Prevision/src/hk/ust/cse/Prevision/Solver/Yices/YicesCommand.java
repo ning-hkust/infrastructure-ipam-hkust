@@ -18,7 +18,7 @@ import java.util.List;
 public class YicesCommand implements ICommand {
 
   @Override
-  public String translateToCommand(Formula formula, MethodMetaData methData) {
+  public String translateToCommand(Formula formula, MethodMetaData methData, boolean keepUnboundedField) {
     Hashtable<String, Hashtable<String, Reference>> refMap = formula.getRefMap();
     
     Hashtable<String, Reference> references = null;
@@ -30,14 +30,14 @@ public class YicesCommand implements ICommand {
     }
     
     StringBuilder command = new StringBuilder();
-    command.append(defineTypes(references, formula.getConditionList()));
+    command.append(defineTypes(references, formula.getConditionList(), methData));
     command.append(defineVariables(formula.getConditionList(), methData));
-    command.append(translateConditions(formula.getConditionList(), methData));
+    command.append(translateConditions(formula.getConditionList(), methData, keepUnboundedField));
     command.append("(check)\n");
     return command.toString();
   }
   
-  private String defineTypes(Hashtable<String, Reference> references, List<Condition> conditionList) {
+  private String defineTypes(Hashtable<String, Reference> references, List<Condition> conditionList, MethodMetaData methData) {
     StringBuilder command = new StringBuilder();
     
     // add primitive define-type statements
@@ -86,8 +86,12 @@ public class YicesCommand implements ICommand {
             }
             else if (!instance.isBounded()) { // Ljava/lang/System.out
               Reference lastRef = instance.getLastReference();
-              if (lastRef != null && !def_types.containsKey(lastRef.getType())) {
-                def_types.put(lastRef.getType(), "");
+              if (lastRef != null) {
+                Reference paramRef = tryCreateParamReference(methData, lastRef.getLongName()); // lastRef may be a parameter
+                String varType = paramRef != null ? paramRef.getType() : lastRef.getType();
+                if (!def_types.containsKey(varType)) {
+                  def_types.put(varType, "");
+                }
               }
             }
           }
@@ -345,31 +349,32 @@ public class YicesCommand implements ICommand {
     return result.toString();
   }
   
-  private String translateConditions(List<Condition> conditionList, MethodMetaData methData) {
+  private String translateConditions(List<Condition> conditionList, MethodMetaData methData, boolean keepUnboundedField) {
     StringBuilder command = new StringBuilder();
     
     HashSet<String> defined = new HashSet<String>();
     for (Condition condition : conditionList) {
       StringBuilder define = new StringBuilder();
       define.append("(assert ");
-      define.append(translateConditionTerms(condition.getConditionTerms(), methData));
+      define.append(translateConditionTerms(condition.getConditionTerms(), methData, keepUnboundedField));
       define.append(")\n");
-      if (define.length() > 0 && !defined.contains(define.toString())) {
-        command.append(define);
-        defined.add(define.toString());
+      String defineStr = define.toString();
+      if (defineStr.length() > 0 && !defined.contains(defineStr) && !defineStr.contains("%%UnboundField%%")) {
+        command.append(defineStr);
+        defined.add(defineStr);
       }
     }
     return command.toString();
   }
   
-  private String translateConditionTerms(List<ConditionTerm> terms, MethodMetaData methData) {
+  private String translateConditionTerms(List<ConditionTerm> terms, MethodMetaData methData, boolean keepUnboundedField) {
     StringBuilder command = new StringBuilder();
     
     command.append((terms.size() > 1) ? "(or " : "");
     for (int i = 0, size = terms.size(); i < size; i++) {
       ConditionTerm term = terms.get(i);
-      String instance1Str = translateInstance(term.getInstance1(), methData);
-      String instance2Str = translateInstance(term.getInstance2(), methData);
+      String instance1Str = translateInstance(term.getInstance1(), methData, keepUnboundedField);
+      String instance2Str = translateInstance(term.getInstance2(), methData, keepUnboundedField);
       
       if (!instance1Str.equals("NaN") && !instance2Str.equals("NaN")) {
         command.append("(");
@@ -413,18 +418,27 @@ public class YicesCommand implements ICommand {
   }
 
   
-  private String translateInstance(Instance instance, MethodMetaData methData) {
+  private String translateInstance(Instance instance, MethodMetaData methData, boolean keepUnboundedField) {
     StringBuilder ret = new StringBuilder();
     
     // if instance is not bound, try to show its last reference name
     if (!instance.isBounded()) {
       String lastRefName = null;
-      String callSites = null;
       Reference lastRef = instance.getLastReference();
       if (lastRef != null) {
         Reference paramRef = tryCreateParamReference(methData, lastRef.getLongName());
-        callSites = (lastRef.getCallSites().length() > 0) ? "<" + lastRef.getCallSites() + ">" : "";
-        lastRefName = (paramRef != null) ? callSites + paramRef.getName() : lastRef.getLongNameWithCallSites();
+        if (paramRef != null) {
+          String callSites = (lastRef.getCallSites().length() > 0) ? "<" + lastRef.getCallSites() + ">" : "";
+          lastRefName = callSites + paramRef.getName();
+        }
+        else if (keepUnboundedField || lastRef.getDeclaringInstance() == null) {
+          lastRefName = lastRef.getLongNameWithCallSites();
+        }
+        else {
+          // since fields could be assigned many times at different time
+          // we may not want to compare fields that are not yet bounded
+          lastRefName = "%%UnboundField%%";
+        }
       }
       ret.append(lastRefName == null ? "{Unbounded}" : Utils.filterChars(lastRefName));
     }
@@ -437,8 +451,8 @@ public class YicesCommand implements ICommand {
       }
     }
     else {
-      String leftStr  = translateInstance(instance.getLeft(), methData);
-      String rightStr = translateInstance(instance.getRight(), methData);
+      String leftStr  = translateInstance(instance.getLeft(), methData, keepUnboundedField);
+      String rightStr = translateInstance(instance.getRight(), methData, keepUnboundedField);
       
       // watch out for NaN, NaN +-*/ any number is still NaN
       if (leftStr.equals("NaN") || rightStr.equals("NaN")) {
@@ -500,7 +514,7 @@ public class YicesCommand implements ICommand {
       int index = param.indexOf(')');
       String paramType = param.substring(1, index);
       String paramName = param.substring(index + 1);
-      paramRef = new Reference(paramName, paramType, "", new Instance() /* just a dummy */, null);
+      paramRef = new Reference(paramName, paramType, "", new Instance("") /* just a dummy */, null);
     }
     return paramRef;
   }

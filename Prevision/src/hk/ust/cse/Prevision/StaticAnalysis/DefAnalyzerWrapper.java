@@ -15,49 +15,86 @@ import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 
+import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
-import com.ibm.wala.ssa.SSACFG;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 
 public class DefAnalyzerWrapper {
   
-  public DefAnalyzerWrapper(String appJar) throws Exception {
-    m_defAnalyzer = new DefAnalyzer(appJar);
+  public DefAnalyzerWrapper(String appJar, int maxLoopDepth) throws Exception {
+    m_defAnalyzer  = new DefAnalyzer(appJar);
+    m_maxLoopDepth = maxLoopDepth;
+  }
+
+  // find defs at once for all methods within the including name
+  public void computeDef(List<String> inclNames) {
+    m_lastResult = m_defAnalyzer.findAllDefs(m_maxLoopDepth, inclNames);
   }
   
-  public void addIncludeName(String name) {
-    m_defAnalyzer.addIncludeName(name);
-  }
-  
-  public void computeDef(int maxLoopDepth) {
-    m_lastResult = m_defAnalyzer.findAllDefs(maxLoopDepth);
+  /**
+   * @return if is skip-able, return the method entry block, null otherwise
+   */
+  public ISSABasicBlock findSkipToBasicBlocks(IR ir, Formula formula) {
+    // check if we have already computed defs for this method
+    if (m_lastResult == null) {
+      m_lastResult = new DefAnalysisResult();
+    }
+    if (m_lastResult.getMethodDefs(ir.getMethod()) == null) {
+      m_defAnalyzer.findAllDefs(ir, m_maxLoopDepth, m_lastResult);
+    }
+    
+    HashSet<String> methodDefs = m_lastResult.getMethodDefs(ir.getMethod());
+    HashSet<String> fieldNamesInFormula = findAllFieldNames(formula);
+    
+    ISSABasicBlock skipTo = ir.getControlFlowGraph().entry();
+    for (String def : methodDefs) {
+      int index = def.lastIndexOf('.');
+      if (index >= 0) {
+        // get the last field name
+        String fieldName = def.substring(index + 1);
+        if (fieldNamesInFormula.contains(fieldName)) {
+          skipTo = null;
+          break;
+        }
+      }
+    }
+    return skipTo;
   }
 
   /**
    * @return if is skip-able, return the skip to block, null otherwise
    */
-  public ISSABasicBlock findSkipToBasicBlocks(SSACFG cfg, ISSABasicBlock mergingBB, 
+  public ISSABasicBlock findSkipToBasicBlocks(IR ir, ISSABasicBlock mergingBB, 
       ISSABasicBlock normPred, Formula formula, String callSites) {
     
-    List<ISSABasicBlock>[] preds = findSkipToBasicBlocks(cfg, mergingBB, 
+    List<ISSABasicBlock>[] preds = findSkipToBasicBlocks(ir, mergingBB, 
         Arrays.asList(new ISSABasicBlock[] {normPred}), formula, callSites);
     return (preds[0].size() > 0) ? preds[0].get(0) : null;
   }
   
-  public List<ISSABasicBlock>[] findSkipToBasicBlocks(SSACFG cfg, ISSABasicBlock mergingBB, 
+  public List<ISSABasicBlock>[] findSkipToBasicBlocks(IR ir, ISSABasicBlock mergingBB, 
       Formula formula, String callSites) {
     
-    Collection<ISSABasicBlock> normPreds = cfg.getNormalPredecessors(mergingBB);
-    return findSkipToBasicBlocks(cfg, mergingBB, normPreds, formula, callSites);
+    Collection<ISSABasicBlock> normPreds = ir.getControlFlowGraph().getNormalPredecessors(mergingBB);
+    return findSkipToBasicBlocks(ir, mergingBB, normPreds, formula, callSites);
   }
   
   @SuppressWarnings("unchecked")
-  public List<ISSABasicBlock>[] findSkipToBasicBlocks(SSACFG cfg, ISSABasicBlock mergingBB, 
+  public List<ISSABasicBlock>[] findSkipToBasicBlocks(IR ir, ISSABasicBlock mergingBB, 
       Collection<ISSABasicBlock> normPreds, Formula formula, String callSites) {
     
     List<ISSABasicBlock> skipToPreds  = new ArrayList<ISSABasicBlock>();
     List<ISSABasicBlock> notSkipPreds = new ArrayList<ISSABasicBlock>();
     
+    // check if we have already computed defs for this method
+    if (m_lastResult == null) {
+      m_lastResult = new DefAnalysisResult();
+    }
+    if (m_lastResult.getMethodDefs(ir.getMethod()) == null) {
+      m_defAnalyzer.findAllDefs(ir, m_maxLoopDepth, m_lastResult);
+    }
+    
+    // find skippable
     Hashtable<String, Reference> methodRefs = formula.getRefMap().get(callSites);
     List<ConditionalBranchDefs> skippables = findSkippableBranches(mergingBB, formula, callSites);
     for (ISSABasicBlock normPred : normPreds) {
@@ -122,7 +159,7 @@ public class DefAnalyzerWrapper {
       
       int index = def.lastIndexOf('.');
       if (index < 0) {
-        if (methodRefs.containsKey(def)) {
+        if (methodRefs != null && methodRefs.containsKey(def)) {
           isSkippable = false;
           break;
         }
@@ -139,7 +176,7 @@ public class DefAnalyzerWrapper {
     return isSkippable;
   }
   
-  public HashSet<String> findAllFieldNames(Formula formula) {
+  private HashSet<String> findAllFieldNames(Formula formula) {
     List<String> allFieldNames = new ArrayList<String>();
     Hashtable<String, Hashtable<String, Reference>> refMap = formula.getRefMap();
     for (Hashtable<String, Reference> methodRefs : refMap.values()) {
@@ -185,7 +222,8 @@ public class DefAnalyzerWrapper {
       skippableList.add(condDefs);
     }
   }
-  
+
+  private final int         m_maxLoopDepth;
   private final DefAnalyzer m_defAnalyzer;
   private DefAnalysisResult m_lastResult;
 }

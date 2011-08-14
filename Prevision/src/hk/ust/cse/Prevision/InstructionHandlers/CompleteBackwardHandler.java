@@ -161,7 +161,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // get the array length field
       List<Reference> lenRefs = arrayRefRef.getFieldReferences("length");
       if (lenRefs.size() == 0) {
-        Reference lenRef = new Reference("length", "I", callSites, new Instance(), arrayRefRef.getInstance());
+        Reference lenRef = new Reference("length", "I", callSites, new Instance(callSites), arrayRefRef.getInstance());
         arrayRefRef.getInstance().setField("length", "I", callSites, lenRef.getInstances());
         lenRefs = arrayRefRef.getFieldReferences("length");
       }
@@ -283,7 +283,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // get the array length field
       List<Reference> lenRefs = arrayRefRef.getFieldReferences("length");
       if (lenRefs.size() == 0) {
-        Reference lenRef = new Reference("length", "I", callSites, new Instance(), arrayRefRef.getInstance());
+        Reference lenRef = new Reference("length", "I", callSites, new Instance(callSites), arrayRefRef.getInstance());
         arrayRefRef.getInstance().setField("length", "I", callSites, lenRef.getInstances());
         lenRefs = arrayRefRef.getFieldReferences("length");
       }
@@ -972,7 +972,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
             invocation.append(", ");
           }
         }
-        invocation.append(");");
+        invocation.append(")");
         
         // create new reference of def
         Reference invocationRef = findOrCreateReference(invocation.toString(), invocationType, callSites, newRefMap);
@@ -1042,7 +1042,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
           invocation.append(", ");
         }
       }
-      invocation.append(");");
+      invocation.append(")");
       
       // create new reference of def
       Reference invocationRef = findOrCreateReference(invocation.toString(), invocationType, callSites, newRefMap);
@@ -1311,10 +1311,10 @@ public class CompleteBackwardHandler extends AbstractHandler {
         if (defRef.getInstances().size() == 0) {
           try {
             // at least one instance to hold the field
-            defRef.assignInstance(new Instance());
+            defRef.assignInstance(new Instance(callSites));
           } catch (Exception e) {e.printStackTrace();}
         }
-        Reference lenRef = new Reference("length", "I", callSites, new Instance(), defRef.getInstance());
+        Reference lenRef = new Reference("length", "I", callSites, new Instance(callSites), defRef.getInstance());
         defRef.getInstance().setField("length", "I", callSites, lenRef.getInstances());
         lenRefs = defRef.getFieldReferences("length");
       }
@@ -1362,10 +1362,10 @@ public class CompleteBackwardHandler extends AbstractHandler {
             if (defRef.getInstances().size() == 0) {
               try {
                 // at least one instance to hold the field
-                defRef.assignInstance(new Instance());
+                defRef.assignInstance(new Instance(callSites));
               } catch (Exception e) {e.printStackTrace();}
             }
-            Reference fieldRef = new Reference(fieldName, fieldType, callSites, new Instance(), defRef.getInstance());
+            Reference fieldRef = new Reference(fieldName, fieldType, callSites, new Instance(callSites), defRef.getInstance());
             defRef.getInstance().setField(fieldName, fieldType, callSites, fieldRef.getInstances());
             fieldRefs = defRef.getFieldReferences(fieldName);
           }
@@ -1472,7 +1472,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
         // find the fieldRef
         List<Reference> fieldRefs = refRef.getFieldReferences(fieldName);
         if (fieldRefs.size() == 0) {
-          Reference fieldRef = new Reference(fieldName, fieldType, callSites, new Instance(), refRef.getInstance());
+          Reference fieldRef = new Reference(fieldName, fieldType, callSites, new Instance(callSites), refRef.getInstance());
           refRef.getInstance().setField(fieldName, fieldType, callSites, fieldRef.getInstances());
           fieldRefs = refRef.getFieldReferences(fieldName);
         }
@@ -1602,17 +1602,20 @@ public class CompleteBackwardHandler extends AbstractHandler {
       }
     }
     else {
+      List<Integer> caseIndices = new ArrayList<Integer>();
       for (int i = 1; i < casesAndLables.length; i += 2) {
         // found the switch case that leads to the label
         if (casesAndLables[i] == label) {
-          // cases should always be constant number
-          String caseNum = "#!" + casesAndLables[i - 1];
-          conditionTerms = new ArrayList<ConditionTerm>();
-          conditionTerms.add(new ConditionTerm(var1Ref.getInstance(), Comparator.OP_EQUAL, new Instance(caseNum, "I"))); 
-          conditionList.add(new Condition(conditionTerms));
-          break;
+          caseIndices.add(i);
         }
       }
+      conditionTerms = new ArrayList<ConditionTerm>();
+      for (Integer index : caseIndices) {
+        // cases should always be constant number
+        String caseNum = "#!" + casesAndLables[index - 1];
+        conditionTerms.add(new ConditionTerm(var1Ref.getInstance(), Comparator.OP_EQUAL, new Instance(caseNum, "I"))); 
+      }
+      conditionList.add(new Condition(conditionTerms));
     }
     // add new references to refMap
     addRefToRefMap(newRefMap, var1Ref);
