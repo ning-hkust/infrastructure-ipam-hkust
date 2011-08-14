@@ -9,35 +9,38 @@ public class Instance {
   
   public enum INSTANCE_OP {ADD, AND, SUB, MUL, DIV, OR, REM, XOR, SHL, SHR, USHR}
   
-  public Instance() { // initial unknown instance
-    m_createTime   = System.nanoTime();
-    m_setValueTime = -1;
-    m_boundValues  = new HashSet<Instance>();
-    m_fields       = new Hashtable<String, Reference>();
+  public Instance(String initCallSites) { // initial unknown instance
+    m_createTime    = System.nanoTime();
+    m_setValueTime  = -1;
+    m_initCallSites = initCallSites;
+    m_boundValues   = new HashSet<Instance>();
+    m_fields        = new Hashtable<String, Reference>();
   }
   
   /**
    * @param value: if it is a constant: #! is num, ## is string, #? is unknown, also null/true/false
    */
   public Instance(String value, String type) { // initially known instance, immediately bounded
-    m_value        = value;
-    m_type         = type;
+    m_value         = value;
+    m_type          = type;
     
-    m_createTime   = System.nanoTime();
-    m_setValueTime = m_createTime; // value is set when create
-    m_boundValues  = null; // this is already bounded
-    m_fields       = new Hashtable<String, Reference>();
+    m_createTime    = System.nanoTime();
+    m_setValueTime  = m_createTime; // value is set when create
+    m_initCallSites = null;
+    m_boundValues   = null;         // this is already bounded
+    m_fields        = new Hashtable<String, Reference>();
   }
   
   public Instance(Instance left, INSTANCE_OP op, Instance right) {
-    m_left         = left;
-    m_right        = right;
-    m_op           = op;
+    m_left          = left;
+    m_right         = right;
+    m_op            = op;
 
-    m_createTime   = System.nanoTime();
-    m_setValueTime = m_createTime; // value is set when create
-    m_boundValues  = null; // this is already bounded
-    m_fields       = new Hashtable<String, Reference>();
+    m_createTime    = System.nanoTime();
+    m_setValueTime  = m_createTime; // value is set when create
+    m_initCallSites = null;
+    m_boundValues   = null;         // this is already bounded
+    m_fields        = new Hashtable<String, Reference>();
   }
   
   public void setValue(Instance instance) throws Exception {
@@ -147,6 +150,10 @@ public class Instance {
     return m_lastRef;
   }
   
+  public String getInitCallSites() {
+    return m_initCallSites;
+  }
+  
   public String getValueWithoutPrefix() {
     if (m_value.startsWith("#")) {
       return m_value.substring(2);
@@ -247,7 +254,7 @@ public class Instance {
         clone = new Instance(m_left.deepClone(cloneMap), m_op, m_right.deepClone(cloneMap));
       }
       else {
-        clone = new Instance();
+        clone = new Instance(m_initCallSites);
       }
 
       // since it is a clone, we don't use the auto-gen time stamps
@@ -287,6 +294,7 @@ public class Instance {
   private Reference                          m_lastRef;     // the lastRef is only useful when the instance not bounded
   private long                               m_createTime;
   private long                               m_setValueTime;
+  private final String                       m_initCallSites;
   private final HashSet<Instance>            m_boundValues; // the boundValues is only useful when the instance not bounded
   private final Hashtable<String, Reference> m_fields;
 }

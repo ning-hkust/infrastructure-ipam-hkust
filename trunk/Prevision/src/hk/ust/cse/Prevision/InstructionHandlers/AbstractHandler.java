@@ -250,7 +250,7 @@ public abstract class AbstractHandler {
           if (newParamRef != null) {
             Reference paramRef = findReference(paramName, callSites, refMap);
             if (paramRef == null) { // newParamRef is add during callee method
-              paramRef = new Reference(paramName, newParamRef.getType(), callSites, new Instance(), null);
+              paramRef = new Reference(paramName, newParamRef.getType(), callSites, new Instance(callSites), null);
               if (paramRef.getInstance().isBounded() /* constant such as #!0 */ ) {
                 newParamRef.setInstancesValue(paramRef.getInstance());
                 newParamRef.putInstancesToOld();
@@ -461,7 +461,7 @@ public abstract class AbstractHandler {
     Reference ref = findReference(refName, callSites, refMap);
     // cannot find, create a new one
     if (ref == null) {
-      ref = new Reference(refName, refType, callSites, new Instance() /* unbounded instance */, declInstance);
+      ref = new Reference(refName, refType, callSites, new Instance(callSites) /* unbounded instance */, declInstance);
     }
     return ref;
   }
@@ -995,7 +995,7 @@ public abstract class AbstractHandler {
 
       if (nearestSetted != null) {
         try {
-          if (callSites.length() > 0 && !ref.canReferenceSetValue()) {
+          if (callSites.length() > 0 && !ref.canReferenceSetValue() && !refInstance.getInitCallSites().equals(callSites)) {
             ret[0] = refInstance.storeValue(nearestSetted);
             //System.err.println("Store: " + path + ": " + nearestSetted);
           }

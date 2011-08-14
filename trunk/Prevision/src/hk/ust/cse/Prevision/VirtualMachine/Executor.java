@@ -66,7 +66,8 @@ public class Executor {
     public boolean   inclStartingInst       = false;
     public boolean   saveNotSatResults      = false;
     public boolean   checkOnTheFly          = true;
-    public boolean   pruneUselessBranches   = true;
+    public boolean   skipUselessBranches    = true;
+    public boolean   skipUselessMethods     = true;
     public int       maxDispatchTargets     = Integer.MAX_VALUE;
     public int       maxRetrieve            = 1;
     public int       maxSmtCheck            = 1000;
@@ -416,10 +417,10 @@ public class Executor {
             cfg.getExceptionalPredecessors(infoItem.currentBB);
           
           // on the fly checks
+          Hashtable<String, Reference> methodRefs = precond.getRefMap().get(infoItem.callSites);
           if (optAndStates.checkOnTheFly && normPredBB.size() > 1) {
-            Hashtable<String, Reference> methodRefs = precond.getRefMap().get(infoItem.callSites);
             if (!infoItem.currentBB.isExitBlock() || methodRefs == null || !methodRefs.containsKey("RET")) {
-              if (m_smtChecker.smtCheck(precond, methData) == Formula.SMT_RESULT.UNSAT) {
+              if (m_smtChecker.smtCheck(precond, methData, false) == Formula.SMT_RESULT.UNSAT) {
                 System.out.println("Inner contradiction developed, discard block.");
                 continue;
               }
@@ -441,18 +442,17 @@ public class Executor {
 //                Formula.EXCEPTIONAL_SUCCESSOR, dfsStack, optAndStates.maxLoop, valPrefix);            
 //          }
           
-          if (infoItem.currentBB.getNumber() == 24) {
-            System.out.println("aa");
+          // try to skip method
+          if (optAndStates.skipUselessMethods && infoItem.currentBB.isExitBlock() && 
+              (methodRefs == null || !methodRefs.containsKey("RET"))) {
+            ISSABasicBlock skipToEntryBB = m_defAnalyzer.findSkipToBasicBlocks(methData.getIR(), precond);
+            if (skipToEntryBB != null) {
+              normPredBB.clear();
+              normPredBB.add(skipToEntryBB);
+              System.out.println(methData.getMethodSignature() + " is skipped, not useful!");
+            }
           }
-          if (infoItem.currentBB.getNumber() == 10) {
-            System.out.println("aa");
-          }
-          if (infoItem.currentBB.getNumber() == 4) {
-            System.out.println("aa");
-          }
-          if (infoItem.currentBB.getNumber() == 25) {
-            System.out.println("aa");
-          }
+          
           // decide phis if any
           Hashtable<ISSABasicBlock, Formula> phiedPreConds = null;
           boolean phiDefsUseful = phiDefsUseful(infoItem, precond);
@@ -476,8 +476,8 @@ public class Executor {
           while (keys.hasMoreElements()) {
             ISSABasicBlock pred  = keys.nextElement();
             Formula phiedPreCond = phiedPreConds.get(pred);
-            if (optAndStates.pruneUselessBranches && (!phiDefsUseful || (false && phiedPreConds.size() == 2))) {
-              ISSABasicBlock skipToCondBB = m_defAnalyzer.findSkipToBasicBlocks(cfg, 
+            if (optAndStates.skipUselessBranches && (!phiDefsUseful || (false && phiedPreConds.size() == 2))) {
+              ISSABasicBlock skipToCondBB = m_defAnalyzer.findSkipToBasicBlocks(methData.getIR(), 
                   infoItem.currentBB, pred, phiedPreCond, infoItem.callSites);
               if (skipToCondBB != null) {
                 if (!phiDefsUseful) {
@@ -534,7 +534,7 @@ public class Executor {
           System.err.println(msg);
           throw new InvalidStackTraceException(msg);
         }
-        else if (curInvokeDepth != 0 || !callStack.isOutMostCall()) {
+        else if (curInvokeDepth != 0 || !callStack.isOutMostCall()) {          
           // we only do smtCheck() if it's not inside an invocation and
           // it's at the outermost invocation
           execResult.addSatisfiable(precond);
@@ -547,7 +547,7 @@ public class Executor {
           printPropagationPath(infoItem);
           
           // use SMT Solver to check precond and obtain a model
-          SMT_RESULT smtResult = m_smtChecker.smtCheck(precond, methData);
+          SMT_RESULT smtResult = m_smtChecker.smtCheck(precond, methData, true);
           precond.setSolverResult(m_smtChecker);
           
           // limit maximum smt checks
@@ -621,7 +621,7 @@ public class Executor {
     // for skipToBB, the last instruction is always conditional branch, skip!
     int currInstIndex  = infoItem.currentBB.getLastInstructionIndex() - (infoItem.isSkipToBB ? 1 : 0);
     int firstInstIndex = infoItem.currentBB.getFirstInstructionIndex();
-    while (currInstIndex >= 0 && currInstIndex >= firstInstIndex) {
+    while (currInstIndex >= 0 && currInstIndex >= firstInstIndex && preCond != null) {
       // get instruction
       SSAInstruction inst = allInsts[currInstIndex];
 

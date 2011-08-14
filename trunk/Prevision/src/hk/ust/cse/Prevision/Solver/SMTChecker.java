@@ -26,12 +26,12 @@ public class SMTChecker {
     }
   }
   
-  public SMT_RESULT smtCheck(Formula formula, MethodMetaData methData /* necessary for param name */) {    
+  public SMT_RESULT smtCheck(Formula formula, MethodMetaData methData /* for param name */, boolean keepUnboundedField) {    
     
     SMT_RESULT smtResult = null;
     try {
       // generate SMT Solver inputs
-      String command = m_command.translateToCommand(formula, methData);
+      String command = m_command.translateToCommand(formula, methData, keepUnboundedField);
       
       if (false /*simplify()*/ /* try simplify() first */) {
         smtResult = SMT_RESULT.UNSAT;
