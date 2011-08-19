@@ -58,6 +58,14 @@ public class DefAnalysisResult {
     m_condDefsForMergingBB = new Hashtable<ISSABasicBlock, List<ConditionalBranchDefs>>();
   }
   
+  void addMethodDef(IMethod method) {
+    HashSet<String> oriDefs = m_methodDefs.get(method);
+    if (oriDefs == null) {
+      oriDefs = new HashSet<String>();
+      m_methodDefs.put(method, oriDefs);
+    }
+  }
+  
   void addMethodDef(IMethod method, String def) {
     List<String> defs = new ArrayList<String>();
     defs.add(def);
