@@ -5,13 +5,18 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Hashtable;
 
+import com.ibm.wala.ssa.ISSABasicBlock;
+
 public class Instance {
   
   public enum INSTANCE_OP {ADD, AND, SUB, MUL, DIV, OR, REM, XOR, SHL, SHR, USHR}
   
-  public Instance(String initCallSites) { // initial unknown instance
+  public Instance(String initCallSites, ISSABasicBlock createBlock) { // initial unknown instance
     m_createTime    = System.nanoTime();
     m_setValueTime  = -1;
+    m_createBlock   = createBlock;
+    m_setValueBlock = null;
+    m_setValueBy    = null;
     m_initCallSites = initCallSites;
     m_boundValues   = new HashSet<Instance>();
     m_fields        = new Hashtable<String, Reference>();
@@ -20,36 +25,36 @@ public class Instance {
   /**
    * @param value: if it is a constant: #! is num, ## is string, #? is unknown, also null/true/false
    */
-  public Instance(String value, String type) { // initially known instance, immediately bounded
+  public Instance(String value, String type, ISSABasicBlock createBlock) { // initially known instance, immediately bounded
     m_value         = value;
     m_type          = type;
     
     m_createTime    = System.nanoTime();
     m_setValueTime  = m_createTime; // value is set when create
+    m_createBlock   = createBlock;
+    m_setValueBlock = createBlock;  // value is set when create
+    m_setValueBy    = null;
     m_initCallSites = null;
     m_boundValues   = null;         // this is already bounded
     m_fields        = new Hashtable<String, Reference>();
   }
   
-  public Instance(Instance left, INSTANCE_OP op, Instance right) {
-    m_left          = left;
-    m_right         = right;
-    m_op            = op;
-
-    m_createTime    = System.nanoTime();
-    m_setValueTime  = m_createTime; // value is set when create
-    m_initCallSites = null;
-    m_boundValues   = null;         // this is already bounded
-    m_fields        = new Hashtable<String, Reference>();
+  public Instance(Instance left, INSTANCE_OP op, Instance right, ISSABasicBlock createBlock) {
+    this(null, null, createBlock);
+    
+    m_left  = left;
+    m_right = right;
+    m_op    = op;
   }
   
   public void setValue(Instance instance) throws Exception {
     if (instance.isAtomic()) {
-      setValue(instance.getValue(), instance.getType());
+      setValue(instance.getValue(), instance.getType(), instance.getSetValueBlock());
     }
     else {
-      setValue(instance.getLeft(), instance.getOp(), instance.getRight());
+      setValue(instance.getLeft(), instance.getOp(), instance.getRight(), instance.getSetValueBlock());
     }
+    m_setValueBy = instance;
   }
   
   // should only be called by setEquivalentInstances
@@ -71,27 +76,29 @@ public class Instance {
     return added;
   }
   
-  private void setValue(String value, String type) throws Exception {
+  private void setValue(String value, String type, ISSABasicBlock setValueBlock) throws Exception {
     if (!isBounded()) {
-      m_value        = value;
-      m_type         = type;
-      m_boundValues.clear();              // not useful anymore after bound              
-      m_lastRef      = null;              // not useful anymore after bound
-      m_setValueTime = System.nanoTime(); // time stamp for setting the value
+      m_value         = value;
+      m_type          = type;
+      m_boundValues.clear();               // not useful anymore after bound              
+      m_lastRef       = null;              // not useful anymore after bound
+      m_setValueTime  = System.nanoTime(); // time stamp for setting the value
+      m_setValueBlock = setValueBlock;
     }
     else {
       throw new Exception("An instance can only be bounded once!");
     }
   }
   
-  private void setValue(Instance left, INSTANCE_OP op, Instance right) throws Exception {
+  private void setValue(Instance left, INSTANCE_OP op, Instance right, ISSABasicBlock setValueBlock) throws Exception {
     if (!isBounded()) {
-      m_left         = left;
-      m_right        = right;
-      m_op           = op;
+      m_left          = left;
+      m_right         = right;
+      m_op            = op;
       m_boundValues.clear();              // not useful anymore after bound
-      m_lastRef      = null;              // not useful anymore after bound
-      m_setValueTime = System.nanoTime(); // time stamp for setting the value
+      m_lastRef       = null;              // not useful anymore after bound
+      m_setValueTime  = System.nanoTime(); // time stamp for setting the value
+      m_setValueBlock = setValueBlock;
     }
     else {
       throw new Exception("An object instance can only be concretize once!");
@@ -100,14 +107,6 @@ public class Instance {
   
   public void setLastReference(Reference lastRef) {
     m_lastRef = lastRef;
-  }
-  
-  public HashSet<Instance> getBoundedValues() {
-    return m_boundValues;
-  }
-  
-  public Reference getField(String fieldName) {
-    return m_fields.get(fieldName);
   }
   
   public void setField(String fieldName, String fieldType, String callSites, Collection<Instance> instances) {
@@ -132,10 +131,8 @@ public class Instance {
   }
   
   public boolean isConstant() {
-    return m_value != null && (m_value.equals("null") || 
-                               m_value.startsWith("#") || 
-                               m_value.equals("true") || 
-                               m_value.equals("false"));
+    return m_value != null && (m_value.equals("null") || m_value.startsWith("#") || 
+                               m_value.equals("true") || m_value.equals("false"));
   }
   
   public String getValue() {
@@ -148,6 +145,10 @@ public class Instance {
   
   public Reference getLastReference() {
     return m_lastRef;
+  }
+  
+  public HashSet<Instance> getBoundedValues() {
+    return m_boundValues;
   }
   
   public String getInitCallSites() {
@@ -183,8 +184,24 @@ public class Instance {
     return m_createTime;
   }
   
+  public ISSABasicBlock getSetValueBlock() {
+    return m_setValueBlock;
+  }
+  
+  public ISSABasicBlock getCreateBlock() {
+    return m_createBlock;
+  }
+  
+  public Instance getSetValueBy() {
+    return m_setValueBy;
+  }
+  
   public Collection<Reference> getFields() {
     return m_fields.values();
+  }
+
+  public Reference getField(String fieldName) {
+    return m_fields.get(fieldName);
   }
   
   public String toString() {
@@ -248,22 +265,18 @@ public class Instance {
     Instance clone = (Instance) cloneMap.get(this);
     if (clone == null) {
       if (isAtomic()) {
-        clone = new Instance(m_value, m_type);
+        clone = new Instance(m_value, m_type, m_createBlock);
       }
       else if (isBounded()) {
-        clone = new Instance(m_left.deepClone(cloneMap), m_op, m_right.deepClone(cloneMap));
+        clone = new Instance(m_left.deepClone(cloneMap), m_op, m_right.deepClone(cloneMap), m_createBlock);
       }
       else {
-        clone = new Instance(m_initCallSites);
+        clone = new Instance(m_initCallSites, m_createBlock);
       }
 
-      // since it is a clone, we don't use the auto-gen time stamps
-      clone.m_createTime   = m_createTime;
-      clone.m_setValueTime = m_setValueTime;
-      
       // save the clone before cloning fields
       cloneMap.put(this, clone);
-      
+
       // also clone fields
       Enumeration<String> keys = m_fields.keys();
       while (keys.hasMoreElements()) {
@@ -279,7 +292,17 @@ public class Instance {
           clone.m_boundValues.add(instance.deepClone(cloneMap));
         }
       }
-  
+
+      // clone set value by
+      if (m_setValueBy != null) {
+        clone.m_setValueBy = m_setValueBy.deepClone(cloneMap);
+      }
+
+      // since it is only a clone, we don't use the auto-gen time stamps
+      clone.m_createTime    = m_createTime;
+      clone.m_setValueTime  = m_setValueTime;
+      clone.m_setValueBlock = m_setValueBlock;
+      
       // keep lastRef as it is already updated in afterInvocation/Reference.deepClone
       clone.setLastReference(m_lastRef);
     }
@@ -294,6 +317,9 @@ public class Instance {
   private Reference                          m_lastRef;     // the lastRef is only useful when the instance not bounded
   private long                               m_createTime;
   private long                               m_setValueTime;
+  private ISSABasicBlock                     m_createBlock;
+  private ISSABasicBlock                     m_setValueBlock;
+  private Instance                           m_setValueBy;
   private final String                       m_initCallSites;
   private final HashSet<Instance>            m_boundValues; // the boundValues is only useful when the instance not bounded
   private final Hashtable<String, Reference> m_fields;

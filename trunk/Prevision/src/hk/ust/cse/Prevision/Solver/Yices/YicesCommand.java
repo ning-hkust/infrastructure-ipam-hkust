@@ -18,9 +18,11 @@ import java.util.List;
 public class YicesCommand implements ICommand {
 
   @Override
-  public String translateToCommand(Formula formula, MethodMetaData methData, boolean keepUnboundedField) {
-    Hashtable<String, Hashtable<String, Reference>> refMap = formula.getRefMap();
+  public String translateToCommand(Formula formula, MethodMetaData methData, 
+      List<String> assertCmds, Hashtable<String, List<Condition>> cmdConditionsMapping, 
+      boolean keepUnboundedField, boolean retrieveUnsatCore) {
     
+    Hashtable<String, Hashtable<String, Reference>> refMap = formula.getRefMap();
     Hashtable<String, Reference> references = null;
     if (refMap.size() > 0) {
       references = refMap.values().iterator().next();
@@ -32,7 +34,8 @@ public class YicesCommand implements ICommand {
     StringBuilder command = new StringBuilder();
     command.append(defineTypes(references, formula.getConditionList(), methData));
     command.append(defineVariables(formula.getConditionList(), methData));
-    command.append(translateConditions(formula.getConditionList(), methData, keepUnboundedField));
+    command.append(translateConditions(formula.getConditionList(), methData, 
+        assertCmds, cmdConditionsMapping, keepUnboundedField, retrieveUnsatCore));
     command.append("(check)\n");
     return command.toString();
   }
@@ -349,19 +352,39 @@ public class YicesCommand implements ICommand {
     return result.toString();
   }
   
-  private String translateConditions(List<Condition> conditionList, MethodMetaData methData, boolean keepUnboundedField) {
+  private String translateConditions(List<Condition> conditionList, MethodMetaData methData, 
+      List<String> assertCmds, Hashtable<String, List<Condition>> cmdConditionsMapping, 
+      boolean keepUnboundedField, boolean retrieveUnsatCore) {
+    
     StringBuilder command = new StringBuilder();
     
-    HashSet<String> defined = new HashSet<String>();
+    HashSet<String> addedAssertCmds = new HashSet<String>();
     for (Condition condition : conditionList) {
-      StringBuilder define = new StringBuilder();
-      define.append("(assert ");
-      define.append(translateConditionTerms(condition.getConditionTerms(), methData, keepUnboundedField));
-      define.append(")\n");
-      String defineStr = define.toString();
-      if (defineStr.length() > 0 && !defined.contains(defineStr) && !defineStr.contains("%%UnboundField%%")) {
-        command.append(defineStr);
-        defined.add(defineStr);
+      StringBuilder assertCmd = new StringBuilder();
+      assertCmd.append(retrieveUnsatCore ? "(assert+ " : "(assert ");
+      assertCmd.append(translateConditionTerms(condition.getConditionTerms(), methData, keepUnboundedField));
+      assertCmd.append(")\n");
+      String assertCmdStr = assertCmd.toString();
+      if (assertCmdStr.length() > 0 && !assertCmdStr.contains("%%UnboundField%%")) {
+        if (!addedAssertCmds.contains(assertCmdStr)) {
+          command.append(assertCmdStr);
+          addedAssertCmds.add(assertCmdStr);
+
+          // save an assert command list
+          if (assertCmds != null) {
+            assertCmds.add(assertCmdStr);
+          }
+        }
+        
+        // save a command and condition mapping
+        if (cmdConditionsMapping != null) {
+          List<Condition> cmdConditions = cmdConditionsMapping.get(assertCmdStr);
+          if (cmdConditions == null) {
+            cmdConditions = new ArrayList<Condition>();
+            cmdConditionsMapping.put(assertCmdStr, cmdConditions);
+          }
+          cmdConditions.add(condition);
+        }
       }
     }
     return command.toString();
@@ -514,7 +537,7 @@ public class YicesCommand implements ICommand {
       int index = param.indexOf(')');
       String paramType = param.substring(1, index);
       String paramName = param.substring(index + 1);
-      paramRef = new Reference(paramName, paramType, "", new Instance("") /* just a dummy */, null);
+      paramRef = new Reference(paramName, paramType, "", new Instance("", null) /* just a dummy */, null);
     }
     return paramRef;
   }

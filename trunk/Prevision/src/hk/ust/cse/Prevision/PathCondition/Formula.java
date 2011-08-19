@@ -22,6 +22,7 @@ public class Formula {
   public Formula() {
     m_conditionList  = new ArrayList<Condition>();
     m_abstractMemory = new AbstractMemory();
+    m_timeStamp      = System.nanoTime(); // time stamp for this formula
   }
 
   public Formula(List<Condition> conditions, 
@@ -30,8 +31,9 @@ public class Formula {
     
     // remember, each Formula instance should own a unique
     // instance of conditions and varMap!
-    m_conditionList = conditions;
+    m_conditionList  = conditions;
     m_abstractMemory = new AbstractMemory(refMap, defMap);
+    m_timeStamp      = System.nanoTime(); // time stamp for this formula
   }
   
   public Formula(List<Condition> conditions, AbstractMemory absMemory) {
@@ -39,6 +41,7 @@ public class Formula {
     // instance of conditions and refMap!
     m_conditionList  = conditions;
     m_abstractMemory = absMemory;
+    m_timeStamp      = System.nanoTime(); // time stamp for this formula
   }
 
   // clear everything except solver data, they are taking too much memory!
@@ -55,9 +58,9 @@ public class Formula {
   }
 
   public void setSolverResult(SMTChecker smtChecker) {
-    m_lastSolverInput  = smtChecker.getLastSolverInput();
-    m_lastSolverOutput = smtChecker.getLastSolverOutput();
-    m_lastSolverResult = smtChecker.getLastSolverResult();
+    m_lastSolverInput    = smtChecker.getLastSolverInput();
+    m_lastSolverOutput   = smtChecker.getLastSolverOutput();
+    m_lastSMTCheckResult = smtChecker.getLastSMTCheckResult();
   }
   
   public String getLastSolverOutput() {
@@ -73,8 +76,8 @@ public class Formula {
 //    return m_lastSatModel;
 //  }
   
-  public SMT_RESULT getLastSolverResult() {
-    return m_lastSolverResult;
+  public SMT_RESULT getLastSMTCheckResult() {
+    return m_lastSMTCheckResult;
   }
 
   public List<Condition> getConditionList() {
@@ -83,6 +86,10 @@ public class Formula {
   
   public AbstractMemory getAbstractMemory() {
     return m_abstractMemory;
+  }
+  
+  public long getTimeStamp() {
+    return m_timeStamp;
   }
   
   public Hashtable<String, Hashtable<String, Reference>> getRefMap() {
@@ -145,15 +152,19 @@ public class Formula {
     for (Condition condition : m_conditionList) {
       cloneCondList.add(condition.deepClone(cloneMap));
     }
-    return new Formula(cloneCondList, cloneAbsMemory);
+    
+    Formula cloneFormula = new Formula(cloneCondList, cloneAbsMemory);
+    cloneFormula.m_timeStamp = m_timeStamp; // since it is only a clone, keep the time stamp
+    return cloneFormula;
   }
   
   //private Boolean                            m_contradicted; 
+  private long                               m_timeStamp;
   private List<Condition>                    m_conditionList;
   private AbstractMemory                     m_abstractMemory;
   private Hashtable<ISSABasicBlock, Integer> m_visitedRecord;
   private String                             m_lastSolverInput;
   private String                             m_lastSolverOutput;
-  private SMT_RESULT                        m_lastSolverResult;
+  private SMT_RESULT                        m_lastSMTCheckResult;
   private List<SMTTerm>                      m_lastSatModel;
 }

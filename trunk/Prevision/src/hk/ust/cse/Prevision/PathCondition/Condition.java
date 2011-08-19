@@ -6,11 +6,16 @@ import java.util.List;
 
 public class Condition {
   public Condition(List<ConditionTerm> terms) {
-    m_terms = terms;
+    m_terms     = terms;
+    m_timeStamp = System.nanoTime();
   }
 
   public List<ConditionTerm> getConditionTerms() {
     return m_terms;
+  }
+  
+  public long getTimeStamp() {
+    return m_timeStamp;
   }
   
   public String toString() {
@@ -45,8 +50,12 @@ public class Condition {
     for (ConditionTerm term : m_terms) {
       cloneTerms.add(term.deepClone(cloneMap));
     }
-    return new Condition(cloneTerms);
+    
+    Condition cloneCondition = new Condition(cloneTerms);
+    cloneCondition.m_timeStamp = m_timeStamp; // since it is only a clone, keep the time stamp
+    return cloneCondition;
   }
 
   private final List<ConditionTerm> m_terms;
+  private long m_timeStamp;
 }
