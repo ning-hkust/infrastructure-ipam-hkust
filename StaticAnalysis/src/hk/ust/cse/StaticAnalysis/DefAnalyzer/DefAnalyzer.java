@@ -36,14 +36,10 @@ public class DefAnalyzer {
   
   public DefAnalyzer(String appJar) throws Exception {
     m_walaAnalyzer   = new WalaAnalyzer(appJar);
-    m_includingNames = new ArrayList<String>();
   }
   
-  public void addIncludeName(String name) {
-    m_includingNames.add(name);
-  }
-  
-  public DefAnalysisResult findAllDefs(int maxLookDepth) {
+  // find defs at once for all methods within the including name
+  public DefAnalysisResult findAllDefs(int maxLookDepth, List<String> inclNames) {
     DefAnalysisResult result = new DefAnalysisResult();
     
     Iterator<IClass> classes = m_walaAnalyzer.getClassHierarchy().iterator();
@@ -52,16 +48,24 @@ public class DefAnalyzer {
       Iterator<IMethod> methods = aClass.getAllMethods().iterator();
       while (methods.hasNext()) {
         IMethod method = methods.next();
-        if (!method.isAbstract() && !method.isNative() && containsName(method.getSignature())) {
+        if (!method.isAbstract() && !method.isNative() && containsName(method.getSignature(), inclNames)) {
           IR ir = Jar2IR.getIR(m_walaAnalyzer, method.getSignature()); // getIR
           if (ir != null) {
-            System.out.println(method.getSignature());
+            System.out.println("Finding all defs for: " + method.getSignature());
             getAllDefs(ir, 0, maxLookDepth, result);
           }
         }
       }        
     }
     return result;
+  }
+
+  // find all defs for ir and put them in result
+  public void findAllDefs(IR ir, int maxLookDepth, DefAnalysisResult result) {
+    if (ir != null && !ir.getMethod().isAbstract() && !ir.getMethod().isNative()) {
+      System.out.println("Finding all defs for: " + ir.getMethod().getSignature());
+      getAllDefs(ir, 0, maxLookDepth, result);
+    }
   }
   
   private void getAllDefs(IR ir, int curDepth, int maxDepth, DefAnalysisResult result) {
@@ -70,6 +74,9 @@ public class DefAnalyzer {
     
     List<ConditionalBranchDefs> currentCondBranchDefs = new ArrayList<ConditionalBranchDefs>();
     Hashtable<String, String[]> varMappings = new Hashtable<String, String[]>();
+    
+    // add method first in case there is no def in method
+    result.addMethodDef(ir.getMethod());
     
     Hashtable<SSAInstruction, ISSABasicBlock> instBBMapping = new Hashtable<SSAInstruction, ISSABasicBlock>();
     SSAInstruction[] insts = getInstructions(ir, instBBMapping);
@@ -421,11 +428,11 @@ public class DefAnalyzer {
     }
   }
   
-  private boolean containsName(String name) {
+  private boolean containsName(String name, List<String> inclNames) {
     boolean ret = false;
     
-    for (int i = 0, size = m_includingNames.size(); i < size; i++) {
-      if (name.startsWith(m_includingNames.get(i))) {
+    for (int i = 0, size = inclNames.size(); i < size; i++) {
+      if (name.startsWith(inclNames.get(i))) {
         ret = true;
         break;
       }
@@ -434,9 +441,10 @@ public class DefAnalyzer {
   }
   
   public static void main(String[] args) throws Exception {
-    DefAnalyzer defAnalyzer = new DefAnalyzer("./test_programs/test_program.jar");
-    defAnalyzer.addIncludeName("test_program.");
-//    DefAnalysisResult result = defAnalyzer.findAllDefs(5);
+    List<String> inclNames = new ArrayList<String>();
+    inclNames.add("test_program.");
+//    DefAnalyzer defAnalyzer = new DefAnalyzer("./test_programs/test_program.jar");
+//    DefAnalysisResult result = defAnalyzer.findAllDefs(5, inclNames);
 //  
 //    Collection<ConditionalBranchDefs> condDefs = result.m_defsForCondBranch.values();
 //    for (ConditionalBranchDefs defs : condDefs) {
@@ -455,5 +463,4 @@ public class DefAnalyzer {
   }
   
   private final WalaAnalyzer m_walaAnalyzer;
-  private final List<String> m_includingNames;
 }
