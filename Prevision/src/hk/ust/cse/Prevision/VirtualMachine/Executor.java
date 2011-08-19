@@ -41,6 +41,7 @@ import com.ibm.wala.util.heapTrace.HeapTracer;
 import com.ibm.wala.util.heapTrace.HeapTracer.Result;
 
 public class Executor {
+  public enum EXCEPTION_TYPE {CUSTOM, NPE};
   public class GlobalOptionsAndStates {
     public GlobalOptionsAndStates(CallStack fullCallStack, boolean useSummary) {      
       // set call stack
@@ -68,6 +69,7 @@ public class Executor {
     public boolean   checkOnTheFly          = true;
     public boolean   skipUselessBranches    = true;
     public boolean   skipUselessMethods     = true;
+    public boolean   heuristicBacktrack     = true;
     public int       maxDispatchTargets     = Integer.MAX_VALUE;
     public int       maxRetrieve            = 1;
     public int       maxSmtCheck            = 1000;
@@ -75,6 +77,7 @@ public class Executor {
     public int       maxLoop                = 1;
     public int       startingInst           = -1;   // -1 if don't want to specify the starting instruction index
     public int[]     startingInstBranchesTo = null; // null if don't want to specify the instructions that the starting instruction is branching to
+    public EXCEPTION_TYPE exceptionType    = EXCEPTION_TYPE.CUSTOM;
     
     public final CallStack fullCallStack;
     public final Summary   summary;
@@ -242,6 +245,10 @@ public class Executor {
       
       // clear m_execResult
       m_execResult = null;
+      
+      m_backTracking = false;
+      m_continueInMethod = false;
+      m_invocationUnsats = new Hashtable<BBorInstInfo, Object[]>();
     }
     
     if (workList.empty()) { // new worklist, simply start from startLine
@@ -254,10 +261,15 @@ public class Executor {
         throw new InvalidStackTraceException(msg);
       }
 
-      // create a "TRUE" Formula if postCond is null
-      postCond = (postCond == null) ? new Formula() : postCond;
+      
+      // create an initial Formula if postCond is null
+      if (postCond == null) {
+        BBorInstInfo initInfoItem = new BBorInstInfo(startFromBB, false, null, null, 
+            Formula.NORMAL_SUCCESSOR, null, null, methMetaData, callSites, null, this);
+        postCond = PrepInitFormula.prepInitFormula(initInfoItem, optAndStates, callStack);
+      }
 
-      // push in the first block\
+      // push in the first block
       workList.push(new BBorInstInfo(startFromBB, false, postCond, postCond, 
           Formula.NORMAL_SUCCESSOR, null, null, methMetaData, callSites, null, this));
     }
@@ -333,7 +345,7 @@ public class Executor {
   private ExecutionResult computeMethod(GlobalOptionsAndStates optAndStates,
       CGNode cgNode, MethodMetaData methData, Stack<BBorInstInfo> workList, 
       int startLine, int startingInst, boolean inclLine, CallStack callStack, 
-      int curInvokeDepth, String valPrefix) throws InvalidStackTraceException {
+      int curInvokeDepth, String callSites) throws InvalidStackTraceException {
 
     // start timing
     long start = System.currentTimeMillis();
@@ -357,9 +369,23 @@ public class Executor {
 
     // output method name
     System.out.println("Computing method: " + cfg.getMethod().getSignature());
-
+    
+    // continue backtrack if necessary
+    if (optAndStates.heuristicBacktrack && m_continueInMethod) {
+      heuristicBacktrack(workList, curInvokeDepth, optAndStates.maxInvokeDepth);
+    } 
+    
     // start depth first search
     while (!workList.empty()) {
+
+      // continue backtrack if necessary
+      if (optAndStates.heuristicBacktrack && m_backTracking) {
+        heuristicBacktrack(workList, curInvokeDepth, optAndStates.maxInvokeDepth);
+        if (workList.empty()) {
+          continue;
+        }
+      } 
+      
       // for (int i = 0; i < dfsStack.size(); i++) {
       // System.out.print(dfsStack.get(i).currentBB.getNumber() + " ");
       // }
@@ -377,10 +403,12 @@ public class Executor {
         // get visited records
         Hashtable<ISSABasicBlock, Integer> visitedBB = infoItem.postCond.getVisitedRecord();
         
+        int prevCondListSize = infoItem.postCond.getConditionList().size();
+        
         // compute for this BB
         int oriStackSize = workList.size();
         Formula precond = computeBB(optAndStates, cgNode, methData, infoItem, startLine, 
-            startingInst, inclLine, callStack, starting, curInvokeDepth, valPrefix, workList);
+            startingInst, inclLine, callStack, starting, curInvokeDepth, callSites, workList);
 
         if (precond == null) {
           continue; // an inner contradiction has been detected
@@ -399,6 +427,15 @@ public class Executor {
         // for this BB and has not yet finished
         if (infoItem.workList != null && !infoItem.workList.empty()) {
           workList.push(infoItem);
+          
+          // add to surveillance list
+          List<Condition> condsOnOrBefore = new ArrayList<Condition>(precond.getConditionList());
+          condsOnOrBefore.remove(prevCondListSize); // remove the receiver != null condition
+          m_invocationUnsats.put(infoItem, new Object[] {condsOnOrBefore, new ArrayList<Condition>()});
+        }
+        else {
+          // don't need to to surveillance
+          m_invocationUnsats.remove(infoItem);
         }
 
 //        // check whether the caught exception is/can be triggered
@@ -420,8 +457,13 @@ public class Executor {
           Hashtable<String, Reference> methodRefs = precond.getRefMap().get(infoItem.callSites);
           if (optAndStates.checkOnTheFly && normPredBB.size() > 1) {
             if (!infoItem.currentBB.isExitBlock() || methodRefs == null || !methodRefs.containsKey("RET")) {
-              if (m_smtChecker.smtCheck(precond, methData, false) == Formula.SMT_RESULT.UNSAT) {
+              if (m_smtChecker.smtCheck(precond, methData, false, optAndStates.heuristicBacktrack) == Formula.SMT_RESULT.UNSAT) {
                 System.out.println("Inner contradiction developed, discard block.");
+                
+                // once smt check failed, we track back heuristically
+                if (optAndStates.heuristicBacktrack) {
+                  heuristicBacktrack(workList, curInvokeDepth, optAndStates.maxInvokeDepth);
+                }
                 continue;
               }
             }
@@ -476,7 +518,7 @@ public class Executor {
           while (keys.hasMoreElements()) {
             ISSABasicBlock pred  = keys.nextElement();
             Formula phiedPreCond = phiedPreConds.get(pred);
-            if (optAndStates.skipUselessBranches && (!phiDefsUseful || (false && phiedPreConds.size() == 2))) {
+            if (optAndStates.skipUselessBranches && !phiDefsUseful) {
               ISSABasicBlock skipToCondBB = m_defAnalyzer.findSkipToBasicBlocks(methData.getIR(), 
                   infoItem.currentBB, pred, phiedPreCond, infoItem.callSites);
               if (skipToCondBB != null) {
@@ -507,7 +549,7 @@ public class Executor {
                       infoItem.sucessorType, infoItem.sucessorBB, infoItem.sucessorInfo, 
                       infoItem.methData, infoItem.callSites, infoItem.workList, infoItem.executor);
                   pushChildrenBlocks(condBBToPush, false, newInfoItem, methData,
-                      Formula.NORMAL_SUCCESSOR, workList, optAndStates.maxLoop, valPrefix);
+                      Formula.NORMAL_SUCCESSOR, workList, optAndStates.maxLoop, callSites);
                 }
                 totalSkipped++;
               }
@@ -522,9 +564,10 @@ public class Executor {
           if (totalSkipped > 0) {
             System.out.println(totalSkipped + " branches skipped!");
           }
+          
           // iterate all normal predecessors
           pushChildrenBlocks(bbPreConds, false, infoItem, methData,
-              Formula.NORMAL_SUCCESSOR, workList, optAndStates.maxLoop, valPrefix);
+              Formula.NORMAL_SUCCESSOR, workList, optAndStates.maxLoop, callSites);
         }
         else if (optAndStates.isEnteringCallStack()) {
           // at method entry, we still cannot find the proper invocation 
@@ -547,7 +590,7 @@ public class Executor {
           printPropagationPath(infoItem);
           
           // use SMT Solver to check precond and obtain a model
-          SMT_RESULT smtResult = m_smtChecker.smtCheck(precond, methData, true);
+          SMT_RESULT smtResult = m_smtChecker.smtCheck(precond, methData, true, optAndStates.heuristicBacktrack);
           precond.setSolverResult(m_smtChecker);
           
           // limit maximum smt checks
@@ -573,6 +616,11 @@ public class Executor {
           }
           else {
             System.out.println("SMT Check failed!\n");
+            
+            // once smt check failed, we track back heuristically
+            if (optAndStates.heuristicBacktrack) {
+              heuristicBacktrack(workList, curInvokeDepth, optAndStates.maxInvokeDepth);
+            }
             
             // memory consumption may grow overtime as not-sat formula added
             if (optAndStates.saveNotSatResults) {
@@ -886,7 +934,7 @@ public class Executor {
       }
     });
     
-    // go through all phi instructions of the block
+    // create new preconds first, so we can keep the timeStamps earlier than phi Instance assignments
     Iterator<SSAPhiInstruction> phiInsts = instInfo.currentBB.iteratePhis();
     for (Iterator<SSAPhiInstruction> it = phiInsts; it.hasNext();) {
       SSAPhiInstruction phiInst = (SSAPhiInstruction) it.next();
@@ -894,13 +942,26 @@ public class Executor {
         for (int i = 0; i < predList.size() && i < phiInst.getNumberOfUses(); i++) {
           ISSABasicBlock pred = predList.get(i);
           Formula newPreCond = newPreConds.get(pred);
-          newPreCond = m_instHandler.handle_phi(newPreCond == null ? postCond : newPreCond, 
-              phiInst, instInfo, phiInst.getUse(i), newPreCond == null);
-          newPreConds.put(pred, newPreCond);
+          if (newPreCond == null) {
+            newPreCond = postCond.clone();
+            newPreConds.put(pred, newPreCond);
+          }
         }
       }
     }
     
+    // then assign phi for each phi instruction
+    phiInsts = instInfo.currentBB.iteratePhis();
+    for (Iterator<SSAPhiInstruction> it = phiInsts; it.hasNext();) {
+      SSAPhiInstruction phiInst = (SSAPhiInstruction) it.next();
+      if (phiInst != null) {
+        for (int i = 0; i < predList.size() && i < phiInst.getNumberOfUses(); i++) {
+          ISSABasicBlock pred = predList.get(i);
+          m_instHandler.handle_phi(newPreConds.get(pred), phiInst, instInfo, phiInst.getUse(i), pred);
+        }
+      }
+    }
+
     return newPreConds;
   }
   
@@ -918,6 +979,120 @@ public class Executor {
       }
     }
     return useful;
+  }
+  
+  @SuppressWarnings("unchecked")
+  private void heuristicBacktrack(Stack<BBorInstInfo> workList, int curInvokeDepth, int maxInvokeDepth) {
+    // find unsat core, only the latest condition is retrieved
+    Condition unsatCore = findUnsatCore();
+    if (unsatCore != null) {
+      if (!m_backTracking && !m_continueInMethod) {
+        Enumeration<BBorInstInfo> keys = m_invocationUnsats.keys();
+        while (keys.hasMoreElements()) {
+          // save unsat core condition to every current invocation
+          BBorInstInfo key = keys.nextElement();
+          ((List<Condition>) m_invocationUnsats.get(key)[1]).add(unsatCore);        
+        }
+        
+        System.out.println("Heuristic Backtracing: found a backtrackable unsat core: " + unsatCore + ", backtracking...");
+        m_backTracking = true;
+      }
+      
+      // try to backtrack current workList
+      boolean continueInMethod  = false;
+      boolean backTrackFinished = false;
+      long eariestSet = findUnsatCoreEarliestSet();
+      while (!workList.empty() && !backTrackFinished) {
+        BBorInstInfo next = workList.peek();
+        SSAInstruction inst = next.currentBB.getLastInstructionIndex() >= 0 ? 
+                                        next.currentBB.getLastInstruction() : null;
+        
+        if (eariestSet < next.postCond.getTimeStamp()) {
+          backTrackFinished = false;
+        }
+        else {
+          // check if the current invocation target is backtrack-able
+          backTrackFinished = true;
+          if (inst != null && inst instanceof SSAInvokeInstruction && curInvokeDepth < maxInvokeDepth) {
+            if (m_invocationUnsats.containsKey(next)) { // this invocation does under surveillance
+              boolean affectable = false;
+              List<Condition> prevUnsatCores      = (List<Condition>) m_invocationUnsats.get(next)[1];
+              List<Condition> prevCondsOnOrBefore = (List<Condition>) m_invocationUnsats.get(next)[0];
+              HashSet<Long> prevCondsOnOrBeforeTimes = new HashSet<Long>();
+              for (Condition prevCondOnOrBefore : prevCondsOnOrBefore) {
+                prevCondsOnOrBeforeTimes.add(prevCondOnOrBefore.getTimeStamp());
+              } 
+              for (int i = 0, size = prevUnsatCores.size(); i < size && !affectable; i++) {
+                Condition unsatCoreCond = prevUnsatCores.get(i);
+                if (eariestSet > next.postCond.getTimeStamp() && 
+                    prevCondsOnOrBeforeTimes.contains(unsatCoreCond.getTimeStamp())) {
+                  affectable       = true;
+                  continueInMethod = true;
+                }                 
+              }
+              // we will continue back track inside the method
+              backTrackFinished = affectable;
+            }
+          }
+        }
+        
+        if (!backTrackFinished) {
+          workList.pop();
+
+          // since we backtracked, the current invocation no longer under surveillance
+          m_invocationUnsats.remove(next);
+        }
+      }
+      m_backTracking     = !backTrackFinished;
+      m_continueInMethod = continueInMethod;
+    }
+  }
+  
+  private Condition findUnsatCore() {
+    Condition unsatCore = null;
+    
+    List<String> assertCmds                    = m_smtChecker.getLastAssertCmds();
+    List<Integer> unsatCoreIds                 = m_smtChecker.getLastResult().getUnsatCoreIds();
+    Hashtable<String, List<Condition>> mapping = m_smtChecker.getLastCmdConditionsMapping();
+    
+    // we only deal with the simplest case
+    if (unsatCoreIds.size() == 1) {
+      String unsatCoreCmd = assertCmds.get(unsatCoreIds.get(0) - 1);
+      List<Condition> unsatCoreConditions = mapping.get(unsatCoreCmd);
+      if (unsatCoreConditions != null && unsatCoreConditions.size() > 0) {
+        for (Condition unsatCoreCondition : unsatCoreConditions) {
+          if (unsatCore == null || unsatCoreCondition.getTimeStamp() > unsatCore.getTimeStamp()) {
+            unsatCore = unsatCoreCondition; // get the latest one
+          }
+        }
+      }
+    }
+    return unsatCore;
+  }
+  
+  private long findUnsatCoreEarliestSet() {
+
+    List<String> assertCmds                    = m_smtChecker.getLastAssertCmds();
+    List<Integer> unsatCoreIds                 = m_smtChecker.getLastResult().getUnsatCoreIds();
+    Hashtable<String, List<Condition>> mapping = m_smtChecker.getLastCmdConditionsMapping();
+    
+    // we only deal with the simplest case
+    long earliest = Long.MAX_VALUE;
+    if (unsatCoreIds.size() == 1) {
+      String unsatCoreCmd = assertCmds.get(unsatCoreIds.get(0) - 1);
+      List<Condition> unsatCoreConditions = mapping.get(unsatCoreCmd);
+      if (unsatCoreConditions != null && unsatCoreConditions.size() > 0) {
+        for (Condition unsatCoreCondition : unsatCoreConditions) {
+          long time1 = unsatCoreCondition.getConditionTerms().get(0).getInstance1().getSetValueTime();
+          long time2 = unsatCoreCondition.getConditionTerms().get(0).getInstance2().getSetValueTime();
+          long condTime = time1 > time2 ? time1 : time2;
+          if (condTime < earliest) {
+            earliest = condTime;
+          }
+        }
+      }
+    }
+    return earliest;
   }
 
   // if lineNumber is <= 0, we return the exit block
@@ -1106,6 +1281,9 @@ public class Executor {
   private final DefAnalyzerWrapper  m_defAnalyzer;
   private MethodMetaData            m_methMetaData;
   private ExecutionResult           m_execResult;
+  private boolean                   m_backTracking;
+  private boolean                   m_continueInMethod;
+  private Hashtable<BBorInstInfo, Object[]> m_invocationUnsats;
 
   private Hashtable<BBorInstInfo, SSAInstruction> m_callStackInvokes;
 }

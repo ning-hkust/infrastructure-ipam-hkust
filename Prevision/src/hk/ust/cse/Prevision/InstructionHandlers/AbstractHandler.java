@@ -26,6 +26,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAInvokeInstruction;
 import com.ibm.wala.ssa.SymbolTable;
@@ -89,7 +90,7 @@ public abstract class AbstractHandler {
 
   public abstract Formula handle_new(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo);
   
-  public abstract Formula handle_phi(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, int phiVarID, boolean needClone);
+  public abstract Formula handle_phi(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, int phiVarID, ISSABasicBlock predBB);
   
   public abstract Formula handle_pi(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo);
   
@@ -214,8 +215,8 @@ public abstract class AbstractHandler {
    * from refMap, re-assign lastRef
    */
   protected static final void afterInvocation(SSAInvokeInstruction invokeInst, 
-      String callSites, String refName, String defName, List<String> paramNames, 
-      Hashtable<String, Hashtable<String, Reference>> refMap, 
+      String callSites, ISSABasicBlock currentBB, String refName, String defName, 
+      List<String> paramNames, Hashtable<String, Hashtable<String, Reference>> refMap, 
       Hashtable<String, Hashtable<String, Integer>> defMap) {
     
     String thisCallSite = String.format("%04d", invokeInst.getProgramCounter());
@@ -250,7 +251,7 @@ public abstract class AbstractHandler {
           if (newParamRef != null) {
             Reference paramRef = findReference(paramName, callSites, refMap);
             if (paramRef == null) { // newParamRef is add during callee method
-              paramRef = new Reference(paramName, newParamRef.getType(), callSites, new Instance(callSites), null);
+              paramRef = new Reference(paramName, newParamRef.getType(), callSites, new Instance(callSites, currentBB), null);
               if (paramRef.getInstance().isBounded() /* constant such as #!0 */ ) {
                 newParamRef.setInstancesValue(paramRef.getInstance());
                 newParamRef.putInstancesToOld();
@@ -450,18 +451,20 @@ public abstract class AbstractHandler {
   }
   
   protected static final Reference findOrCreateReference(String refName, 
-      String refType, String callSites, Hashtable<String, Hashtable<String, Reference>> refMap) {
-    return findOrCreateReference(refName, refType, callSites, null, refMap);
+      String refType, String callSites, ISSABasicBlock createBlock, 
+      Hashtable<String, Hashtable<String, Reference>> refMap) {
+    return findOrCreateReference(refName, refType, callSites, createBlock, null, refMap);
   }
   
   protected static final Reference findOrCreateReference(String refName, 
-      String refType, String callSites, Instance declInstance, 
+      String refType, String callSites, ISSABasicBlock createBlock, Instance declInstance, 
       Hashtable<String, Hashtable<String, Reference>> refMap) {
     
     Reference ref = findReference(refName, callSites, refMap);
     // cannot find, create a new one
     if (ref == null) {
-      ref = new Reference(refName, refType, callSites, new Instance(callSites) /* unbounded instance */, declInstance);
+      ref = new Reference(refName, refType, callSites, 
+          new Instance(callSites, createBlock) /* unbounded instance */, declInstance);
     }
     return ref;
   }

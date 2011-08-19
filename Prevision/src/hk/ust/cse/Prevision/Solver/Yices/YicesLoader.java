@@ -14,12 +14,12 @@ public class YicesLoader implements ISolverLoader {
 
     // create a solver result
     if (m_lastResult == null) {
-      //m_lastResult = new YicesResult();
+      m_lastResult = new YicesResult();
     }
     
     if (output.length() > 0) {       // SMT Check finished
       // parse and save result
-      //m_lastResult.parseOutput(output, defFinalVarMap);
+      m_lastResult.parseOutput(output);
 
       // return satisfactory or not
       return (result) ? SOLVER_COMP_PROCESS.SAT : SOLVER_COMP_PROCESS.UNSAT;

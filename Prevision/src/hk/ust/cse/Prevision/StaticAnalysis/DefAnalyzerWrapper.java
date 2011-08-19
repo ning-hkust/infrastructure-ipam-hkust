@@ -30,6 +30,62 @@ public class DefAnalyzerWrapper {
   public void computeDef(List<String> inclNames) {
     m_lastResult = m_defAnalyzer.findAllDefs(m_maxLoopDepth, inclNames);
   }
+
+  public HashSet<String> getMethodFieldNames(IR ir) {
+    HashSet<String> varsAndFieldNames = new HashSet<String>();
+    
+    // check if we have already computed defs for this method
+    if (m_lastResult == null) {
+      m_lastResult = new DefAnalysisResult();
+    }
+    if (m_lastResult.getMethodDefs(ir.getMethod()) == null) {
+      m_defAnalyzer.findAllDefs(ir, m_maxLoopDepth, m_lastResult);
+    }
+    
+    HashSet<String> methodDefs = m_lastResult.getMethodDefs(ir.getMethod());
+    if (methodDefs != null) {
+      for (String def : methodDefs) {
+        int index = def.lastIndexOf('.');
+        if (index >= 0) {
+          // get the last field name
+          String fieldName = def.substring(index + 1);
+          varsAndFieldNames.add(fieldName);
+        }
+      }
+    }
+    return varsAndFieldNames;
+  }
+  
+  public HashSet<String> getMergingBBVarsAndFieldNames(IR ir, ISSABasicBlock mergingBB) {
+    HashSet<String> varsAndFieldNames = new HashSet<String>();
+    
+    // check if we have already computed defs for this method
+    if (m_lastResult == null) {
+      m_lastResult = new DefAnalysisResult();
+    }
+    if (m_lastResult.getMethodDefs(ir.getMethod()) == null) {
+      m_defAnalyzer.findAllDefs(ir, m_maxLoopDepth, m_lastResult);
+    }
+    
+    List<ConditionalBranchDefs> condDefsList = 
+      m_lastResult.getCondBranchDefsForMergingBB(mergingBB);
+    if (condDefsList != null) {
+      for (ConditionalBranchDefs condDefs : condDefsList) {
+        for (String def : condDefs.defs) {
+          int index = def.lastIndexOf('.');
+          if (index >= 0) {
+            // get the last field name
+            String fieldName = def.substring(index + 1);
+            varsAndFieldNames.add(fieldName);
+          }
+          else {
+            varsAndFieldNames.add("SSAVar:" + def);
+          }
+        }
+      }
+    }
+    return varsAndFieldNames;
+  }
   
   /**
    * @return if is skip-able, return the method entry block, null otherwise

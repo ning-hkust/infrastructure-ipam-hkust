@@ -22,7 +22,7 @@ public class Reference {
     
     if (name.equals("null") || name.startsWith("#") || name.equals("true") || name.equals("false")) { // is constant
       // ignore original instance
-      instance = new Instance(name, null);
+      instance = new Instance(name, null, instance.getCreateBlock());
     }
     if (instance != null) {
       m_instances.add(instance);
@@ -42,7 +42,7 @@ public class Reference {
     
     if (name.equals("null") || name.startsWith("#") || name.equals("true") || name.equals("false")) { // is constant
       // ignore original instance
-      Instance instance = new Instance(name, null);
+      Instance instance = new Instance(name, null, m_instances.iterator().next().getCreateBlock());
       m_instances.add(instance);
       startInstanceLiftTime(instance);
       instance.setLastReference(this);

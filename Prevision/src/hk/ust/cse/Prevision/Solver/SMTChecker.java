@@ -1,10 +1,15 @@
 package hk.ust.cse.Prevision.Solver;
 
+import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.PathCondition.Formula.SMT_RESULT;
 import hk.ust.cse.Prevision.Solver.Yices.YicesCommand;
 import hk.ust.cse.Prevision.Solver.Yices.YicesLoader;
 import hk.ust.cse.Wala.MethodMetaData;
+
+import java.util.ArrayList;
+import java.util.Hashtable;
+import java.util.List;
 
 public class SMTChecker {
   public enum SOLVERS {YICES, Z3}
@@ -26,15 +31,20 @@ public class SMTChecker {
     }
   }
   
-  public SMT_RESULT smtCheck(Formula formula, MethodMetaData methData /* for param name */, boolean keepUnboundedField) {    
+  public SMT_RESULT smtCheck(Formula formula, MethodMetaData methData /* for param name */, 
+      boolean keepUnboundedField, boolean retrieveUnsatCore) {    
     
-    SMT_RESULT smtResult = null;
+    SMT_RESULT smtCheckResult = null;
     try {
       // generate SMT Solver inputs
-      String command = m_command.translateToCommand(formula, methData, keepUnboundedField);
+      m_lastAssertCmds = retrieveUnsatCore ? new ArrayList<String>() : null;
+      m_lastCmdConditionsMapping = retrieveUnsatCore ? new Hashtable<String, List<Condition>>() : null;
+      String command = m_command.translateToCommand(formula, methData, 
+          m_lastAssertCmds, m_lastCmdConditionsMapping, keepUnboundedField, retrieveUnsatCore);
       
+      // smt check
       if (false /*simplify()*/ /* try simplify() first */) {
-        smtResult = SMT_RESULT.UNSAT;
+        smtCheckResult = SMT_RESULT.UNSAT;
         m_lastSolverOutput = "unsat\nProven contradicted by simplify().";
       }
       else {
@@ -42,16 +52,16 @@ public class SMTChecker {
         ISolverLoader.SOLVER_COMP_PROCESS solverResult = m_solverLoader.check(command);
         switch (solverResult) {
         case SAT:
-          smtResult = SMT_RESULT.SAT;
+          smtCheckResult = SMT_RESULT.SAT;
           break;
         case UNSAT:
-          smtResult = SMT_RESULT.UNSAT;
+          smtCheckResult = SMT_RESULT.UNSAT;
           break;
         case ERROR:
-          smtResult = SMT_RESULT.ERROR;
+          smtCheckResult = SMT_RESULT.ERROR;
           break;
         case TIMEOUT:
-          smtResult = SMT_RESULT.TIMEOUT;
+          smtCheckResult = SMT_RESULT.TIMEOUT;
           break;
         }
         
@@ -59,22 +69,23 @@ public class SMTChecker {
         // keeps the last one, so it might change from time to time
         m_lastSolverInput  = m_solverLoader.getLastInput();
         m_lastSolverOutput = m_solverLoader.getLastOutput();
-        //m_lastSatModel     = s_solverLoader.getLastResult().getSatModel();
+        m_lastSolverResult = m_solverLoader.getLastResult();
       } 
     } catch (StackOverflowError e) {
       System.err.println("Stack overflowed when generating SMT statements, skip!");
-      smtResult = SMT_RESULT.STACK_OVERFLOW;
+      smtCheckResult = SMT_RESULT.STACK_OVERFLOW;
     }
     
-    // save the solver result
-    m_lastSolverResult = smtResult;
+    // save the solver smt check result
+    m_lastSMTCheckResult = smtCheckResult;
     
-    return smtResult;
+    return smtCheckResult;
   }
   
   public void clearSolverData() {
     m_lastSolverInput  = null;
     m_lastSolverOutput = null;
+    m_lastSolverResult = null;
   }
   
   public String getLastSolverOutput() {
@@ -85,8 +96,20 @@ public class SMTChecker {
     return m_lastSolverInput;
   }
   
-  public SMT_RESULT getLastSolverResult() {
+  public ISolverResult getLastResult() {
     return m_lastSolverResult;
+  }
+  
+  public SMT_RESULT getLastSMTCheckResult() {
+    return m_lastSMTCheckResult;
+  }
+  
+  public List<String> getLastAssertCmds() {
+    return m_lastAssertCmds;
+  }
+  
+  public Hashtable<String, List<Condition>> getLastCmdConditionsMapping() {
+    return m_lastCmdConditionsMapping;
   }
   
 //  private boolean simplify() {
@@ -173,9 +196,12 @@ public class SMTChecker {
 //    return isContradicted;
 //  }
   
-  private String      m_lastSolverInput;
-  private String      m_lastSolverOutput;
-  private SMT_RESULT m_lastSolverResult;
-  private final ISolverLoader m_solverLoader;
-  private final ICommand      m_command;
+  private String                             m_lastSolverInput;
+  private String                             m_lastSolverOutput;
+  private ISolverResult                      m_lastSolverResult;
+  private SMT_RESULT                        m_lastSMTCheckResult;
+  private List<String>                       m_lastAssertCmds;
+  private Hashtable<String, List<Condition>> m_lastCmdConditionsMapping;
+  private final ISolverLoader                m_solverLoader;
+  private final ICommand                     m_command;
 }
