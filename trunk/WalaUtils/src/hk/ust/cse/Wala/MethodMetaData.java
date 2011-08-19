@@ -8,8 +8,6 @@ import java.util.List;
 
 import com.ibm.wala.cfg.ShrikeCFG;
 import com.ibm.wala.classLoader.IBytecodeMethod;
-import com.ibm.wala.shrikeBT.ConstantInstruction;
-import com.ibm.wala.shrikeBT.IInstruction;
 import com.ibm.wala.shrikeCT.InvalidClassFileException;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
@@ -49,67 +47,6 @@ public class MethodMetaData {
     }
     else {
       return m_ir.getMethod().getDeclaringClass().getName().getClassName().toString();
-    }
-  }
-
-  /**
-   * @param varID
-   * @param valPrefix
-   * @return if variable "varID" is a constant, return the prefixed 
-   * string representing that constant, otherwise return vVarID
-   */
-  public String getSymbol(int varID, String valPrefix, Hashtable<String, Integer> defCountMap) {
-    String var = null;
-    SymbolTable symbolTable = m_ir.getSymbolTable();
-    if (varID >= 0 && symbolTable.isConstant(varID)) {
-      Object constant = symbolTable.getConstantValue(varID);
-      if (constant != null) {
-        var = constant.toString();
-        var = getConstantPrefix(varID) + var;
-      }
-      else {
-        var = "null";
-      }
-    }
-    else {
-      var = "v" + valPrefix + varID;
-
-      // add defCount information
-      Integer defCount = defCountMap.get(var);
-      if (defCount != null && defCount > 0) {
-        var += "@" + defCount;
-      }
-    }
-    return var;
-  }
-
-  private String getConstantPrefix(int varID) {
-    if (!m_ir.getSymbolTable().isConstant(varID)) {
-      return "";
-    }
-    else if (m_ir.getSymbolTable().isNumberConstant(varID)) {
-      return "#!";
-    }
-    else if (m_ir.getSymbolTable().isStringConstant(varID)) {
-      return "##";
-    }
-    else {
-      return "#?";
-    }
-  }
-
-  private String getConstantPrefix(Object constantObject) {
-    if (constantObject == null) {
-      return "";
-    }
-    else if (constantObject instanceof Number) {
-      return "#!";
-    }
-    else if (constantObject instanceof String) {
-      return "##";
-    }
-    else {
-      return "#?";
     }
   }
 
@@ -186,6 +123,25 @@ public class MethodMetaData {
     return lineNo;
   }
 
+  public int getFirstInstructionIndexForLine(int lineNo) {
+    int index = -1;
+    
+    SSAInstruction[] instructions = m_ir.getInstructions();
+    for (int i = 0; i < instructions.length; i++) {
+      if (instructions[i] != null) {
+        int instLineNo = getLineNumber(i);
+        if (instLineNo == lineNo) {
+          index = i;
+          break;
+        }
+        else if (instLineNo > lineNo) {
+          break;
+        }
+      }
+    }
+    return index;
+  }
+  
   public SSAInstruction getFirstInstructionForLine(int lineNo) {
     SSAInstruction instForLine = null;
     
@@ -198,6 +154,44 @@ public class MethodMetaData {
           break;
         }
         else if (instLineNo > lineNo) {
+          break;
+        }
+      }
+    }
+    return instForLine;
+  }
+  
+  public int getLastInstructionIndexForLine(int lineNo) {
+    int index = -1;
+    
+    SSAInstruction[] instructions = m_ir.getInstructions();
+    for (int i = instructions.length - 1; i >= 0; i--) {
+      if (instructions[i] != null) {
+        int instLineNo = getLineNumber(i);
+        if (instLineNo == lineNo) {
+          index = i;
+          break;
+        }
+        else if (instLineNo < lineNo) {
+          break;
+        }
+      }
+    }
+    return index;
+  }
+  
+  public SSAInstruction getLastInstructionForLine(int lineNo) {
+    SSAInstruction instForLine = null;
+    
+    SSAInstruction[] instructions = m_ir.getInstructions();
+    for (int i = instructions.length - 1; i >= 0; i--) {
+      if (instructions[i] != null) {
+        int instLineNo = getLineNumber(i);
+        if (instLineNo == lineNo) {
+          instForLine = instructions[i];
+          break;
+        }
+        else if (instLineNo < lineNo) {
           break;
         }
       }
@@ -246,34 +240,7 @@ public class MethodMetaData {
     return exceptionType;
   }
 
-  public String getConstantInstructionStr(int nInstruction) {
-    // get ShrikeCFG from SSACFG
-    ShrikeCFG shrikeCFG = getShrikeCFG();
-
-    // get instruction
-    IInstruction[] instructions = shrikeCFG.getInstructions();
-    IInstruction instruction = instructions[nInstruction];
-
-    String constantStr = null;
-    if (instruction != null && instruction instanceof ConstantInstruction) {
-      Object constantObject = ((ConstantInstruction) instruction).getValue();
-      constantStr = getConstantPrefix(constantObject);
-
-      if (constantObject == null) {
-        constantStr += "null";
-      }
-      else {
-        constantStr += constantObject.toString();
-      }
-    }
-    else {
-      constantStr = null;
-    }
-
-    return constantStr;
-  }
-  
-  private ShrikeCFG getShrikeCFG() {
+  public ShrikeCFG getShrikeCFG() {
     SSACFG cfg = getcfg();
 
     ShrikeCFG shrikeCFG = null;
