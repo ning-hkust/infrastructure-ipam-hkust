@@ -4,11 +4,13 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.jar.JarFile;
 
+import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.core.tests.callGraph.CallGraphTestUtil;
 import com.ibm.wala.ipa.callgraph.AnalysisCache;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.AnalysisScope;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
+import com.ibm.wala.ipa.callgraph.impl.DefaultEntrypoint;
 import com.ibm.wala.ipa.callgraph.impl.Util;
 import com.ibm.wala.ipa.cha.ClassHierarchy;
 import com.ibm.wala.ssa.SSAOptions;
@@ -21,7 +23,7 @@ public class WalaAnalyzer {
     this(appJar, null);
   }
   
-  public WalaAnalyzer(String appJar, Iterable<Entrypoint> additionalEntryPoints) throws Exception {
+  public WalaAnalyzer(String appJar, Iterable<IMethod> additionalEntryPoints) throws Exception {
     m_jarFile = new JarFile(appJar);
     
     // Create an object which caches IRs and related information, 
@@ -52,9 +54,9 @@ public class WalaAnalyzer {
     
     // add in additional entry points
     if (additionalEntryPoints != null) {
-      Iterator<Entrypoint> iter = additionalEntryPoints.iterator();
+      Iterator<IMethod> iter = additionalEntryPoints.iterator();
       while (iter.hasNext()) {
-        totalPoints.add((Entrypoint)iter.next());
+        totalPoints.add(new DefaultEntrypoint(iter.next(), m_cha));
       }
     }
     
@@ -62,6 +64,35 @@ public class WalaAnalyzer {
     // In particular, we will use all Pi nodes when building the IR.
     m_options = new AnalysisOptions(m_scope, totalPoints);
     m_options.getSSAOptions().setPiNodePolicy(SSAOptions.getAllBuiltInPiNodes());
+    
+    // construct call graph
+    m_callGraph = new CallGraph(m_options, m_irCache, m_cha, m_scope);
+  }
+  
+  public void recomputeCallGraph(Iterable<IMethod> additionalEntryPoints) throws Exception {
+    // retrieve all the Main classes (classes with a 'main') as 'entry points'
+    // entry points are useful to construct the call graph
+    Iterable<Entrypoint> entrypoints = Util.makeMainEntrypoints(m_scope, m_cha);
+    
+    // add entry points to a new set
+    HashSet<Entrypoint> totalPoints = new HashSet<Entrypoint>();
+    if (entrypoints != null) {
+      Iterator<Entrypoint> iter = entrypoints.iterator();
+      while (iter.hasNext()) {
+        totalPoints.add((Entrypoint)iter.next());
+      }
+    }
+    
+    // add in additional entry points
+    if (additionalEntryPoints != null) {
+      Iterator<IMethod> iter = additionalEntryPoints.iterator();
+      while (iter.hasNext()) {
+        totalPoints.add(new DefaultEntrypoint(iter.next(), m_cha));
+      }
+    }
+    
+    // set new entry points
+    m_options.setEntrypoints(totalPoints);
     
     // construct call graph
     m_callGraph = new CallGraph(m_options, m_irCache, m_cha, m_scope);
@@ -96,5 +127,5 @@ public class WalaAnalyzer {
   private final ClassHierarchy  m_cha;
   private final AnalysisScope   m_scope;
   private final AnalysisOptions m_options;
-  private final CallGraph       m_callGraph;
+  private CallGraph             m_callGraph;
 }
