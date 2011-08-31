@@ -2,6 +2,7 @@ package hk.ust.cse.util;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -17,7 +18,8 @@ public class Utils {
   }
 
   public static String getClassTypeJavaStr(String classType, boolean replaceDollar) {
-    StringBuilder classTypeStr = new StringBuilder(classType);
+    // to primitive type first, in case it is a primitive encoding
+    StringBuilder classTypeStr = new StringBuilder(toPrimitiveType(classType));
     int length = classTypeStr.length();
     
     // delete dimension signs
@@ -124,6 +126,61 @@ public class Utils {
       methods.addAll(Arrays.asList(declMethods));
     }
     return methods;
+  }
+  
+  public static Field getInheritedField(Class<?> cls, String fieldName) {
+    Field field = null;
+    for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
+      Field[] declFields = c.getDeclaredFields();
+      for (Field declField : declFields) {
+        if (declField.getName().equals(fieldName)) {
+          field = declField;
+          break;
+        }
+      }
+    }
+    return field;
+  }
+  
+  public static Method getInheritedMethod(Class<?> cls, String methodName, Class<?>[] paramTypes) {
+    Method method = null;
+    for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
+      Method[] declMethods = c.getDeclaredMethods();
+      for (Method declMethod : declMethods) {
+        if (declMethod.getName().equals(methodName)) {
+          Class<?>[] declMethodParamTypes = declMethod.getParameterTypes();
+          if ((paramTypes == null && declMethodParamTypes.length == 0) || 
+              (paramTypes != null && paramTypes.equals(declMethodParamTypes))) {
+            method = declMethod;
+            break;
+          }
+        }
+      }
+    }
+    return method;
+  }
+  
+  public static Class<?> getClosestPublicSuperClass(Class<?> cls) {
+    Class<?> superClass = null;
+    for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
+      if (Modifier.isPublic(c.getModifiers())) {
+        superClass = c;
+        break;
+      }
+    }
+    return superClass;
+  }
+  
+  public static Class<?>[] getPublicInterfaces(Class<?> cls) {
+    List<Class<?>> publicInterfaces = new ArrayList<Class<?>>();
+    
+    Class<?>[] interfaces = cls.getInterfaces();
+    for (Class<?> anInterface : interfaces) {
+      if (Modifier.isPublic(anInterface.getModifiers())) {
+        publicInterfaces.add(anInterface);
+      }
+    }
+    return publicInterfaces.toArray(new Class<?>[0]);
   }
   
   public static Class<?> findClass(String clsName) {
