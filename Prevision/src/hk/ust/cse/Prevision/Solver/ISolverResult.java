@@ -2,12 +2,14 @@ package hk.ust.cse.Prevision.Solver;
 
 
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
+import hk.ust.cse.Prevision.VirtualMachine.Instance;
 
+import java.util.Hashtable;
 import java.util.List;
 
 public interface ISolverResult {
 
-  public abstract void parseOutput(String output);
+  public abstract void parseOutput(String output, Hashtable<String, Instance> nameInstanceMapping);
 
   public abstract boolean isSatisfactory();
 
@@ -15,7 +17,6 @@ public interface ISolverResult {
 
   public abstract List<Integer> getUnsatCoreIds();
 
-  
   public abstract List<ConditionTerm> getSatModel();
 
 }

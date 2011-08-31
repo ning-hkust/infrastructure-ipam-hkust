@@ -13,13 +13,13 @@ public class Instance {
   
   public Instance(String initCallSites, ISSABasicBlock createBlock) { // initial unknown instance
     m_createTime    = System.nanoTime();
-    m_setValueTime  = -1;
+    m_setValueTime  = Long.MIN_VALUE;
     m_createBlock   = createBlock;
     m_setValueBlock = null;
     m_setValueBy    = null;
     m_initCallSites = initCallSites;
-    m_boundValues   = new HashSet<Instance>();
-    m_fields        = new Hashtable<String, Reference>();
+    m_boundValues   = new HashSet<Instance>(1);
+    m_fields        = new Hashtable<String, Reference>(1);
   }
   
   /**
@@ -36,7 +36,7 @@ public class Instance {
     m_setValueBy    = null;
     m_initCallSites = null;
     m_boundValues   = null;         // this is already bounded
-    m_fields        = new Hashtable<String, Reference>();
+    m_fields        = new Hashtable<String, Reference>(1);
   }
   
   public Instance(Instance left, INSTANCE_OP op, Instance right, ISSABasicBlock createBlock) {
@@ -80,7 +80,7 @@ public class Instance {
     if (!isBounded()) {
       m_value         = value;
       m_type          = type;
-      m_boundValues.clear();               // not useful anymore after bound              
+      m_boundValues   = null;              // not useful anymore after bound              
       m_lastRef       = null;              // not useful anymore after bound
       m_setValueTime  = System.nanoTime(); // time stamp for setting the value
       m_setValueBlock = setValueBlock;
@@ -95,7 +95,7 @@ public class Instance {
       m_left          = left;
       m_right         = right;
       m_op            = op;
-      m_boundValues.clear();              // not useful anymore after bound
+      m_boundValues   = null;              // not useful anymore after bound
       m_lastRef       = null;              // not useful anymore after bound
       m_setValueTime  = System.nanoTime(); // time stamp for setting the value
       m_setValueBlock = setValueBlock;
@@ -178,6 +178,33 @@ public class Instance {
   
   public long getSetValueTime() {
     return m_setValueTime;
+  }
+  
+  public long getLatestSetValueTime() {
+    if (isAtomic()) {
+      return m_setValueTime;
+    }
+    else if (isBounded()) {
+      long latestLeft  = m_left.getLatestSetValueTime();
+      long latestRight = m_right.getLatestSetValueTime();
+      return (latestLeft == Long.MIN_VALUE && latestRight == Long.MIN_VALUE) ? m_setValueTime : 
+        (latestLeft > latestRight ? latestLeft : latestRight);
+    }
+    else {
+      Instance toppest = getToppestInstance();
+      if (toppest.getValue() != null && toppest.getValue().startsWith("##")) {
+        return toppest.getLatestSetValueTime();
+      }
+      return Long.MIN_VALUE;
+    }
+  }
+  
+  public Instance getToppestInstance() {
+    Instance currentInstance = this;
+    while (currentInstance.getLastReference() != null && currentInstance.getLastReference().getDeclaringInstance() != null) {
+      currentInstance = currentInstance.getLastReference().getDeclaringInstance();
+    }
+    return currentInstance;
   }
   
   public long getCreateTime() {
@@ -320,7 +347,7 @@ public class Instance {
   private ISSABasicBlock                     m_createBlock;
   private ISSABasicBlock                     m_setValueBlock;
   private Instance                           m_setValueBy;
+  private HashSet<Instance>                  m_boundValues; // the boundValues is only useful when the instance not bounded
   private final String                       m_initCallSites;
-  private final HashSet<Instance>            m_boundValues; // the boundValues is only useful when the instance not bounded
   private final Hashtable<String, Reference> m_fields;
 }

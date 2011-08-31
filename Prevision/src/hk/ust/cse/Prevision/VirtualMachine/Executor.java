@@ -2,20 +2,21 @@ package hk.ust.cse.Prevision.VirtualMachine;
 
 import hk.ust.cse.Prevision.CallStack;
 import hk.ust.cse.Prevision.InvalidStackTraceException;
-import hk.ust.cse.Prevision.Summary;
 import hk.ust.cse.Prevision.InstructionHandlers.AbstractHandler;
 import hk.ust.cse.Prevision.InstructionHandlers.CompleteBackwardHandler;
+import hk.ust.cse.Prevision.Optimization.DefAnalyzerWrapper;
+import hk.ust.cse.Prevision.Optimization.HeuristicBacktrack;
 import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.PathCondition.Formula.SMT_RESULT;
 import hk.ust.cse.Prevision.Solver.SMTChecker;
-import hk.ust.cse.Prevision.StaticAnalysis.DefAnalyzerWrapper;
 import hk.ust.cse.Wala.Jar2IR;
 import hk.ust.cse.Wala.MethodMetaData;
 import hk.ust.cse.Wala.WalaAnalyzer;
 import hk.ust.cse.Wala.WalaUtils;
 import hk.ust.cse.util.Utils;
 
+import java.lang.reflect.Method;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,6 +29,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Stack;
 
+import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
@@ -41,50 +43,6 @@ import com.ibm.wala.util.heapTrace.HeapTracer;
 import com.ibm.wala.util.heapTrace.HeapTracer.Result;
 
 public class Executor {
-  public enum EXCEPTION_TYPE {CUSTOM, NPE};
-  public class GlobalOptionsAndStates {
-    public GlobalOptionsAndStates(CallStack fullCallStack, boolean useSummary) {      
-      // set call stack
-      this.fullCallStack = fullCallStack;
-      
-      // initialize summary
-      this.summary = useSummary ? new Summary() : null;
-
-      // states
-      this.m_enteringCallStack = true; // at the beginning, we are entering call stack
-    }
-
-    public boolean isEnteringCallStack() {
-      return m_enteringCallStack;
-    }
-
-    public void finishedEnteringCallStack() {
-      m_enteringCallStack = false;
-    }
-
-    // global options
-    public boolean   inclInnerMostLine      = false;
-    public boolean   inclStartingInst       = false;
-    public boolean   saveNotSatResults      = false;
-    public boolean   checkOnTheFly          = true;
-    public boolean   skipUselessBranches    = true;
-    public boolean   skipUselessMethods     = true;
-    public boolean   heuristicBacktrack     = true;
-    public int       maxDispatchTargets     = Integer.MAX_VALUE;
-    public int       maxRetrieve            = 1;
-    public int       maxSmtCheck            = 1000;
-    public int       maxInvokeDepth         = 1;
-    public int       maxLoop                = 1;
-    public int       startingInst           = -1;   // -1 if don't want to specify the starting instruction index
-    public int[]     startingInstBranchesTo = null; // null if don't want to specify the instructions that the starting instruction is branching to
-    public EXCEPTION_TYPE exceptionType    = EXCEPTION_TYPE.CUSTOM;
-    
-    public final CallStack fullCallStack;
-    public final Summary   summary;
-
-    // global states
-    private boolean m_enteringCallStack;
-  }
 
   public class BBorInstInfo {
     public BBorInstInfo(ISSABasicBlock currentBB, boolean isSkipToBB, Formula postCond, 
@@ -142,14 +100,12 @@ public class Executor {
     m_defAnalyzer = defAnalyzer;
   }
   
-  public ExecutionResult compute(GlobalOptionsAndStates optAndStates, 
-      Formula postCond) throws InvalidStackTraceException {
-    return compute(optAndStates, postCond, null);
+  public ExecutionResult compute(ExecutionOptions execOptions, Formula postCond) throws InvalidStackTraceException {
+    return compute(execOptions, postCond, null);
   }
   
-  public ExecutionResult compute(GlobalOptionsAndStates optAndStates, 
-      Formula postCond, IR ir) throws InvalidStackTraceException {
-    CallStack fullStack = optAndStates.fullCallStack;
+  public ExecutionResult compute(ExecutionOptions execOptions, Formula postCond, IR ir) throws InvalidStackTraceException {
+    CallStack fullStack = execOptions.fullCallStack;
     
     // compute from the outermost stack frame
     String methNameOrSig = fullStack.getCurMethodNameOrSign();
@@ -159,54 +115,47 @@ public class Executor {
     boolean inclLine = true;
     int startingInst = -1;
     if (fullStack.getDepth() == 1) {
-      inclLine     = optAndStates.inclInnerMostLine;
-      startingInst = optAndStates.startingInst;
+      inclLine     = execOptions.inclInnerMostLine;
+      startingInst = execOptions.startingInst;
     }
 
     // get ir(ssa) for methods in jar file
     if (ir == null) {
-      if (Utils.isMethodSignature(methNameOrSig)) {
-        ir = Jar2IR.getIR(m_walaAnalyzer, methNameOrSig);
-      }
-      else {
-        ir = Jar2IR.getIR(m_walaAnalyzer, methNameOrSig, lineNo);
-      }
-    
+      ir = Utils.isMethodSignature(methNameOrSig) ? Jar2IR.getIR(m_walaAnalyzer, methNameOrSig) : 
+                                                    Jar2IR.getIR(m_walaAnalyzer, methNameOrSig, lineNo);
       // return if method is not found
       if (ir == null) {
         String msg = "Failed to locate " + methNameOrSig + ":" + lineNo;
         System.err.println(msg);
         throw new InvalidStackTraceException(msg);
       }
+      
+      // re-compute call graph with ir (outermost) since main()s may not be good enough
+      HashSet<IMethod> additionalEntrypoints = new HashSet<IMethod>();
+      additionalEntrypoints.add(ir.getMethod());
+      try {
+        m_walaAnalyzer.recomputeCallGraph(additionalEntrypoints);
+      } catch (Exception e) {e.printStackTrace(); /* should not throw */}
     }
       
     // get the initial cgNode
-    CGNode cgNode = null;
-    if (optAndStates.maxDispatchTargets > 0) {
-      cgNode = m_walaAnalyzer.getCallGraph().getNode(ir.getMethod());
-    }
+    CGNode cgNode = (execOptions.maxDispatchTargets > 0) ? m_walaAnalyzer.getCallGraph().getNode(ir.getMethod()) : null;
     
     // the initial outter most workList
     Stack<BBorInstInfo> workList = new Stack<BBorInstInfo>();
     
-    return computeRec(optAndStates, cgNode, ir, lineNo, startingInst, inclLine, 
+    return computeRec(execOptions, cgNode, ir, lineNo, startingInst, inclLine, 
         fullStack, 0, "", workList, postCond);
   }
   
-  public ExecutionResult computeRec(GlobalOptionsAndStates optAndStates, 
+  public ExecutionResult computeRec(ExecutionOptions execOptions, 
       CGNode cgNode, String methNameOrSig, int startLine, int startingInst, 
       boolean inclLine, CallStack callStack, int curInvokeDepth, String callSites, 
       Stack<BBorInstInfo> workList, Formula postCond) throws InvalidStackTraceException {
     
     // get ir(ssa) for methods in jar file
-    IR ir = null;
-    if (Utils.isMethodSignature(methNameOrSig)) {
-      ir = Jar2IR.getIR(m_walaAnalyzer, methNameOrSig);
-    }
-    else {
-      ir = Jar2IR.getIR(m_walaAnalyzer, methNameOrSig, startLine);
-    }
-  
+    IR ir = Utils.isMethodSignature(methNameOrSig) ? Jar2IR.getIR(m_walaAnalyzer, methNameOrSig) : 
+                                                     Jar2IR.getIR(m_walaAnalyzer, methNameOrSig, startLine);
     // return if method is not found
     if (ir == null) {
       String msg = "Failed to locate " + methNameOrSig + ":" + startLine;
@@ -214,14 +163,14 @@ public class Executor {
       throw new InvalidStackTraceException(msg);
     }
     
-    return computeRec(optAndStates, cgNode, ir, startLine, startingInst, 
+    return computeRec(execOptions, cgNode, ir, startLine, startingInst, 
         inclLine, callStack, curInvokeDepth, callSites, workList, postCond);
   }
 
   /**
    * @param cgNode: only useful when we use 'compDispatchTargets' function
    */
-  public ExecutionResult computeRec(GlobalOptionsAndStates optAndStates, 
+  public ExecutionResult computeRec(ExecutionOptions execOptions, 
       CGNode cgNode, IR ir, int startLine, int startingInst, boolean inclLine, 
       CallStack callStack, int curInvokeDepth, String callSites, 
       Stack<BBorInstInfo> workList, Formula postCond) throws InvalidStackTraceException {
@@ -230,9 +179,6 @@ public class Executor {
     
     // start timing
     long start = System.currentTimeMillis();
-    
-    // printIR(ir);
-    // System.out.println(ir.toString());
 
     // init MethodMetaData, save it if it's not inside an 
     // invocation and it's at the out most call
@@ -246,27 +192,23 @@ public class Executor {
       // clear m_execResult
       m_execResult = null;
       
-      m_backTracking = false;
-      m_continueInMethod = false;
-      m_invocationUnsats = new Hashtable<BBorInstInfo, Object[]>();
+      // for heuristic backtracking
+      m_heuristicBacktrack = new HeuristicBacktrack(m_smtChecker);
     }
     
     if (workList.empty()) { // new worklist, simply start from startLine
-      // start from the basic block at nStartLine
       ISSABasicBlock startFromBB = findBasicBlock(methMetaData, startLine, startingInst);
       if (startFromBB == null) {
-        String msg = "Failed to find a valid basic block at line: " + startLine + 
-                     " and instruction index: " + startingInst;
+        String msg = "Failed to find a valid basic block at line: " + startLine + " and instruction index: " + startingInst;
         System.err.println(msg);
         throw new InvalidStackTraceException(msg);
       }
 
-      
       // create an initial Formula if postCond is null
       if (postCond == null) {
         BBorInstInfo initInfoItem = new BBorInstInfo(startFromBB, false, null, null, 
             Formula.NORMAL_SUCCESSOR, null, null, methMetaData, callSites, null, this);
-        postCond = PrepInitFormula.prepInitFormula(initInfoItem, optAndStates, callStack);
+        postCond = PrepInitFormula.prepInitFormula(initInfoItem, execOptions, callStack);
       }
 
       // push in the first block
@@ -274,8 +216,8 @@ public class Executor {
           Formula.NORMAL_SUCCESSOR, null, null, methMetaData, callSites, null, this));
     }
 
-    // start depth first search
-    ExecutionResult execResult = computeMethod(optAndStates, cgNode, methMetaData, 
+    // start depth first search for this method
+    ExecutionResult execResult = computeMethod(execOptions, cgNode, methMetaData, 
         workList, startLine, startingInst, inclLine, callStack, curInvokeDepth, callSites);
     
     // save result if it's not inside an invocation and it's at the out most call
@@ -291,7 +233,9 @@ public class Executor {
       }
       
       // clear non-solver data in each Formula object
-      m_execResult.clearAllSatNonSolverData();
+      if (execOptions.clearSatNonSolverData) {
+        m_execResult.clearAllSatNonSolverData();
+      }
 
       // end timing
       long end = System.currentTimeMillis();
@@ -342,7 +286,7 @@ public class Executor {
     return m_walaAnalyzer;
   }
  
-  private ExecutionResult computeMethod(GlobalOptionsAndStates optAndStates,
+  private ExecutionResult computeMethod(ExecutionOptions execOptions,
       CGNode cgNode, MethodMetaData methData, Stack<BBorInstInfo> workList, 
       int startLine, int startingInst, boolean inclLine, CallStack callStack, 
       int curInvokeDepth, String callSites) throws InvalidStackTraceException {
@@ -358,48 +302,43 @@ public class Executor {
     // get cfg for later use
     SSACFG cfg = methData.getcfg();
     
-    // if nStartLine <= 0, we start from exit block
+    // if startLine <= 0, we start from exit block
     boolean[] starting = new boolean[1];
     starting[0] = startLine > 0;
     
     // if callStack's depth == 1, finished entering call stack
-    if (optAndStates.isEnteringCallStack() && callStack.getDepth() <= 1) {
-      optAndStates.finishedEnteringCallStack();
+    if (execOptions.isEnteringCallStack() && callStack.getDepth() <= 1) {
+      execOptions.finishedEnteringCallStack();
     }
 
     // output method name
     System.out.println("Computing method: " + cfg.getMethod().getSignature());
     
     // continue backtrack if necessary
-    if (optAndStates.heuristicBacktrack && m_continueInMethod) {
-      heuristicBacktrack(workList, curInvokeDepth, optAndStates.maxInvokeDepth);
+    if (execOptions.heuristicBacktrack && m_heuristicBacktrack.isContinueInMethod()) {
+      m_heuristicBacktrack.backtrack(workList, curInvokeDepth, execOptions.maxInvokeDepth);
     } 
     
     // start depth first search
     while (!workList.empty()) {
 
       // continue backtrack if necessary
-      if (optAndStates.heuristicBacktrack && m_backTracking) {
-        heuristicBacktrack(workList, curInvokeDepth, optAndStates.maxInvokeDepth);
+      if (execOptions.heuristicBacktrack && m_heuristicBacktrack.isBacktracking()) {
+        m_heuristicBacktrack.backtrack(workList, curInvokeDepth, execOptions.maxInvokeDepth);
         if (workList.empty()) {
           continue;
         }
-      } 
-      
-      // for (int i = 0; i < dfsStack.size(); i++) {
-      // System.out.print(dfsStack.get(i).currentBB.getNumber() + " ");
-      // }
-      // System.out.println();
+      }
 
+      // next block to compute
       BBorInstInfo infoItem = workList.pop();
 
-      // if postCond is still satisfiable
       //if (!infoItem.postCond.isContradicted()) {
       if (true) {
         int instIndex = infoItem.currentBB.getLastInstructionIndex();
         String lineNo = (instIndex >= 0) ? " @ line " + methData.getLineNumber(instIndex) : "";
         System.out.println("Computing BB" + infoItem.currentBB.getNumber() + lineNo);
-        
+
         // get visited records
         Hashtable<ISSABasicBlock, Integer> visitedBB = infoItem.postCond.getVisitedRecord();
         
@@ -407,35 +346,28 @@ public class Executor {
         
         // compute for this BB
         int oriStackSize = workList.size();
-        Formula precond = computeBB(optAndStates, cgNode, methData, infoItem, startLine, 
+        Formula precond = computeBB(execOptions, cgNode, methData, infoItem, startLine, 
             startingInst, inclLine, callStack, starting, curInvokeDepth, callSites, workList);
 
-        if (precond == null) {
-          continue; // an inner contradiction has been detected
-        }
-        
-        // if new invocation targets have been pushed into stack due to 
-        // target dispatch, skip the current instruction
-        if (workList.size() != oriStackSize) {
-          continue;
+        if (precond == null || // an inner contradiction has been detected
+            workList.size() != oriStackSize) { // if new invocation targets have been pushed into stack 
+                                               // due to target dispatch, skip the current instruction
+          continue; 
         }
 
         // marked as visited
         precond.setVisitedRecord(visitedBB, infoItem);
 
-        // unpop it if can't pop: a new workList created 
-        // for this BB and has not yet finished
+        // re-push if can't pop: a new workList created for this BB has not yet finished
         if (infoItem.workList != null && !infoItem.workList.empty()) {
           workList.push(infoItem);
           
-          // add to surveillance list
-          List<Condition> condsOnOrBefore = new ArrayList<Condition>(precond.getConditionList());
-          condsOnOrBefore.remove(prevCondListSize); // remove the receiver != null condition
-          m_invocationUnsats.put(infoItem, new Object[] {condsOnOrBefore, new ArrayList<Condition>()});
+          // add to watch list
+          m_heuristicBacktrack.addToWatchList(infoItem, precond, prevCondListSize);
         }
         else {
-          // don't need to to surveillance
-          m_invocationUnsats.remove(infoItem);
+          // don't need to watch anymore
+          m_heuristicBacktrack.removeFromWatchList(infoItem);
         }
 
 //        // check whether the caught exception is/can be triggered
@@ -455,37 +387,47 @@ public class Executor {
           
           // on the fly checks
           Hashtable<String, Reference> methodRefs = precond.getRefMap().get(infoItem.callSites);
-          if (optAndStates.checkOnTheFly && normPredBB.size() > 1) {
+          if (execOptions.checkOnTheFly && normPredBB.size() > 1) {
             if (!infoItem.currentBB.isExitBlock() || methodRefs == null || !methodRefs.containsKey("RET")) {
-              if (m_smtChecker.smtCheck(precond, methData, false, optAndStates.heuristicBacktrack) == Formula.SMT_RESULT.UNSAT) {
+              SMT_RESULT smtResult = m_smtChecker.smtCheck(precond, methData, false, execOptions.heuristicBacktrack);
+              precond.setSolverResult(m_smtChecker);
+              
+              // trigger callbacks
+              for (Object[] m : execOptions.getAfterOnTheFlyCheckCallback()) {
+                try {
+                  ((Method) m[0]).invoke(m[1], precond);
+                } catch (Exception e) {e.printStackTrace();}
+              }
+              
+              if (smtResult == Formula.SMT_RESULT.UNSAT) {
                 System.out.println("Inner contradiction developed, discard block.");
                 
                 // once smt check failed, we track back heuristically
-                if (optAndStates.heuristicBacktrack) {
-                  heuristicBacktrack(workList, curInvokeDepth, optAndStates.maxInvokeDepth);
+                if (execOptions.heuristicBacktrack) {
+                  m_heuristicBacktrack.backtrack(workList, curInvokeDepth, execOptions.maxInvokeDepth);
                 }
                 continue;
               }
             }
           }
 
-          // if have specified the optAndStates.startingInstBranchesTo list, 
+          // if have specified the execOptions.startingInstBranchesTo list, 
           // only take the specified branches at the starting basic block
-          if (shouldCheckBranching(cfg, startingInst, curInvokeDepth, callStack, optAndStates, infoItem)) {
+          if (shouldCheckBranching(cfg, startingInst, curInvokeDepth, callStack, execOptions, infoItem)) {
             
             // retain only the branches in startingInstBranchesTo list
-            retainOnlyBranches(cfg, optAndStates.startingInstBranchesTo, normPredBB, excpPredBB);
+            retainOnlyBranches(cfg, execOptions.startingInstBranchesTo, normPredBB, excpPredBB);
           }
           
 //          // only traverse exceptional paths when we come from a catch block
 //          if (isCaught(precond)) {
 //            // iterate all exceptional predecessors
 //            pushChildrenBlocks(excpPredBB, false, infoItem, precond, methData,
-//                Formula.EXCEPTIONAL_SUCCESSOR, dfsStack, optAndStates.maxLoop, valPrefix);            
+//                Formula.EXCEPTIONAL_SUCCESSOR, dfsStack, execOptions.maxLoop, valPrefix);            
 //          }
           
           // try to skip method
-          if (optAndStates.skipUselessMethods && infoItem.currentBB.isExitBlock() && 
+          if (execOptions.skipUselessMethods && infoItem.currentBB.isExitBlock() && 
               (methodRefs == null || !methodRefs.containsKey("RET"))) {
             ISSABasicBlock skipToEntryBB = m_defAnalyzer.findSkipToBasicBlocks(methData.getIR(), precond);
             if (skipToEntryBB != null) {
@@ -518,7 +460,7 @@ public class Executor {
           while (keys.hasMoreElements()) {
             ISSABasicBlock pred  = keys.nextElement();
             Formula phiedPreCond = phiedPreConds.get(pred);
-            if (optAndStates.skipUselessBranches && !phiDefsUseful) {
+            if (execOptions.skipUselessBranches && !phiDefsUseful) {
               ISSABasicBlock skipToCondBB = m_defAnalyzer.findSkipToBasicBlocks(methData.getIR(), 
                   infoItem.currentBB, pred, phiedPreCond, infoItem.callSites);
               if (skipToCondBB != null) {
@@ -549,7 +491,7 @@ public class Executor {
                       infoItem.sucessorType, infoItem.sucessorBB, infoItem.sucessorInfo, 
                       infoItem.methData, infoItem.callSites, infoItem.workList, infoItem.executor);
                   pushChildrenBlocks(condBBToPush, false, newInfoItem, methData,
-                      Formula.NORMAL_SUCCESSOR, workList, optAndStates.maxLoop, callSites);
+                      Formula.NORMAL_SUCCESSOR, workList, execOptions.maxLoop, callSites);
                 }
                 totalSkipped++;
               }
@@ -567,11 +509,10 @@ public class Executor {
           
           // iterate all normal predecessors
           pushChildrenBlocks(bbPreConds, false, infoItem, methData,
-              Formula.NORMAL_SUCCESSOR, workList, optAndStates.maxLoop, callSites);
+              Formula.NORMAL_SUCCESSOR, workList, execOptions.maxLoop, callSites);
         }
-        else if (optAndStates.isEnteringCallStack()) {
-          // at method entry, we still cannot find the proper invocation 
-          // to enter call stack, throw InvalidStackTraceException
+        else if (execOptions.isEnteringCallStack()) {
+          // at method entry, cannot find the proper invocation to enter call stack
           String msg = "Failed to enter call stack: " + callStack.getNextMethodNameOrSign() + 
             " at " + callStack.getCurMethodNameOrSign() + ":" + callStack.getCurLineNo();
           System.err.println(msg);
@@ -590,12 +531,19 @@ public class Executor {
           printPropagationPath(infoItem);
           
           // use SMT Solver to check precond and obtain a model
-          SMT_RESULT smtResult = m_smtChecker.smtCheck(precond, methData, true, optAndStates.heuristicBacktrack);
+          SMT_RESULT smtResult = m_smtChecker.smtCheck(precond, methData, true, execOptions.heuristicBacktrack);
           precond.setSolverResult(m_smtChecker);
+          
+          // trigger callbacks
+          for (Object[] m : execOptions.getAfterSmtCheckCallbacks()) {
+            try {
+              ((Method) m[0]).invoke(m[1], precond);
+            } catch (Exception e) {e.printStackTrace();}
+          }
           
           // limit maximum smt checks
           boolean canBreak = false;
-          if (optAndStates.maxSmtCheck > 0 && ++smtChecked >= optAndStates.maxSmtCheck) {
+          if (execOptions.maxSmtCheck > 0 && ++smtChecked >= execOptions.maxSmtCheck) {
             execResult.setOverLimit(true);
             System.out.println("Reached Maximum SMT Check Limit!");
             canBreak = true;
@@ -608,22 +556,27 @@ public class Executor {
             execResult.addSatisfiable(precond);
             
             // limit maximum number of satisfiable preconditions to retrieve
-            if (optAndStates.maxRetrieve > 0 && ++satRetrieved >= optAndStates.maxRetrieve) {
+            if (execOptions.maxRetrieve > 0 && ++satRetrieved >= execOptions.maxRetrieve) {
               execResult.setReachMaximum(true);
               System.out.println("Reached Maximum Retrieve Limit!");
               canBreak = true;
+            }
+            
+            // clear out watch list since there is already a sat along this path
+            if (execOptions.heuristicBacktrack) {
+              m_heuristicBacktrack.clearWatchList();
             }
           }
           else {
             System.out.println("SMT Check failed!\n");
             
             // once smt check failed, we track back heuristically
-            if (optAndStates.heuristicBacktrack) {
-              heuristicBacktrack(workList, curInvokeDepth, optAndStates.maxInvokeDepth);
+            if (execOptions.heuristicBacktrack && smtResult == SMT_RESULT.UNSAT) {
+              m_heuristicBacktrack.backtrack(workList, curInvokeDepth, execOptions.maxInvokeDepth);
             }
             
             // memory consumption may grow overtime as not-sat formula added
-            if (optAndStates.saveNotSatResults) {
+            if (execOptions.saveNotSatResults) {
               // clear non-solver data in the not satisfiable formula object
               precond.clearNonSolverData();
               
@@ -647,7 +600,7 @@ public class Executor {
     return execResult;
   }
 
-  private Formula computeBB(GlobalOptionsAndStates optAndStates, CGNode cgNode, 
+  private Formula computeBB(ExecutionOptions execOptions, CGNode cgNode, 
       MethodMetaData methData, BBorInstInfo infoItem, int startLine, int startingInst, 
       boolean inclLine, CallStack callStack, boolean[] starting, int curInvokeDepth, 
       String callSites, Stack<BBorInstInfo> workList) throws InvalidStackTraceException {
@@ -659,7 +612,7 @@ public class Executor {
     for (Iterator<SSAPiInstruction> it = infoItem.currentBB.iteratePis(); it.hasNext();) {
       SSAPiInstruction piInst = (SSAPiInstruction) it.next();
       if (piInst != null) {
-        preCond = m_instHandler.handle(optAndStates, cgNode, preCond, piInst, 
+        preCond = m_instHandler.handle(execOptions, cgNode, preCond, piInst, 
             infoItem, callStack, curInvokeDepth);
       }
     }
@@ -681,7 +634,7 @@ public class Executor {
         if (cgNode != null) {
           // find the potential targets of this invocation
           SimpleEntry<IR[], CGNode[]> ret = WalaUtils.findInvocationTargets(
-              m_walaAnalyzer, cgNode, invokeInst.getCallSite(), optAndStates.maxDispatchTargets);
+              m_walaAnalyzer, cgNode, invokeInst.getCallSite(), execOptions.maxDispatchTargets);
           IR[] targetIRs       = ret.getKey();
           CGNode[] targetNodes = ret.getValue();
         
@@ -712,7 +665,7 @@ public class Executor {
       
       // determine if entering call stack is still correct
       int currLine = methData.getLineNumber(currInstIndex);
-      if (optAndStates.isEnteringCallStack()) {
+      if (execOptions.isEnteringCallStack()) {
         // determine if entering call stack is still correct
         if (callStack.getCurLineNo() == currLine) {
           if (inst instanceof SSAInvokeInstruction) {
@@ -745,7 +698,7 @@ public class Executor {
       }
       
       if (inst != null && (!starting[0] || (currLine - (inclLine ? 1 : 0)) < startLine)) {
-        boolean inclStartingInst = optAndStates.inclStartingInst;
+        boolean inclStartingInst = execOptions.inclStartingInst;
         
         // if it is at the inner most frame, start from the starting index
         if (!starting[0] || startingInst < 0 || 
@@ -753,7 +706,7 @@ public class Executor {
           
           // get precond for this instruction
           if (lastInst) {
-            preCond = m_instHandler.handle(optAndStates, cgNode, preCond, inst, 
+            preCond = m_instHandler.handle(execOptions, cgNode, preCond, inst, 
                 infoItem, callStack, curInvokeDepth);
           }
           else {
@@ -761,7 +714,7 @@ public class Executor {
             BBorInstInfo instInfo = new BBorInstInfo(infoItem.currentBB, 
                 infoItem.isSkipToBB, preCond, infoItem.postCond4BB, Formula.NORMAL_SUCCESSOR, 
                 infoItem.sucessorBB, infoItem.sucessorInfo, methData, callSites, infoItem.workList, this);
-            preCond = m_instHandler.handle(optAndStates, cgNode, preCond, inst, 
+            preCond = m_instHandler.handle(execOptions, cgNode, preCond, inst, 
                 instInfo, callStack, curInvokeDepth);
           }
         }
@@ -829,9 +782,9 @@ public class Executor {
   }
   
   private boolean shouldCheckBranching(SSACFG cfg, int startingInst, int curInvokeDepth, 
-      CallStack callStack, GlobalOptionsAndStates optAndStates, BBorInstInfo infoItem) {
+      CallStack callStack, ExecutionOptions execOptions, BBorInstInfo infoItem) {
     return curInvokeDepth == 0 && callStack.getDepth() <= 1 && 
-        optAndStates.startingInst >= 0 && optAndStates.startingInstBranchesTo != null && 
+        execOptions.startingInst >= 0 && execOptions.startingInstBranchesTo != null && 
         infoItem.sucessorBB == null && 
         infoItem.currentBB.equals(cfg.getBlockForInstruction(startingInst));
   }
@@ -958,6 +911,7 @@ public class Executor {
         for (int i = 0; i < predList.size() && i < phiInst.getNumberOfUses(); i++) {
           ISSABasicBlock pred = predList.get(i);
           m_instHandler.handle_phi(newPreConds.get(pred), phiInst, instInfo, phiInst.getUse(i), pred);
+          newPreConds.get(pred).addToTraversedPath(phiInst, instInfo.methData, instInfo.callSites, phiInst.getUse(i));
         }
       }
     }
@@ -981,120 +935,6 @@ public class Executor {
     return useful;
   }
   
-  @SuppressWarnings("unchecked")
-  private void heuristicBacktrack(Stack<BBorInstInfo> workList, int curInvokeDepth, int maxInvokeDepth) {
-    // find unsat core, only the latest condition is retrieved
-    Condition unsatCore = findUnsatCore();
-    if (unsatCore != null) {
-      if (!m_backTracking && !m_continueInMethod) {
-        Enumeration<BBorInstInfo> keys = m_invocationUnsats.keys();
-        while (keys.hasMoreElements()) {
-          // save unsat core condition to every current invocation
-          BBorInstInfo key = keys.nextElement();
-          ((List<Condition>) m_invocationUnsats.get(key)[1]).add(unsatCore);        
-        }
-        
-        System.out.println("Heuristic Backtracing: found a backtrackable unsat core: " + unsatCore + ", backtracking...");
-        m_backTracking = true;
-      }
-      
-      // try to backtrack current workList
-      boolean continueInMethod  = false;
-      boolean backTrackFinished = false;
-      long eariestSet = findUnsatCoreEarliestSet();
-      while (!workList.empty() && !backTrackFinished) {
-        BBorInstInfo next = workList.peek();
-        SSAInstruction inst = next.currentBB.getLastInstructionIndex() >= 0 ? 
-                                        next.currentBB.getLastInstruction() : null;
-        
-        if (eariestSet < next.postCond.getTimeStamp()) {
-          backTrackFinished = false;
-        }
-        else {
-          // check if the current invocation target is backtrack-able
-          backTrackFinished = true;
-          if (inst != null && inst instanceof SSAInvokeInstruction && curInvokeDepth < maxInvokeDepth) {
-            if (m_invocationUnsats.containsKey(next)) { // this invocation does under surveillance
-              boolean affectable = false;
-              List<Condition> prevUnsatCores      = (List<Condition>) m_invocationUnsats.get(next)[1];
-              List<Condition> prevCondsOnOrBefore = (List<Condition>) m_invocationUnsats.get(next)[0];
-              HashSet<Long> prevCondsOnOrBeforeTimes = new HashSet<Long>();
-              for (Condition prevCondOnOrBefore : prevCondsOnOrBefore) {
-                prevCondsOnOrBeforeTimes.add(prevCondOnOrBefore.getTimeStamp());
-              } 
-              for (int i = 0, size = prevUnsatCores.size(); i < size && !affectable; i++) {
-                Condition unsatCoreCond = prevUnsatCores.get(i);
-                if (eariestSet > next.postCond.getTimeStamp() && 
-                    prevCondsOnOrBeforeTimes.contains(unsatCoreCond.getTimeStamp())) {
-                  affectable       = true;
-                  continueInMethod = true;
-                }                 
-              }
-              // we will continue back track inside the method
-              backTrackFinished = affectable;
-            }
-          }
-        }
-        
-        if (!backTrackFinished) {
-          workList.pop();
-
-          // since we backtracked, the current invocation no longer under surveillance
-          m_invocationUnsats.remove(next);
-        }
-      }
-      m_backTracking     = !backTrackFinished;
-      m_continueInMethod = continueInMethod;
-    }
-  }
-  
-  private Condition findUnsatCore() {
-    Condition unsatCore = null;
-    
-    List<String> assertCmds                    = m_smtChecker.getLastAssertCmds();
-    List<Integer> unsatCoreIds                 = m_smtChecker.getLastResult().getUnsatCoreIds();
-    Hashtable<String, List<Condition>> mapping = m_smtChecker.getLastCmdConditionsMapping();
-    
-    // we only deal with the simplest case
-    if (unsatCoreIds.size() == 1) {
-      String unsatCoreCmd = assertCmds.get(unsatCoreIds.get(0) - 1);
-      List<Condition> unsatCoreConditions = mapping.get(unsatCoreCmd);
-      if (unsatCoreConditions != null && unsatCoreConditions.size() > 0) {
-        for (Condition unsatCoreCondition : unsatCoreConditions) {
-          if (unsatCore == null || unsatCoreCondition.getTimeStamp() > unsatCore.getTimeStamp()) {
-            unsatCore = unsatCoreCondition; // get the latest one
-          }
-        }
-      }
-    }
-    return unsatCore;
-  }
-  
-  private long findUnsatCoreEarliestSet() {
-
-    List<String> assertCmds                    = m_smtChecker.getLastAssertCmds();
-    List<Integer> unsatCoreIds                 = m_smtChecker.getLastResult().getUnsatCoreIds();
-    Hashtable<String, List<Condition>> mapping = m_smtChecker.getLastCmdConditionsMapping();
-    
-    // we only deal with the simplest case
-    long earliest = Long.MAX_VALUE;
-    if (unsatCoreIds.size() == 1) {
-      String unsatCoreCmd = assertCmds.get(unsatCoreIds.get(0) - 1);
-      List<Condition> unsatCoreConditions = mapping.get(unsatCoreCmd);
-      if (unsatCoreConditions != null && unsatCoreConditions.size() > 0) {
-        for (Condition unsatCoreCondition : unsatCoreConditions) {
-          long time1 = unsatCoreCondition.getConditionTerms().get(0).getInstance1().getSetValueTime();
-          long time2 = unsatCoreCondition.getConditionTerms().get(0).getInstance2().getSetValueTime();
-          long condTime = time1 > time2 ? time1 : time2;
-          if (condTime < earliest) {
-            earliest = condTime;
-          }
-        }
-      }
-    }
-    return earliest;
-  }
-
   // if lineNumber is <= 0, we return the exit block
   private ISSABasicBlock findBasicBlock(MethodMetaData methData, int lineNumber, int instIndex) {
     SSACFG cfg = methData.getcfg();
@@ -1135,7 +975,7 @@ public class Executor {
     }
     else {
       // get the exit block
-      foundBB = cfg.getBasicBlock(cfg.getMaxNumber());
+      foundBB = cfg.exit();
     }
     return foundBB;
   }
@@ -1159,8 +999,8 @@ public class Executor {
     computePath.append(0);
     BBorInstInfo currentBB = entryNode;
     while (currentBB.sucessorInfo != null) {
-      computePath.append(" >- ");
-      computePath.append(new StringBuilder(String.valueOf(currentBB.sucessorBB.getNumber())).reverse());
+      computePath.append(" >- ").append(
+          new StringBuilder(String.valueOf(currentBB.sucessorBB.getNumber())).reverse());
       currentBB = currentBB.sucessorInfo;
     }
     System.out.print(computePath.reverse());
@@ -1210,8 +1050,6 @@ public class Executor {
     }
     else {
       System.out.println("The line is unreachable!");
-      // can't find any good precond, human??? should
-      // remember those timeout smtchecks
     }
   }
   
@@ -1240,12 +1078,7 @@ public class Executor {
   }
   
   public static void main(String args[]) {
-    try {
-      // compute def result first
-//      DefAnalyzerWrapper defAnalyzer = new DefAnalyzerWrapper(args[0]);
-//      defAnalyzer.addIncludeName("test_program1.");
-//      defAnalyzer.computeDef(10);
-      
+    try {      
       AbstractHandler instHandler = new CompleteBackwardHandler();
       SMTChecker smtChecker = new SMTChecker(SMTChecker.SOLVERS.YICES);
       Executor executor = new Executor(args[0]/*jar file path*/, instHandler, smtChecker, null);
@@ -1260,15 +1093,15 @@ public class Executor {
       }
       
       // set options
-      GlobalOptionsAndStates optAndStates = executor.new GlobalOptionsAndStates(callStack, false);
-      optAndStates.maxDispatchTargets = 2;
-      optAndStates.maxRetrieve        = 10;
-      optAndStates.maxSmtCheck        = 5000;
-      optAndStates.maxInvokeDepth     = 1;
-      optAndStates.maxLoop            = 7;
-      optAndStates.checkOnTheFly      = true;
+      ExecutionOptions execOptions = new ExecutionOptions(callStack, false);
+      execOptions.maxDispatchTargets = 2;
+      execOptions.maxRetrieve        = 10;
+      execOptions.maxSmtCheck        = 5000;
+      execOptions.maxInvokeDepth     = 1;
+      execOptions.maxLoop            = 7;
+      execOptions.checkOnTheFly      = true;
       
-      executor.compute(optAndStates, null);
+      executor.compute(execOptions, null);
       // wp.heapTracer();
     } catch (Exception e) {
       e.printStackTrace();
@@ -1281,9 +1114,7 @@ public class Executor {
   private final DefAnalyzerWrapper  m_defAnalyzer;
   private MethodMetaData            m_methMetaData;
   private ExecutionResult           m_execResult;
-  private boolean                   m_backTracking;
-  private boolean                   m_continueInMethod;
-  private Hashtable<BBorInstInfo, Object[]> m_invocationUnsats;
+  private HeuristicBacktrack        m_heuristicBacktrack;
 
   private Hashtable<BBorInstInfo, SSAInstruction> m_callStackInvokes;
 }

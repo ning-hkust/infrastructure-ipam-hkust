@@ -1,7 +1,6 @@
 package hk.ust.cse.Prevision.Solver.Yices;
 
 import hk.ust.cse.Prevision.Solver.ISolverLoader;
-import hk.ust.cse.Prevision.Solver.ISolverResult;
 import hk.ust.cse.YicesWrapper.YicesWrapper;
 
 public class YicesLoader implements ISolverLoader {
@@ -12,15 +11,7 @@ public class YicesLoader implements ISolverLoader {
     String output  = YicesWrapper.getLastOutput();
     String errMsg  = YicesWrapper.getLastErrorMsg();
 
-    // create a solver result
-    if (m_lastResult == null) {
-      m_lastResult = new YicesResult();
-    }
-    
     if (output.length() > 0) {       // SMT Check finished
-      // parse and save result
-      m_lastResult.parseOutput(output);
-
       // return satisfactory or not
       return (result) ? SOLVER_COMP_PROCESS.SAT : SOLVER_COMP_PROCESS.UNSAT;
     }
@@ -41,10 +32,4 @@ public class YicesLoader implements ISolverLoader {
   public String getLastInput() {
     return YicesWrapper.getLastInput();
   }
-
-  public ISolverResult getLastResult() {
-    return m_lastResult;
-  }
-  
-  private ISolverResult m_lastResult;
 }

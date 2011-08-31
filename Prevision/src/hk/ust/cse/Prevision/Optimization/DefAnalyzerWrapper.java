@@ -1,4 +1,4 @@
-package hk.ust.cse.Prevision.StaticAnalysis;
+package hk.ust.cse.Prevision.Optimization;
 
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;

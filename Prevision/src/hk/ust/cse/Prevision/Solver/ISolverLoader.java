@@ -10,6 +10,4 @@ public interface ISolverLoader {
   public abstract String getLastOutput();
 
   public abstract String getLastInput();
-
-  public abstract ISolverResult getLastResult();
 }

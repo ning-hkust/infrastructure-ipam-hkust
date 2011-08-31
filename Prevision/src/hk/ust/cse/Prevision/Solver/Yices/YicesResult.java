@@ -1,10 +1,14 @@
 package hk.ust.cse.Prevision.Solver.Yices;
 
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
+import hk.ust.cse.Prevision.PathCondition.ConditionTerm.Comparator;
 import hk.ust.cse.Prevision.Solver.ISolverResult;
+import hk.ust.cse.Prevision.VirtualMachine.Instance;
 
 import java.util.ArrayList;
+import java.util.Hashtable;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class YicesResult implements ISolverResult {
@@ -12,7 +16,7 @@ public class YicesResult implements ISolverResult {
   private static final Pattern s_pattern1 = Pattern.compile("^\\(= ([\\S]+) ([\\S]+)\\)$");
   private static final Pattern s_pattern2 = Pattern.compile("v[\\d]+\\$1");
   
-  public void parseOutput(String output) {
+  public void parseOutput(String output, Hashtable<String, Instance> nameInstanceMapping) {
     // save output first
     m_output = output;
 
@@ -20,9 +24,9 @@ public class YicesResult implements ISolverResult {
     String[] outLines = output.split(LINE_SEPARATOR);
 
     // analyze
-    m_satModel = new ArrayList<ConditionTerm>();
+    m_satModel = null;
     if (outLines.length == 0) {
-      m_bSatisfactory = false;
+      m_bSatisfactory = false; // error
     }
     else if (outLines[0].startsWith("unsat")) {
       m_bSatisfactory = false;
@@ -43,17 +47,15 @@ public class YicesResult implements ISolverResult {
       m_bSatisfactory = true;
       
       // analyze each model line
-//      for (int i = 1; i < outLines.length; i++) {
-//        if (outLines[i].length() > 0) {
-//          ConditionTerm term = toConditionTerm(outLines[i]);
-//          if (term != null) {
-//            m_satModel.add(term);
-//          }
-//          else {
-//            System.err.println("Unable to analyze model line: " + outLines[i]);
-//          }
-//        }
-//      }
+      m_satModel = new ArrayList<ConditionTerm>();
+      for (int i = 1; i < outLines.length; i++) {
+        if (outLines[i].length() > 0) {
+          ConditionTerm term = toConditionTerm(outLines[i], nameInstanceMapping);
+          if (term != null) {
+            m_satModel.add(term);
+          }
+        }
+      }
       
       // substitute embedded final vars
       substEmbeddedFinalVars();
@@ -79,26 +81,50 @@ public class YicesResult implements ISolverResult {
     return m_satModel;
   }
   
-  private ConditionTerm toConditionTerm(String str) {
-    ConditionTerm smtTerm = null;
+  private ConditionTerm toConditionTerm(String str, Hashtable<String, Instance> nameInstanceMapping) {
+    ConditionTerm conditionTerm = null;
     
-//    Matcher matcher = null;
-//    if ((matcher = s_pattern1.matcher(str)).find()) {
-//      SMTVariable var1 = defFinalVarMap.get(matcher.group(1));
-//      SMTVariable var2 = defFinalVarMap.get(matcher.group(2));
-//      
-//      // it is possible that var2 is a new value,
-//      // e.g. a new int or string(bit-vector) value
-//      if (var2 == null) {
-//        var2 = new SMTVariable(matcher.group(2), "#ConstantNumber", 
-//            VarCategory.VAR_CONST, null);
-//      }
-//      
-//      if (var1 != null) {
-//        smtTerm = new SMTTerm(var1, Operator.OP_EQUAL, var2);
-//      }
-//    }
-    return smtTerm;
+    Matcher matcher = null;
+    if ((matcher = s_pattern1.matcher(str)).find()) {
+      String instance1Str = matcher.group(1);
+      String instance2Str = matcher.group(2);
+      if (!instance1Str.startsWith("$tmp_")) { // if it is an introduced helper variable, discard
+        Instance instance1 = nameInstanceMapping.get(instance1Str);
+        Instance instance2 = nameInstanceMapping.get(instance2Str);
+        
+        // it is possible that var2 is a new value,
+        // e.g. a new int or string(bit-vector) value
+        if (instance2 == null) {
+          String value = matcher.group(2);
+          if (value.equals("true")) {
+            value = "1";
+          }
+          else if (value.equals("false")) {
+            value = "0";
+          }
+          
+          String prefix = "";
+          try {
+            Long.valueOf(value);
+            prefix = "#!";
+          } catch (NumberFormatException e) {
+            prefix = value.startsWith("0b") ? "##" : "";
+          }
+          instance2 = new Instance(prefix + value, instance1.getType(), null);
+        }
+        
+        if (instance1 != null) {
+          conditionTerm = new ConditionTerm(instance1, Comparator.OP_EQUAL, instance2);
+        }
+        else {
+          System.err.println("Unable to analyze model line: " + str);
+        }
+      }
+    }
+    else {
+      System.err.println("Unable to analyze model line: " + str);
+    }
+    return conditionTerm;
   }
   
   private void removeConvHelperTerm() {

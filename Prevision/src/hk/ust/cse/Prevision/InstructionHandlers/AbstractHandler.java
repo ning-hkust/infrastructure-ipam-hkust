@@ -5,9 +5,9 @@ import hk.ust.cse.Prevision.InvalidStackTraceException;
 import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Formula;
+import hk.ust.cse.Prevision.VirtualMachine.ExecutionOptions;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionResult;
 import hk.ust.cse.Prevision.VirtualMachine.Executor.BBorInstInfo;
-import hk.ust.cse.Prevision.VirtualMachine.Executor.GlobalOptionsAndStates;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
 import hk.ust.cse.Wala.MethodMetaData;
@@ -70,17 +70,17 @@ public abstract class AbstractHandler {
 
   public abstract Formula handle_invokestatic(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo);
   
-  public abstract Formula handle_invokeinterface_stepin(GlobalOptionsAndStates optionsAndStates, 
-      CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth);
+  public abstract Formula handle_invokeinterface_stepin(ExecutionOptions execOptions, CGNode caller, 
+      Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth);
 
-  public abstract Formula handle_invokevirtual_stepin(GlobalOptionsAndStates optionsAndStates, 
-      CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth);
+  public abstract Formula handle_invokevirtual_stepin(ExecutionOptions execOptions, CGNode caller, 
+      Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth);
 
-  public abstract Formula handle_invokespecial_stepin(GlobalOptionsAndStates optionsAndStates, 
-      CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth);
+  public abstract Formula handle_invokespecial_stepin(ExecutionOptions execOptions, CGNode caller, 
+      Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth);
 
-  public abstract Formula handle_invokestatic_stepin(GlobalOptionsAndStates optionsAndStates, 
-      CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth);
+  public abstract Formula handle_invokestatic_stepin(ExecutionOptions execOptions, CGNode caller, 
+      Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth);
   
   public abstract Formula handle_monitorenter(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo);
   
@@ -106,8 +106,8 @@ public abstract class AbstractHandler {
 
   public abstract Formula handle_entryblock(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo);
 
-  public final Formula handle(GlobalOptionsAndStates optionsAndStates, CGNode method, 
-      Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth) {
+  public final Formula handle(ExecutionOptions execOptions, CGNode method,  Formula postCond, 
+      SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth) {
 
     Formula preCond = null;
     try {
@@ -125,8 +125,8 @@ public abstract class AbstractHandler {
           instType = instType.replace(' ', '_');
           
           if (!instType.startsWith("invoke") || 
-              (!optionsAndStates.isEnteringCallStack() && 
-               curInvokeDepth >= optionsAndStates.maxInvokeDepth && 
+              (!execOptions.isEnteringCallStack() && 
+               curInvokeDepth >= execOptions.maxInvokeDepth && 
               !instInfo.executor.isCallStackInvokeInst(instInfo, inst))) {
             // invoke handler for this instruction
             Method rmethod = this.getClass().getMethod("handle_" + instType,
@@ -137,10 +137,15 @@ public abstract class AbstractHandler {
             System.out.println("stepping into " + instType + "...");
             // invoke handler for this instruction
             Method rmethod = this.getClass().getMethod("handle_" + instType + "_stepin", 
-                GlobalOptionsAndStates.class, CGNode.class, Formula.class, SSAInstruction.class, 
+                ExecutionOptions.class, CGNode.class, Formula.class, SSAInstruction.class, 
                 BBorInstInfo.class, CallStack.class, int.class);
-            preCond = (Formula) rmethod.invoke(this, optionsAndStates, method, 
+            preCond = (Formula) rmethod.invoke(this, execOptions, method, 
                 postCond, inst, instInfo, callStack, curInvokeDepth);
+          }
+          
+          // save traversed path
+          if (preCond != null) {
+            preCond.addToTraversedPath(inst, instInfo.methData, instInfo.callSites);
           }
         }
         else {
@@ -305,15 +310,15 @@ public abstract class AbstractHandler {
   }
   
   protected static final Formula computeToEnterCallSite(SSAInvokeInstruction invokeInst,
-      BBorInstInfo instInfo, GlobalOptionsAndStates optAndStates, CGNode caller, 
-      CallStack callStack, int curInvokeDepth, String callSites, Formula postCond) {
+      BBorInstInfo instInfo, ExecutionOptions execOptions, CGNode caller, 
+      CallStack callStack, int curInvokeDepth, String callSites, Formula postCond) throws InvalidStackTraceException {
     Formula preCond = null;
     
     // get method signature
-    assert(instInfo.target.getKey().equals(invokeInst));
     String methodSig  = null;
     CGNode methodNode = null;
-    if (instInfo.target.getValue() != null) {
+    if (instInfo.target != null && instInfo.target.getKey().equals(invokeInst) && 
+                                   instInfo.target.getValue() != null) {
       methodSig  = instInfo.target.getValue().getMethod().getSignature();
       methodNode = instInfo.target.getValue();
     }
@@ -327,33 +332,31 @@ public abstract class AbstractHandler {
     int lineNo = innerCallStack.getCurLineNo();
     
     // we only consider inclLine & starting instruction at the innermost call
-    boolean inclLine = (innerCallStack.getDepth() == 1) ? optAndStates.inclInnerMostLine : true;
-    int startingInst = (innerCallStack.getDepth() == 1) ? optAndStates.startingInst : -1;
+    boolean inclLine = (innerCallStack.getDepth() == 1) ? execOptions.inclInnerMostLine : true;
+    int startingInst = (innerCallStack.getDepth() == 1) ? execOptions.startingInst : -1;
 
     // create workList if necessary
     instInfo.workList = (instInfo.workList == null) ? new Stack<BBorInstInfo>() : instInfo.workList;
     
-    try {
-      String newCallSites = callSites + String.format("%04d", invokeInst.getProgramCounter());
-      ExecutionResult execResult = instInfo.executor.computeRec(optAndStates, 
-          methodNode, methodSig, lineNo, startingInst, inclLine, innerCallStack, 
-          curInvokeDepth, newCallSites, instInfo.workList, postCond);
-      preCond = execResult.getFirstSatisfiable();
-    } catch (InvalidStackTraceException e) {}
+    // call compute
+    String newCallSites = callSites + String.format("%04d", invokeInst.getProgramCounter());
+    ExecutionResult execResult = instInfo.executor.computeRec(execOptions, methodNode, methodSig, 
+        lineNo, startingInst, inclLine, innerCallStack, curInvokeDepth, newCallSites, instInfo.workList, postCond);
+    preCond = execResult.getFirstSatisfiable();
     
     return preCond;
   }
   
   protected static final Formula computeAtCallSite(SSAInvokeInstruction invokeInst,
-      BBorInstInfo instInfo, GlobalOptionsAndStates optAndStates, CGNode caller, 
-      CallStack callStack, int curInvokeDepth, String callSites, Formula newPostCond) {
+      BBorInstInfo instInfo, ExecutionOptions execOptions, CGNode caller, 
+      CallStack callStack, int curInvokeDepth, String callSites, Formula newPostCond) throws InvalidStackTraceException {
     Formula preCond = null;
   
     // get method signature
-    assert(instInfo.target.getKey().equals(invokeInst));
     String methodSig  = null;
     CGNode methodNode = null;
-    if (instInfo.target.getValue() != null) {
+    if (instInfo.target != null && instInfo.target.getKey().equals(invokeInst) && 
+                                   instInfo.target.getValue() != null) {
       methodSig  = instInfo.target.getValue().getMethod().getSignature();
       methodNode = instInfo.target.getValue();
     }
@@ -364,8 +367,8 @@ public abstract class AbstractHandler {
     
     // get from summary
 //    boolean noMatch = false;
-//    if (optAndStates.summary != null) {
-//      preCond = optAndStates.summary.getSummary(methodSig, curInvokeDepth + 1,
+//    if (execOptions.summary != null) {
+//      preCond = execOptions.summary.getSummary(methodSig, curInvokeDepth + 1,
 //          callSites, newPostCond);
 //      if (preCond == null) {
 //        noMatch = true;
@@ -377,39 +380,22 @@ public abstract class AbstractHandler {
       // create workList if necessary
       instInfo.workList = (instInfo.workList == null) ? new Stack<BBorInstInfo>() : instInfo.workList;
       
-      try { 
-        // call compute, startLine = -1 (from exit block)
-        String newCallSites = callSites + String.format("%04d", invokeInst.getProgramCounter());
-        ExecutionResult exeResult = instInfo.executor.computeRec(optAndStates, 
-            methodNode, methodSig, -1, -1, false, callStack, curInvokeDepth + 1, 
-            newCallSites, instInfo.workList, newPostCond);
-        preCond = exeResult.getFirstSatisfiable();
-      } catch (InvalidStackTraceException e) {}
+      // call compute, startLine = -1 (from exit block)
+      String newCallSites = callSites + String.format("%04d", invokeInst.getProgramCounter());
+      ExecutionResult exeResult = instInfo.executor.computeRec(execOptions, methodNode, methodSig, 
+          -1, -1, false, callStack, curInvokeDepth + 1, newCallSites, instInfo.workList, newPostCond);
+      preCond = exeResult.getFirstSatisfiable();
     }
     
     // save to summary
 //    if (noMatch && preCond != null) {
 //      // use the original method signature
 //      methodSig = invokeInst.getDeclaredTarget().getSignature();
-//      optAndStates.summary.putSummary(methodSig, curInvokeDepth + 1,
+//      execOptions.summary.putSummary(methodSig, curInvokeDepth + 1,
 //          newValPrefix, newPostCond, preCond);
 //    }
     
     return preCond;
-  }
-  
-  protected static final List<Condition> addConditions(
-      List<Condition> oldConditionList, List<Condition> conditionList) {
-    // create new list
-    int len1 = oldConditionList.size();
-    int len2 = conditionList.size();
-    List<Condition> newConditionList = new ArrayList<Condition>(len1 + len2);
-
-    // copy elements from old list
-    newConditionList.addAll(oldConditionList);
-    // add new statements
-    newConditionList.addAll(conditionList);
-    return newConditionList;
   }
   
   /**
@@ -792,7 +778,7 @@ public abstract class AbstractHandler {
         // some reverts may not be necessary
         if (!prevSet[0].equals(lastSet[0]) || prevSet[1] == null || !prevSet[1].equals(lastSet[1])) {
           Long time = (Long) newlySettedTime.get(prevSet[0]);
-          if (time < (Long) prevSet[2] && time > (Long) ((Long[]) prevSet[3])[0] && false) { //XXX
+          if (time < (Long) prevSet[2] && time > (Long) ((Long[]) prevSet[3])[0]/* && false*/) { //XXX
             revertingIndices.add(prevMatchedIndex);
           }
 //          else {
@@ -921,7 +907,7 @@ public abstract class AbstractHandler {
       preInstances.add(refInstance);
       for (Instance instance : allInstances) {
         
-        if (instance.getSetValueTime() != -1) { // this instance is set/store
+        if (instance.getSetValueTime() != Long.MIN_VALUE) { // this instance is set/store
           if (pathInstances == null) {
             pathInstances = settedInstances.get(path);
             if (pathInstances == null) {
@@ -983,7 +969,7 @@ public abstract class AbstractHandler {
     Object[] ret = new Object[]{false, null, null, null, null, null, null};
     List<Instance> pathSettedInstances = settedInstances.get(path);
     Long[] lifeTime = ref.getLifeTime(refInstance);
-    if (pathSettedInstances != null && refInstance.getSetValueTime() == -1 && lifeTime != null) {
+    if (pathSettedInstances != null && refInstance.getSetValueTime() == Long.MIN_VALUE && lifeTime != null) {
       Instance nearestSetted = null;
       Long nearestSettedTime = null;
 
@@ -1036,8 +1022,7 @@ public abstract class AbstractHandler {
     }
   }
   
-  protected static final Formula defaultHandler(Formula postCond, 
-      SSAInstruction inst, BBorInstInfo instInfo) {
-    return new Formula(postCond.getConditionList(), postCond.getRefMap(), postCond.getDefMap());
+  protected static final Formula defaultHandler(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+    return new Formula(postCond);
   }
 }
