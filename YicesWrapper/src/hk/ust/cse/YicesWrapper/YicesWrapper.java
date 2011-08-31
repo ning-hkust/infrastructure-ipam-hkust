@@ -76,6 +76,13 @@ public class YicesWrapper {
         reader.close();
       } catch (IOException e) { /* should not throw exception */ }
       s_lastOutput = String.valueOf(buff, 0, nRead);
+      
+      // type error message is passed through the normal output
+      if (s_lastOutput.startsWith("type error: ")) {
+        result = false;
+        s_lastError  = s_lastOutput; // move error message to error output
+        s_lastOutput = "";
+      }
     }
     else {
       result       = false;
