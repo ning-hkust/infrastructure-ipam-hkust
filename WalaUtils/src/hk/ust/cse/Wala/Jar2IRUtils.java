@@ -77,7 +77,7 @@ class Jar2IRUtils {
       
       // class name matches?
       String declaringClass = aClass.getName().toString();
-      declaringClass = Utils.getClassTypeJavaStr(declaringClass);
+      declaringClass = Utils.getClassTypeJavaStr(declaringClass, false);
       if (!methodName.startsWith(declaringClass)) {
         continue;
       }

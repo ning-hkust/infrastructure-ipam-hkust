@@ -172,9 +172,6 @@ public class MethodMetaData {
           index = i;
           break;
         }
-        else if (instLineNo < lineNo) {
-          break;
-        }
       }
     }
     return index;
@@ -189,9 +186,6 @@ public class MethodMetaData {
         int instLineNo = getLineNumber(i);
         if (instLineNo == lineNo) {
           instForLine = instructions[i];
-          break;
-        }
-        else if (instLineNo < lineNo) {
           break;
         }
       }
