@@ -1,5 +1,6 @@
 package edu.mit.csail.pag.objcap;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -7,18 +8,24 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.Writer;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
+
+import com.thoughtworks.xstream.XStream;
+import com.thoughtworks.xstream.XStreamException;
 
 import edu.mit.csail.pag.objcap.util.Serializer;
 import edu.mit.csail.pag.objcap.util.Util;
@@ -484,6 +491,162 @@ public class ObjCapture {
     }
 
     return retSet;
+  }
+
+  /**
+   * Read instances from a zipped file
+   */
+  public static Set<Object> getFromZipFile(String zipFilePath, Class<?> clazz, int maxObjectCount)
+      throws IOException {
+
+    Set<Object> objs = null;
+    Set<SimpleEntry<Object, String>> objsWithPath = getFromZipFileWithFilePath(zipFilePath, clazz, maxObjectCount);
+    if (objsWithPath != null) {
+      objs = new HashSet<Object>();
+      for (SimpleEntry<Object, String> obj : objsWithPath) {
+        objs.add(obj.getKey());
+      }
+    }
+    return objs;
+  }
+
+  /**
+   * Read instances from a zipped file, include file paths
+   */
+  public static Set<SimpleEntry<Object, String>> getFromZipFileWithFilePath(
+      String zipFilePath, Class<?> clazz, int maxObjectCount) throws IOException {
+
+    if (clazz == null && maxObjectCount <= 0) {
+      return null;
+    }
+
+    // get the detail folder name
+    String className = clazz.getCanonicalName();
+    if (className == null) {
+      className = clazz.getName(); 
+    }
+    String slashedClassName = Util.transClassNameDotToSlash(className);
+
+    Set<SimpleEntry<Object, String>> objects = new HashSet<SimpleEntry<Object, String>>();
+    try {
+      ZipFile zipFile = new ZipFile(zipFilePath);
+      Enumeration<?> allObjectFiles = zipFile.entries();
+    
+      // for de-serializing
+      XStream xstream = new XStream();
+
+      // read each object
+      boolean inGoodFolder = false;
+      boolean gotInBefore  = false;
+      char[] buff = new char[20971520];
+      while (allObjectFiles.hasMoreElements() && objects.size() < maxObjectCount) {
+        ZipEntry entry = (ZipEntry) allObjectFiles.nextElement();
+
+        if (entry.isDirectory() && entry.getName().startsWith(slashedClassName + "/")) {
+          inGoodFolder = true;
+        }
+        else if (entry.isDirectory()) {
+          inGoodFolder = false;
+        }
+        
+        if (inGoodFolder && !entry.isDirectory() && entry.getName().startsWith(slashedClassName + "/hash_")) {
+          gotInBefore = true;
+          
+          // big xml files usually leads to jvm crash
+          if (entry.getSize() > 1048576) {
+            continue;
+          }
+  
+          // read object list
+          BufferedReader reader = new BufferedReader(new InputStreamReader(zipFile.getInputStream(entry)));
+          int read = reader.read(buff, 0, buff.length);
+          reader.close();
+  
+          // de-serialize object
+          try {
+            Object obj = xstream.fromXML(new String(buff, 0, read));
+            if (obj != null) {
+              objects.add(new SimpleEntry<Object, String>(obj, entry.getName()));
+            }
+          } catch (XStreamException e) {
+            System.err.println("Error occured when de-serializing object: " + entry.getName());
+          } catch (Exception e) {}
+        }
+        else if (gotInBefore) {
+          break;
+        }
+      }
+    } catch (Exception e) {e.printStackTrace();}
+    System.out.println("Read " + objects.size() + " object from " + slashedClassName);
+    
+    return objects;
+  }
+  
+  public static Set<String> classesInZipFile(String zipFilePath) {
+    HashSet<String> classesInZipFile = new HashSet<String>();
+    try {
+      ZipFile zipFile = new ZipFile(zipFilePath);
+      Enumeration<?> allObjectFiles = zipFile.entries();
+      while (allObjectFiles.hasMoreElements()) {
+        ZipEntry entry = (ZipEntry) allObjectFiles.nextElement();
+        
+        String lastClassName = null;
+        if (!entry.isDirectory() && (lastClassName == null || !entry.getName().startsWith(lastClassName + "/hash_"))) {
+          int index = entry.getName().lastIndexOf("/hash_");
+          if (index >= 0) {
+            lastClassName = entry.getName().substring(0, index);
+            classesInZipFile.add(lastClassName);
+          }
+        }
+      }
+    } catch (Exception e) {e.printStackTrace();}
+  
+    return classesInZipFile;
+  }
+
+  /**
+   * Read instance from a zipped file
+   */
+  public static Object getObjectFromZipFile(String zipFilePath, String objPath)
+      throws IOException {
+
+    Object obj = null;
+    try {
+      ZipFile zipFile = new ZipFile(zipFilePath);
+      Enumeration<?> allObjectFiles = zipFile.entries();
+    
+      // for de-serializing
+      XStream xstream = new XStream();
+
+      // read each object
+      char[] buff = new char[20971520];
+      while (allObjectFiles.hasMoreElements()) {
+        ZipEntry entry = (ZipEntry) allObjectFiles.nextElement();
+
+        if (!entry.isDirectory() && entry.getName().equals(objPath)) {
+          // big xml files usually leads to jvm crash
+          if (entry.getSize() > 1048576) {
+            break;
+          }
+  
+          // read object list
+          BufferedReader reader = new BufferedReader(new InputStreamReader(zipFile.getInputStream(entry)));
+          int read = reader.read(buff, 0, buff.length);
+          reader.close();
+  
+          // de-serialize object
+          try {
+            obj = xstream.fromXML(new String(buff, 0, read));
+          } catch (XStreamException e) {
+            System.err.println("Exception occured when de-serializing object: " + entry.getName());
+          }
+          
+          break;
+        }
+      }
+    } catch (Exception e) {e.printStackTrace();}
+  
+    return obj;
   }
 
 	/**
