@@ -71,7 +71,7 @@ public class CallStack implements Cloneable {
       return null;
     }
   }
-
+  
   public String getCurMethodNameOrSign() {
     if (m_callStack.size() > 0) {
       return m_callStack.get(0).getMethodNameOrSign();
@@ -105,6 +105,10 @@ public class CallStack implements Cloneable {
 
   public boolean isOutMostCall() {
     return m_isOutMostCall;
+  }
+  
+  public void setOutMostCall(boolean isOutMostCall) {
+    m_isOutMostCall = isOutMostCall  ;
   }
   
   public String toString() {
@@ -167,6 +171,6 @@ public class CallStack implements Cloneable {
     return hashCode;
   }
 
+  private boolean m_isOutMostCall;
   private final List<StackTrace> m_callStack;
-  private final boolean          m_isOutMostCall;
 }

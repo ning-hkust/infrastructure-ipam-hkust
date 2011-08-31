@@ -1,5 +1,7 @@
 package hk.ust.cse.Prevision.VirtualMachine;
 
+import hk.ust.cse.Prevision.PathCondition.Formula;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Enumeration;
@@ -15,9 +17,9 @@ public class Reference {
     m_name         = name;
     m_type         = type;
     m_callSites    = callSites;
-    m_instances    = new HashSet<Instance>();
-    m_oldInstances = new HashSet<Instance>();
-    m_lifeTimes    = new Hashtable<Instance, Long[]>();
+    m_instances    = new HashSet<Instance>(1);
+    m_oldInstances = new HashSet<Instance>(1);
+    m_lifeTimes    = new Hashtable<Instance, Long[]>(1);
     m_declInstance = declInstance;
     
     if (name.equals("null") || name.startsWith("#") || name.equals("true") || name.equals("false")) { // is constant
@@ -27,7 +29,9 @@ public class Reference {
     if (instance != null) {
       m_instances.add(instance);
       startInstanceLiftTime(instance);
-      instance.setLastReference(this);
+      if (!instance.isBounded()) {
+        instance.setLastReference(this);
+      }
     }
   }
   
@@ -35,23 +39,24 @@ public class Reference {
     m_name         = name;
     m_type         = type;
     m_callSites    = callSites;
-    m_instances    = new HashSet<Instance>();
-    m_oldInstances = new HashSet<Instance>();
-    m_lifeTimes    = new Hashtable<Instance, Long[]>();
+    m_instances    = new HashSet<Instance>(1);
+    m_oldInstances = new HashSet<Instance>(1);
+    m_lifeTimes    = new Hashtable<Instance, Long[]>(1);
     m_declInstance = declInstance;
     
     if (name.equals("null") || name.startsWith("#") || name.equals("true") || name.equals("false")) { // is constant
       // ignore original instance
-      Instance instance = new Instance(name, null, m_instances.iterator().next().getCreateBlock());
+      Instance instance = new Instance(name, null, instances.iterator().next().getCreateBlock());
       m_instances.add(instance);
       startInstanceLiftTime(instance);
-      instance.setLastReference(this);
     }
     else if (instances != null) {
       m_instances.addAll(instances);
       startInstanceLiftTime(instances);
       for (Instance instance : instances) {
-        instance.setLastReference(this);
+        if (!instance.isBounded()) {
+          instance.setLastReference(this);
+        }
       }
     }
   }
@@ -60,7 +65,9 @@ public class Reference {
     if (!isConstantReference()) {
       m_instances.add(instance);
       startInstanceLiftTime(instance);
-      instance.setLastReference(this);
+      if (!instance.isBounded()) {
+        instance.setLastReference(this);
+      }
     }
     else {
       throw new Exception("Should not assign a new instance to a constant reference!");
@@ -72,7 +79,9 @@ public class Reference {
       m_instances.addAll(instances);
       startInstanceLiftTime(instances);
       for (Instance instance : instances) {
-        instance.setLastReference(this);
+        if (!instance.isBounded()) {
+          instance.setLastReference(this);
+        }
       }
     }
     else {
@@ -88,19 +97,125 @@ public class Reference {
   
   // usually, need putInstancesToOld() after it
   public void setInstancesValue(Instance assigner) {
-    if (!canReferenceSetValue()) {
-      for (Instance instance : m_instances) {
+    boolean canReferenceSetValue = canReferenceSetValue();
+    
+    for (Instance instance : m_instances) {
+      if (!canReferenceSetValue && !instance.isBounded()) {
         try {
-          instance.storeValue(assigner); // never setValue directly for field instances
+          instance.storeValue(assigner);
         } catch (Exception e) {e.printStackTrace();}
       }
-    }
-    else {
-      for (Instance instance : m_instances) {
+      else if (!instance.isBounded()) {
         try {
           instance.setValue(assigner);
         } catch (Exception e) {e.printStackTrace();}
       }
+    }
+  }
+  
+  public void setFieldInstancesValue(Instance assigner, Formula formula) {
+    List<Long> times = formula.getFieldAssignTimes(m_name);
+    long currentTime = System.nanoTime();
+    long lastTime = (times == null) ? Long.MAX_VALUE : times.get(times.size() - 1);
+    
+    for (Instance instance : m_instances) {
+      if (instance.getCreateTime() > lastTime && instance.getCreateTime() < currentTime && !instance.isBounded()) {
+        try {
+          instance.setValue(assigner);
+        } catch (Exception e) {e.printStackTrace();}
+      }
+      else if (!instance.isBounded()) {
+        try {
+          instance.storeValue(assigner);
+        } catch (Exception e) {e.printStackTrace();}
+      }
+    }
+  }
+  
+  public void updateFieldInstancesValue(Collection<Instance> newInstances, Formula formula) {
+    // find sets from the new instances
+    Hashtable<String, List<Instance>> settedInstances = new Hashtable<String, List<Instance>>();
+    for (Instance newInstance : newInstances) {
+      findSetInstances("", new ArrayList<Instance>(), newInstance, m_name, settedInstances);
+    }
+    
+    // update the value of the old instances
+    for (Instance instance : m_instances) {
+      updateFieldInstancesValue("", new ArrayList<Instance>(), instance, m_name, settedInstances, formula);
+    }
+  }
+
+  private void findSetInstances(String lastPath, List<Instance> preInstances, 
+      Instance instance, String fieldName, Hashtable<String, List<Instance>> settedInstances) {
+    
+    // build current path
+    String path = new StringBuilder(lastPath).append(".").append(fieldName).toString();
+    
+    if (!preInstances.contains(instance)) { // avoid recursions
+      preInstances.add(instance);
+      if (instance.getSetValueTime() != Long.MIN_VALUE) { // this instance is set/store
+        List<Instance> pathInstances = settedInstances.get(path);
+        if (pathInstances == null) {
+          pathInstances = new ArrayList<Instance>();
+          settedInstances.put(path, pathInstances);
+        }
+        pathInstances.add(instance);
+      }
+
+      // recursive for instance's fields
+      for (Reference fieldRef : instance.getFields()) {
+        for (Instance fieldInstance : fieldRef.getInstances()) {
+          findSetInstances(path, preInstances, fieldInstance, fieldRef.getName(), settedInstances);
+        }
+      }
+      preInstances.remove(preInstances.size() - 1);
+    }
+  }
+  
+  private void updateFieldInstancesValue(String lastPath, List<Instance> preInstances, 
+      Instance instance, String fieldName, Hashtable<String, List<Instance>> settedInstances, Formula formula) {
+
+    // build current path
+    String path = new StringBuilder(lastPath).append(".").append(fieldName).toString();
+    
+    if (!preInstances.contains(instance)) { // avoid recursions
+      preInstances.add(instance);
+      if (instance.getSetValueTime() == Long.MIN_VALUE) {
+        List<Instance> pathInstances = settedInstances.get(path);
+        if (pathInstances != null) {
+          // get the settable period
+          long start = instance.getCreateTime();
+          long end = Long.MIN_VALUE;
+          for (Long assignTime : formula.getFieldAssignTimes(fieldName)) {
+            if (assignTime > start) {
+              end = assignTime;
+              break;
+            }
+          }
+          
+          Instance nearestSetted = null;
+          for (Instance pathInstance : pathInstances) {
+            if (pathInstance.getSetValueTime() > start && pathInstance.getSetValueTime() <= end && 
+                (nearestSetted == null || pathInstance.getSetValueTime() < nearestSetted.getSetValueTime())) {
+              nearestSetted = pathInstance;
+            }
+          }
+          
+          if (nearestSetted != null) {
+            try {
+              instance.setValueInclSetTime(nearestSetted, nearestSetted.getSetValueTime());
+            } catch (Exception e) {e.printStackTrace();}
+          }
+        }
+      }
+
+      // recursive for instance's fields
+      for (Reference fieldRef : instance.getFields()) {
+        for (Instance fieldInstance : fieldRef.getInstances()) {
+          updateFieldInstancesValue(path, preInstances, fieldInstance, fieldRef.getName(), settedInstances, formula);
+        }
+      }
+      preInstances.remove(preInstances.size() - 1);
     }
   }
   

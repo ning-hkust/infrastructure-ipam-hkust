@@ -1,15 +1,12 @@
 package hk.ust.cse.Prevision.Solver;
 
-import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.PathCondition.Formula.SMT_RESULT;
+import hk.ust.cse.Prevision.Solver.ICommand.TranslatedCommand;
 import hk.ust.cse.Prevision.Solver.Yices.YicesCommand;
 import hk.ust.cse.Prevision.Solver.Yices.YicesLoader;
+import hk.ust.cse.Prevision.Solver.Yices.YicesResult;
 import hk.ust.cse.Wala.MethodMetaData;
-
-import java.util.ArrayList;
-import java.util.Hashtable;
-import java.util.List;
 
 public class SMTChecker {
   public enum SOLVERS {YICES, Z3}
@@ -17,30 +14,30 @@ public class SMTChecker {
   public SMTChecker(SOLVERS solver) {
     switch (solver) {
     case YICES:
-      m_solverLoader = new YicesLoader();
-      m_command      = new YicesCommand();
+      m_solverLoader     = new YicesLoader();
+      m_command          = new YicesCommand();
+      m_lastSolverResult = new YicesResult();
       break;
     case Z3:
-      m_solverLoader = new YicesLoader();
-      m_command      = new YicesCommand();
+      m_solverLoader     = new YicesLoader();
+      m_command          = new YicesCommand();
+      m_lastSolverResult = new YicesResult();
       break;
     default:
-      m_solverLoader = new YicesLoader();
-      m_command      = new YicesCommand();
+      m_solverLoader     = new YicesLoader();
+      m_command          = new YicesCommand();
+      m_lastSolverResult = new YicesResult();
       break;
     }
   }
-  
+  public static int aa = 0;
   public SMT_RESULT smtCheck(Formula formula, MethodMetaData methData /* for param name */, 
       boolean keepUnboundedField, boolean retrieveUnsatCore) {    
     
     SMT_RESULT smtCheckResult = null;
     try {
       // generate SMT Solver inputs
-      m_lastAssertCmds = retrieveUnsatCore ? new ArrayList<String>() : null;
-      m_lastCmdConditionsMapping = retrieveUnsatCore ? new Hashtable<String, List<Condition>>() : null;
-      String command = m_command.translateToCommand(formula, methData, 
-          m_lastAssertCmds, m_lastCmdConditionsMapping, keepUnboundedField, retrieveUnsatCore);
+      m_lastTranslatedCommand = m_command.translateToCommand(formula, methData, keepUnboundedField, retrieveUnsatCore);
       
       // smt check
       if (false /*simplify()*/ /* try simplify() first */) {
@@ -49,7 +46,7 @@ public class SMTChecker {
       }
       else {
         // check with an smt solver instance
-        ISolverLoader.SOLVER_COMP_PROCESS solverResult = m_solverLoader.check(command);
+        ISolverLoader.SOLVER_COMP_PROCESS solverResult = m_solverLoader.check(m_lastTranslatedCommand.command);
         switch (solverResult) {
         case SAT:
           smtCheckResult = SMT_RESULT.SAT;
@@ -69,7 +66,7 @@ public class SMTChecker {
         // keeps the last one, so it might change from time to time
         m_lastSolverInput  = m_solverLoader.getLastInput();
         m_lastSolverOutput = m_solverLoader.getLastOutput();
-        m_lastSolverResult = m_solverLoader.getLastResult();
+        m_lastSolverResult.parseOutput(m_lastSolverOutput, m_lastTranslatedCommand.nameInstanceMapping);
       } 
     } catch (StackOverflowError e) {
       System.err.println("Stack overflowed when generating SMT statements, skip!");
@@ -104,12 +101,8 @@ public class SMTChecker {
     return m_lastSMTCheckResult;
   }
   
-  public List<String> getLastAssertCmds() {
-    return m_lastAssertCmds;
-  }
-  
-  public Hashtable<String, List<Condition>> getLastCmdConditionsMapping() {
-    return m_lastCmdConditionsMapping;
+  public TranslatedCommand getLastTranslatedCommand() {
+    return m_lastTranslatedCommand;
   }
   
 //  private boolean simplify() {
@@ -200,8 +193,7 @@ public class SMTChecker {
   private String                             m_lastSolverOutput;
   private ISolverResult                      m_lastSolverResult;
   private SMT_RESULT                        m_lastSMTCheckResult;
-  private List<String>                       m_lastAssertCmds;
-  private Hashtable<String, List<Condition>> m_lastCmdConditionsMapping;
+  private TranslatedCommand                  m_lastTranslatedCommand;
   private final ISolverLoader                m_solverLoader;
   private final ICommand                     m_command;
 }

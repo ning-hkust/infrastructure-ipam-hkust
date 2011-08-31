@@ -1,16 +1,19 @@
 package hk.ust.cse.Prevision.PathCondition;
 
+import hk.ust.cse.Prevision.Solver.ISolverResult;
 import hk.ust.cse.Prevision.Solver.SMTChecker;
 import hk.ust.cse.Prevision.VirtualMachine.AbstractMemory;
 import hk.ust.cse.Prevision.VirtualMachine.Executor.BBorInstInfo;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
-import hk.ust.cse.Prevision.deprecated.SMTTerm;
+import hk.ust.cse.Wala.MethodMetaData;
 
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.List;
 
 import com.ibm.wala.ssa.ISSABasicBlock;
+import com.ibm.wala.ssa.SSAInstruction;
 
 public class Formula {
   public enum SMT_RESULT {SAT, UNSAT, ERROR, TIMEOUT, STACK_OVERFLOW}
@@ -20,23 +23,24 @@ public class Formula {
   
   // a TRUE predicate
   public Formula() {
-    m_conditionList  = new ArrayList<Condition>();
-    m_abstractMemory = new AbstractMemory();
-    m_timeStamp      = System.nanoTime(); // time stamp for this formula
-  }
-
-  public Formula(List<Condition> conditions, 
-      Hashtable<String, Hashtable<String, Reference>> refMap, 
-      Hashtable<String, Hashtable<String, Integer>> defMap) {
-    
-    // remember, each Formula instance should own a unique
-    // instance of conditions and varMap!
-    m_conditionList  = conditions;
-    m_abstractMemory = new AbstractMemory(refMap, defMap);
-    m_timeStamp      = System.nanoTime(); // time stamp for this formula
+    m_conditionList    = new ArrayList<Condition>();
+    m_abstractMemory   = new AbstractMemory();
+    m_fieldAssignTimes = new Hashtable<String, List<Long>>();
+    m_traversedPath    = new ArrayList<Object[]>();
+    m_timeStamp        = System.nanoTime(); // time stamp for this formula
   }
   
-  public Formula(List<Condition> conditions, AbstractMemory absMemory) {
+  public Formula(Formula formula) {
+    // remember, each Formula instance should own a unique
+    // instance of conditions and varMap!
+    m_conditionList    = formula.getConditionList();
+    m_abstractMemory   = new AbstractMemory(formula.getRefMap(), formula.getDefMap());
+    m_fieldAssignTimes = formula.getFieldAssignTimes();
+    m_traversedPath    = formula.getTraversedPath();
+    m_timeStamp        = System.nanoTime(); // time stamp for this formula
+  }
+  
+  private Formula(List<Condition> conditions, AbstractMemory absMemory) {
     // remember, each Formula instance should own a unique
     // instance of conditions and refMap!
     m_conditionList  = conditions;
@@ -46,21 +50,43 @@ public class Formula {
 
   // clear everything except solver data, they are taking too much memory!
   public void clearNonSolverData() {
-    m_conditionList  = null;
-    m_abstractMemory = null;
-    m_visitedRecord  = null;
+    m_conditionList    = null;
+    m_abstractMemory   = null;
+    m_fieldAssignTimes = null;
+    m_traversedPath    = null;
+    m_visitedRecord    = null;
   }
 
   // clear solver data
   public void clearSolverData() {
     m_lastSolverInput  = null;
     m_lastSolverOutput = null;
+    m_lastSolverResult = null;
   }
 
   public void setSolverResult(SMTChecker smtChecker) {
     m_lastSolverInput    = smtChecker.getLastSolverInput();
     m_lastSolverOutput   = smtChecker.getLastSolverOutput();
+    m_lastSolverResult   = smtChecker.getLastResult();
     m_lastSMTCheckResult = smtChecker.getLastSMTCheckResult();
+  }
+  
+  public void addFieldAssignTime(String fieldName, long time) {
+    List<Long> times = m_fieldAssignTimes.get(fieldName);
+    if (times == null) {
+      times = new ArrayList<Long>();
+      m_fieldAssignTimes.put(fieldName, times);
+    }
+    times.add(time);
+  }
+  
+  public void addToTraversedPath(SSAInstruction traversed, MethodMetaData methData, String callSites) {
+    m_traversedPath.add(new Object[] {traversed, methData, callSites});
+  }
+  
+  // for phi instruction only
+  public void addToTraversedPath(SSAInstruction traversed, MethodMetaData methData, String callSites, int phiVarID) {
+    m_traversedPath.add(new Object[] {traversed, methData, callSites, phiVarID});
   }
   
   public String getLastSolverOutput() {
@@ -71,10 +97,9 @@ public class Formula {
     return m_lastSolverInput;
   }
   
-  //XXX
-//  public List<SMTTerm> getLastSatModel() {
-//    return m_lastSatModel;
-//  }
+  public ISolverResult getLastSolverResult() {
+    return m_lastSolverResult;
+  }
   
   public SMT_RESULT getLastSMTCheckResult() {
     return m_lastSMTCheckResult;
@@ -86,6 +111,18 @@ public class Formula {
   
   public AbstractMemory getAbstractMemory() {
     return m_abstractMemory;
+  }
+  
+  public Hashtable<String, List<Long>> getFieldAssignTimes() {
+    return m_fieldAssignTimes;
+  }
+  
+  public List<Long> getFieldAssignTimes(String fieldName) {
+    return m_fieldAssignTimes.get(fieldName);
+  }
+  
+  public List<Object[]> getTraversedPath() {
+    return m_traversedPath;
   }
   
   public long getTimeStamp() {
@@ -122,24 +159,6 @@ public class Formula {
     }
   }
 
-  public boolean equals(Object obj) {
-    if (obj == null) {
-      return false;
-    }
-    
-    if (!(obj instanceof Formula)) {
-      return false;
-    }
-    
-    Formula formula = (Formula) obj;
-    return m_conditionList.equals(formula.getConditionList()) && 
-           m_abstractMemory.equals(formula.getAbstractMemory());
-  }
-
-  public int hashCode() {
-    return m_conditionList.hashCode() + m_abstractMemory.hashCode();
-  }
-  
   public Formula clone() {
     // makes sure the pointings are still correct
     Hashtable<Object, Object> cloneMap = new Hashtable<Object, Object>();
@@ -152,8 +171,16 @@ public class Formula {
     for (Condition condition : m_conditionList) {
       cloneCondList.add(condition.deepClone(cloneMap));
     }
-    
     Formula cloneFormula = new Formula(cloneCondList, cloneAbsMemory);
+    
+    cloneFormula.m_traversedPath    = new ArrayList<Object[]>(m_traversedPath);
+    cloneFormula.m_fieldAssignTimes = new Hashtable<String, List<Long>>();
+    Enumeration<String> keys = m_fieldAssignTimes.keys();
+    while (keys.hasMoreElements()) {
+      String fieldName = (String) keys.nextElement();
+      cloneFormula.m_fieldAssignTimes.put(fieldName, new ArrayList<Long>(m_fieldAssignTimes.get(fieldName)));
+    }
+    
     cloneFormula.m_timeStamp = m_timeStamp; // since it is only a clone, keep the time stamp
     return cloneFormula;
   }
@@ -162,9 +189,11 @@ public class Formula {
   private long                               m_timeStamp;
   private List<Condition>                    m_conditionList;
   private AbstractMemory                     m_abstractMemory;
+  private Hashtable<String, List<Long>>      m_fieldAssignTimes;
+  private List<Object[]>                     m_traversedPath;
   private Hashtable<ISSABasicBlock, Integer> m_visitedRecord;
   private String                             m_lastSolverInput;
   private String                             m_lastSolverOutput;
+  private ISolverResult                      m_lastSolverResult;
   private SMT_RESULT                        m_lastSMTCheckResult;
-  private List<SMTTerm>                      m_lastSatModel;
 }

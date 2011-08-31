@@ -1,12 +1,13 @@
 package hk.ust.cse.Prevision.InstructionHandlers;
 
 import hk.ust.cse.Prevision.CallStack;
+import hk.ust.cse.Prevision.InvalidStackTraceException;
 import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm.Comparator;
 import hk.ust.cse.Prevision.PathCondition.Formula;
+import hk.ust.cse.Prevision.VirtualMachine.ExecutionOptions;
 import hk.ust.cse.Prevision.VirtualMachine.Executor.BBorInstInfo;
-import hk.ust.cse.Prevision.VirtualMachine.Executor.GlobalOptionsAndStates;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.Prevision.VirtualMachine.Instance.INSTANCE_OP;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
@@ -85,15 +86,21 @@ public class CompleteBackwardHandler extends AbstractHandler {
         // add new references to refMap
         Reference defRef = findOrCreateReference(def, "I", callSites, currentBB, newRefMap);
         
+        Collection<Instance> defInstances = defRef.getInstances();
         List<Reference> fieldRefs = arrayRefRef.getFieldReferences("length");
         if (fieldRefs.size() == 0) {
           // set to the first instance
-          arrayRefRef.getInstance().setField("length", "I", callSites, defRef.getInstances());
+          Instance instance = arrayRefRef.getInstance();
+          instance.setField("length", "I", callSites, defInstances);
+          // update field instances values
+          instance.getField("length").updateFieldInstancesValue(defInstances, postCond);
         }
         else {
           for (Reference fieldRef : fieldRefs) {
             try {
-              fieldRef.assignInstance(defRef.getInstances());
+              fieldRef.assignInstance(defInstances);
+              // update field instances values
+              fieldRef.updateFieldInstancesValue(defInstances, postCond);
             } catch (Exception e) {e.printStackTrace();}
           }
         }
@@ -127,8 +134,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
     }
     
     // add new conditions to condition list
-    List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newDefMap);
+    postCond.getConditionList().addAll(conditionList);
+    return new Formula(postCond);
   }
 
   public Formula handle_arrayload(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -253,8 +260,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
     }
     
     // add new conditions to condition list
-    List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newDefMap);
+    postCond.getConditionList().addAll(conditionList);
+    return new Formula(postCond);
   }
   
   public Formula handle_arraystore(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -377,8 +384,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
     } 
     
     // add new conditions to condition list
-    List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, postCond.getDefMap());
+    postCond.getConditionList().addAll(conditionList);
+    return new Formula(postCond);
   }
 
   public Formula handle_binaryop(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -451,8 +458,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // assign the instance to the def reference
       assignInstance(defRef, binaryOp, newRefMap, newDefMap);
     }
-    
-    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
+
+    return new Formula(postCond);
   }
   
   // handler for catch instruction
@@ -488,7 +495,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
     // some exception type", and expect to meet an exception triggering point
     //newVarMap = setExceptionCaught(postCond, newVarMap, excepTypeStr);
 
-    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
+    return new Formula(postCond);
   }
   
   // handler for checkcast instruction
@@ -501,7 +508,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
     Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap(); 
     SSACheckCastInstruction checkcastInst                     = (SSACheckCastInstruction) inst;
 
-    // the variable(result) define by the getfield instruction
+    // the variable(result) define by the checkcast instruction
     String def = getSymbol(checkcastInst.getDef(), methData, callSites, newDefMap);
     String val = getSymbol(checkcastInst.getUse(0), methData, callSites, newDefMap);
     String declaredResultType = checkcastInst.getDeclaredResultType().getName().toString();
@@ -557,8 +564,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
     }
     
     // add new conditions to condition list
-    List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newDefMap);
+    postCond.getConditionList().addAll(conditionList);
+    return new Formula(postCond);
   }
   
   public Formula handle_compare(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -596,8 +603,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // assign the instance to the def reference
       assignInstance(defRef, compareOp, newRefMap, newDefMap);
     }
-    
-    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
+
+    return new Formula(postCond);
   }
 
   public Formula handle_conversion(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -671,8 +678,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
     }
     
     // add new conditions to condition list
-    List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newDefMap);
+    postCond.getConditionList().addAll(conditionList);
+    return new Formula(postCond);
   }
   
   public Formula handle_conditional_branch(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -771,8 +778,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
     addRefToRefMap(newRefMap, var2Ref);
 
     // add new conditions to condition list
-    List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, postCond.getDefMap());
+    postCond.getConditionList().addAll(conditionList);
+    return new Formula(postCond);
   }
 
   // handler for getfield instruction
@@ -813,19 +820,26 @@ public class CompleteBackwardHandler extends AbstractHandler {
         // since there is a new def, add to defMap
         addDefToDefMap(newDefMap, defRef);
         
+        Collection<Instance> defInstances = defRef.getInstances();
         List<Reference> fieldRefs = refRef.getFieldReferences(fieldName);
         if (fieldRefs.size() == 0) {
           // set to the first instance
-          refRef.getInstance().setField(fieldName, fieldType, callSites, defRef.getInstances());
+          Instance instance = refRef.getInstance();
+          instance.setField(fieldName, fieldType, callSites, defInstances);
+          // update field instances values
+          instance.getField(fieldName).updateFieldInstancesValue(defInstances, postCond);
         }
         else {
           for (Reference fieldRef : fieldRefs) {
             try {
-              fieldRef.assignInstance(defRef.getInstances());
+              fieldRef.assignInstance(defInstances);
+              // update field instances values
+              fieldRef.updateFieldInstancesValue(defInstances, postCond);
             } catch (Exception e) {e.printStackTrace();}
           }
         }
         defRef.putInstancesToOld();
+        
         // defRef not longer useful
         if (findReference(defRef.getName(), defRef.getCallSites(), newRefMap) != null) {
           newRefMap.get(defRef.getCallSites()).remove(defRef.getName());
@@ -853,8 +867,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
     }
     
     // add new conditions to condition list
-    List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newDefMap);
+    postCond.getConditionList().addAll(conditionList);
+    return new Formula(postCond);
   }
 
   // handler for getstatic instruction
@@ -884,7 +898,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       assignInstance(defRef, fieldRef, newRefMap, newDefMap);
     }
 
-    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
+    return new Formula(postCond);
   }
 
   public Formula handle_goto(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -923,7 +937,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       assignInstance(defRef, checkRef, newRefMap, newDefMap);
     }
 
-    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
+    return new Formula(postCond);
   }
   
   public Formula handle_invokeinterface(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -973,15 +987,13 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // add new references to refMap
       addRefToRefMap(newRefMap, refRef);
 
-      String invocationType = invokeInst.getDeclaredResultType().getName().toString();
       // the variable define by the invokeinterface/invokespecial/invokevirtual instruction
-      if (containsRef(def, callSites, newRefMap)) {
+      if (containsRef(def, callSites, newRefMap)) { // similar to getfield
+        // add new references to refMap
+        String invocationType = invokeInst.getDeclaredResultType().getName().toString();
         StringBuilder invocation = new StringBuilder();
-        // get the fieldType of the declared field of the invokeinterface/invokespecial/invokevirtual instruction
-        // get the class type that declared this field
-        invocation.append(ref);
         // get the name of the field
-        invocation.append("." + invokeInst.getDeclaredTarget().getSelector().getName());
+        invocation.append(invokeInst.getDeclaredTarget().getSelector().getName());
         // get the parameters
         invocation.append("(");
         for (int i = 0; i < params.size(); i++) {
@@ -992,15 +1004,31 @@ public class CompleteBackwardHandler extends AbstractHandler {
         }
         invocation.append(")");
         
-        // create new reference of def
-        Reference invocationRef = findOrCreateReference(invocation.toString(), invocationType, callSites, currentBB, newRefMap);
-        Reference defRef        = findOrCreateReference(def, invocationType, callSites, currentBB, newRefMap);
-        
-        // associate the two refs' instance together as the same one
-        assignInstance(defRef, invocationRef, newRefMap, newDefMap);
+        Reference defRef = findOrCreateReference(def, invocationType, callSites, currentBB, newRefMap);
 
-        // add new variables to varMap
-        //newVarMap = addVars2VarMap(postCond, methData, newVarMap, params);
+        // since there is a new def, add to defMap
+        addDefToDefMap(newDefMap, defRef);
+        
+        Collection<Instance> defInstances = defRef.getInstances();
+        List<Reference> fieldRefs = refRef.getFieldReferences(invocation.toString());
+        if (fieldRefs.size() == 0) {
+          // set to the first instance
+          Instance instance = refRef.getInstance();
+          instance.setField(invocation.toString(), invocationType, callSites, defInstances);
+        }
+        else {
+          for (Reference fieldRef : fieldRefs) {
+            try {
+              fieldRef.assignInstance(defInstances);
+            } catch (Exception e) {e.printStackTrace();}
+          }
+        }
+        defRef.putInstancesToOld();
+        
+        // defRef not longer useful
+        if (findReference(defRef.getName(), defRef.getCallSites(), newRefMap) != null) {
+          newRefMap.get(defRef.getCallSites()).remove(defRef.getName());
+        }
       }
       break;
     case Formula.EXCEPTIONAL_SUCCESSOR:
@@ -1022,8 +1050,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
     }
 
     // add new conditions to condition list
-    List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newDefMap);
+    postCond.getConditionList().addAll(conditionList);
+    return new Formula(postCond);
   }
 
   // simple implementation, do not consider call graph
@@ -1069,43 +1097,38 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
       // associate the two refs' instance together as the same one
       assignInstance(defRef, invocationRef, newRefMap, newDefMap);
-
-      // add new variables to varMap
-      //newVarMap = addVars2VarMap(postCond, methData, newVarMap, params);
     }
 
-    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
+    return new Formula(postCond);
   }
   
-  public Formula handle_invokeinterface_stepin(GlobalOptionsAndStates optionsAndStates, 
-      CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, 
-      CallStack callStack, int curInvokeDepth) {
-    return handle_invokenonstatic_stepin(optionsAndStates, caller, postCond, inst, instInfo, callStack, curInvokeDepth);
+  public Formula handle_invokeinterface_stepin(ExecutionOptions execOptions, CGNode caller, 
+      Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth) {
+    return handle_invokenonstatic_stepin(execOptions, caller, postCond, inst, instInfo, callStack, curInvokeDepth);
   }
 
-  public Formula handle_invokevirtual_stepin(GlobalOptionsAndStates optionsAndStates, 
-      CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, 
-      CallStack callStack, int curInvokeDepth) {
-    return handle_invokenonstatic_stepin(optionsAndStates, caller, postCond, inst, instInfo, callStack, curInvokeDepth);
+  public Formula handle_invokevirtual_stepin(ExecutionOptions execOptions, CGNode caller, 
+      Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth) {
+    return handle_invokenonstatic_stepin(execOptions, caller, postCond, inst, instInfo, callStack, curInvokeDepth);
   }
 
-  public Formula handle_invokespecial_stepin(GlobalOptionsAndStates optionsAndStates, 
-      CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, 
-      CallStack callStack, int curInvokeDepth) {
-    return handle_invokenonstatic_stepin(optionsAndStates, caller, postCond, inst, instInfo, callStack, curInvokeDepth);
+  public Formula handle_invokespecial_stepin(ExecutionOptions execOptions, CGNode caller, 
+      Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth) {
+    return handle_invokenonstatic_stepin(execOptions, caller, postCond, inst, instInfo, callStack, curInvokeDepth);
   }
   
   // go into invocation
-  private Formula handle_invokenonstatic_stepin(GlobalOptionsAndStates optionsAndStates, 
-      CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth) {
+  private Formula handle_invokenonstatic_stepin(ExecutionOptions execOptions, CGNode caller, 
+      Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth) {
     
     postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     Formula preCond                                           = null;
     String callSites                                          = instInfo.callSites;
     ISSABasicBlock currentBB                                  = instInfo.currentBB;
     MethodMetaData methData                                   = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    Formula newPostCond                                       = postCond.clone();
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = newPostCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = newPostCond.getDefMap();
     SSAInvokeInstruction invokeInst                           = (SSAInvokeInstruction) inst;
 
     // the variable(result) define by the invokeinterface/invokevirtual/invokespecial instruction
@@ -1149,35 +1172,42 @@ public class CompleteBackwardHandler extends AbstractHandler {
       }
       beforeInvocation(invokeInst, refRef, defRef, paramRefs, newRefMap);
       
-      // create new postCond which contains the new mapped references
-      // add new conditions to condition list
-      List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-      Formula newPostCond = new Formula(newConditions, newRefMap, newDefMap);
+      // add the condition list before invocation
+      newPostCond.getConditionList().addAll(conditionList);
       
       // different handling mechanisms for ordinary invocations and entering call stacks
-      if (optionsAndStates.isEnteringCallStack()) {
+      if (execOptions.isEnteringCallStack()) {
         // save this invoke instruction
         instInfo.executor.saveCallStackInvokeInst(instInfo, inst);
 
         // compute targeting method to enter call stack
-        preCond = computeToEnterCallSite(invokeInst, instInfo, optionsAndStates, 
-            caller, callStack, curInvokeDepth, callSites, newPostCond);
+        try {
+          preCond = computeToEnterCallSite(invokeInst, instInfo, execOptions, caller, 
+                                           callStack, curInvokeDepth, callSites, newPostCond);
+        } catch (InvalidStackTraceException e) {
+          // cannot find the callsite method (e.g., interface method)
+          preCond = handle_invokenonstatic(postCond, inst, instInfo);
+        }
       }
       else {
         // compute targeting method with startLine = -1 (from exit block)
-        preCond = computeAtCallSite(invokeInst, instInfo, optionsAndStates, 
-            caller, callStack, curInvokeDepth, callSites, newPostCond);
+        try {
+          preCond = computeAtCallSite(invokeInst, instInfo, execOptions, caller, 
+                                      callStack, curInvokeDepth, callSites, newPostCond);
+        } catch (InvalidStackTraceException e) {
+          // cannot find the callsite method (e.g., interface method)
+          preCond = handle_invokenonstatic(postCond, inst, instInfo);
+        }
       }
 
       // if succeed
       if (preCond != null) {
-        afterInvocation(invokeInst, callSites, currentBB, ref, def, params, 
-            preCond.getRefMap(), preCond.getDefMap());
-        return new Formula(preCond.getConditionList(), preCond.getRefMap(), preCond.getDefMap());
+        afterInvocation(invokeInst, callSites, currentBB, ref, def, params, preCond.getRefMap(), preCond.getDefMap());
+        return new Formula(preCond);
       }
       else {
         // an inner contradiction has been detected
-        return preCond;//handle_invokenonstatic(postCond, inst, instInfo);
+        return preCond;
       }
     case Formula.EXCEPTIONAL_SUCCESSOR:
       /* can only be NPE */
@@ -1198,21 +1228,22 @@ public class CompleteBackwardHandler extends AbstractHandler {
     }
 
     // add new conditions to condition list
-    List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, newDefMap);
+    postCond.getConditionList().addAll(conditionList);
+    return new Formula(postCond);
   }
 
   // go into invocation
-  public Formula handle_invokestatic_stepin(GlobalOptionsAndStates optionsAndStates, 
-      CGNode caller, Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, 
-      CallStack callStack, int curInvokeDepth) {
+  public Formula handle_invokestatic_stepin(ExecutionOptions execOptions, CGNode caller, 
+      Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, CallStack callStack, int curInvokeDepth) {
+    
     postCond                                                  = postCond == instInfo.postCond4BB ? postCond.clone() : postCond;
     Formula preCond                                           = null;
     String callSites                                          = instInfo.callSites;
     ISSABasicBlock currentBB                                  = instInfo.currentBB;
     MethodMetaData methData                                   = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
-    Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
+    Formula newPostCond                                       = postCond.clone();
+    Hashtable<String, Hashtable<String, Reference>> newRefMap = newPostCond.getRefMap();
+    Hashtable<String, Hashtable<String, Integer>> newDefMap   = newPostCond.getDefMap();
     SSAInvokeInstruction invokestaticInst                     = (SSAInvokeInstruction) inst;
     
     // the variable(result) define by the invokestatic instruction
@@ -1238,33 +1269,39 @@ public class CompleteBackwardHandler extends AbstractHandler {
     }
     beforeInvocation(invokestaticInst, null, defRef, paramRefs, newRefMap);
     
-    // create new postCond which contains the new mapped references
-    Formula newPostCond = new Formula(postCond.getConditionList(), newRefMap, newDefMap);
-    
     // different handling mechanisms for ordinary invocations and entering call stacks
-    if (optionsAndStates.isEnteringCallStack()) {
+    if (execOptions.isEnteringCallStack()) {
       // save this invoke instruction
       instInfo.executor.saveCallStackInvokeInst(instInfo, inst);
 
       // compute targeting method to enter call stack
-      preCond = computeToEnterCallSite(invokestaticInst, instInfo, optionsAndStates, 
-          caller, callStack, curInvokeDepth, callSites, newPostCond);
+      try {
+        preCond = computeToEnterCallSite(invokestaticInst, instInfo, execOptions, caller, 
+                                         callStack, curInvokeDepth, callSites, newPostCond);
+      } catch (InvalidStackTraceException e) {
+        // cannot find the callsite method (e.g., interface method)
+        preCond = handle_invokestatic(postCond, inst, instInfo);
+      }
     }
     else {
       // compute targeting method with startLine = -1 (from exit block)
-      preCond = computeAtCallSite(invokestaticInst, instInfo, optionsAndStates, 
-          caller, callStack, curInvokeDepth, callSites, newPostCond);
+      try {
+        preCond = computeAtCallSite(invokestaticInst, instInfo, execOptions, caller, 
+                                    callStack, curInvokeDepth, callSites, newPostCond);
+      } catch (InvalidStackTraceException e) {
+        // cannot find the callsite method (e.g., interface method)
+        preCond = handle_invokestatic(postCond, inst, instInfo);
+      }
     }
 
     // if succeed
     if (preCond != null) {
-      afterInvocation(invokestaticInst, callSites, currentBB, null, def, params, 
-          preCond.getRefMap(), preCond.getDefMap());
-      return new Formula(preCond.getConditionList(), preCond.getRefMap(), preCond.getDefMap());
+      afterInvocation(invokestaticInst, callSites, currentBB, null, def, params, preCond.getRefMap(), preCond.getDefMap());
+      return new Formula(preCond);
     }
     else {
       // an inner contradiction has been detected
-      return preCond;//handle_invokestatic(postCond, inst, instInfo);
+      return preCond;
     }
   }
   
@@ -1306,8 +1343,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // assign the instance to the def reference
       assignInstance(defRef, unaryOp, newRefMap, newDefMap);
     }
-    
-    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
+
+    return new Formula(postCond);
   }
 
   public Formula handle_new(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -1344,7 +1381,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // substitute
       if (valSizeRef.getInstance().isBounded()) {
         for (Reference lenRef : lenRefs) {
-          lenRef.setInstancesValue(valSizeRef.getInstance());
+          lenRef.setFieldInstancesValue(valSizeRef.getInstance(), postCond);
           lenRef.putInstancesToOld();
         }
       }
@@ -1364,6 +1401,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
         }
         addRefToRefMap(newRefMap, valSizeRef);
       }
+      postCond.addFieldAssignTime("length", System.nanoTime());
     }
     // initialize the default values of each member fields
     else if (newInst.getConcreteType().isClassType()) {
@@ -1394,9 +1432,10 @@ public class CompleteBackwardHandler extends AbstractHandler {
             fieldRefs = defRef.getFieldReferences(fieldName);
           }
           for (Reference fieldRef : fieldRefs) {
-            fieldRef.setInstancesValue(valInstance);
+            fieldRef.setFieldInstancesValue(valInstance, postCond);
             fieldRef.putInstancesToOld();
           }
+          postCond.addFieldAssignTime(fieldName, System.nanoTime());
         }
       }
     }
@@ -1413,7 +1452,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       assignInstance(defRef, newInstance, newRefMap, newDefMap);
     }
 
-    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
+    return new Formula(postCond);
   }
 
   public Formula handle_phi(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo, int phiVarID, ISSABasicBlock predBB) {
@@ -1434,8 +1473,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
       // associate the two refs' instance together as the same one
       assignInstance(defRef, phiRef, newRefMap, newDefMap);
     }
-    
-    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
+
+    return new Formula(postCond);
   }
   
   // handler for pi instruction
@@ -1460,7 +1499,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       assignInstance(defRef, valRef, newRefMap, newDefMap);
     }
 
-    return new Formula(postCond.getConditionList(), newRefMap, newDefMap);
+    return new Formula(postCond);
   }
   
   // handler for putfield instruction
@@ -1507,7 +1546,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
         // substitute
         if (valRef.getInstance().isBounded()) {
           for (Reference fieldRef : fieldRefs) {
-            fieldRef.setInstancesValue(valRef.getInstance());
+            fieldRef.setFieldInstancesValue(valRef.getInstance(), postCond);
             fieldRef.putInstancesToOld();
           }
         }
@@ -1527,6 +1566,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
           }
           addRefToRefMap(newRefMap, valRef);
         }
+        postCond.addFieldAssignTime(fieldName, System.nanoTime());
       }
       break;
     case Formula.EXCEPTIONAL_SUCCESSOR:
@@ -1549,8 +1589,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
     }
 
     // add new conditions to condition list
-    List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, postCond.getDefMap());
+    postCond.getConditionList().addAll(conditionList);
+    return new Formula(postCond);
   }
   
   // handler for putstatic instruction
@@ -1577,7 +1617,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
     // associate the two refs' instance together as the same one
     assignInstance(fieldRef, valRef, newRefMap, postCond.getDefMap());
 
-    return new Formula(postCond.getConditionList(), newRefMap, postCond.getDefMap());
+    return new Formula(postCond);
   }
 
   public Formula handle_return(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -1598,7 +1638,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
     // associate the two refs' instance together as the same one
     assignInstance(retRef, returnRef, newRefMap, postCond.getDefMap());
 
-    return new Formula(postCond.getConditionList(), newRefMap, postCond.getDefMap());
+    return new Formula(postCond);
   }
 
   public Formula handle_switch(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -1652,8 +1692,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
     addRefToRefMap(newRefMap, var1Ref);
 
     // add new conditions to condition list
-    List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, postCond.getDefMap());
+    postCond.getConditionList().addAll(conditionList);
+    return new Formula(postCond);
   }
   
   // handler for throw instruction
@@ -1688,8 +1728,8 @@ public class CompleteBackwardHandler extends AbstractHandler {
     //newVarMap = setExceptionThrownCurrent(postCond, newVarMap, exception);
 
     // add new conditions to condition list
-    List<Condition> newConditions = addConditions(postCond.getConditionList(), conditionList);
-    return new Formula(newConditions, newRefMap, postCond.getDefMap());
+    postCond.getConditionList().addAll(conditionList);
+    return new Formula(postCond);
   }
 
   public Formula handle_entryblock(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
@@ -1718,8 +1758,6 @@ public class CompleteBackwardHandler extends AbstractHandler {
     // at the entry, set the equivalent not set instances
     postCond = setEquivalentInstances(postCond, callSites);
 
-    return new Formula(postCond.getConditionList(), postCond.getAbstractMemory());
+    return new Formula(postCond);
   }
-  
-  static int aa = 0;
 }
