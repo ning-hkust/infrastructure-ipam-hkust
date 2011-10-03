@@ -1,5 +1,6 @@
 package hk.ust.cse.Prevision.Optimization;
 
+import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.Solver.SMTChecker;
@@ -69,8 +70,9 @@ public class HeuristicBacktrack {
               } 
               for (int i = 0, size = prevUnsatCores.size(); i < size && !affectable; i++) {
                 Condition unsatCoreCond = prevUnsatCores.get(i);
-                long instance1Time = unsatCoreCond.getConditionTerms().get(0).getInstance1().getSetValueTime();
-                long instance2Time = unsatCoreCond.getConditionTerms().get(0).getInstance2().getSetValueTime();
+                BinaryConditionTerm binaryTerm = (BinaryConditionTerm) unsatCoreCond.getConditionTerms().get(0); // only binary can be unsat core
+                long instance1Time = binaryTerm.getInstance1().getSetValueTime();
+                long instance2Time = binaryTerm.getInstance2().getSetValueTime();
                 if ((instance1Time > next.postCond.getTimeStamp() || instance2Time > next.postCond.getTimeStamp()) && 
                     prevCondsOnOrBeforeTimes.contains(unsatCoreCond.getTimeStamp())) {
                   affectable       = true;
@@ -109,7 +111,7 @@ public class HeuristicBacktrack {
     return m_continueInMethod;
   }
   
-  public void addToWatchList(BBorInstInfo infoItem, Formula precond, int prevCondListSize) {
+  public void addToWatchList(BBorInstInfo infoItem, Formula precond) {
     if (!m_watchList.containsKey(infoItem) || m_watchList.get(infoItem).length > 0) {
       List<Condition> condsOnOrBefore = new ArrayList<Condition>(precond.getConditionList());
       m_watchList.put(infoItem, new Object[] {condsOnOrBefore, new ArrayList<Condition>()});
@@ -117,7 +119,7 @@ public class HeuristicBacktrack {
       SSAInstruction inst = infoItem.currentBB.getLastInstructionIndex() >= 0 ? 
                             infoItem.currentBB.getLastInstruction() : null;
       if (inst != null && inst instanceof SSAInvokeInstruction && !((SSAInvokeInstruction) inst).isStatic()) {
-        condsOnOrBefore.remove(prevCondListSize); // remove the receiver != null condition
+        condsOnOrBefore.remove(condsOnOrBefore.size() - 1); // remove the receiver != null condition
       }
     }
   }
@@ -159,7 +161,6 @@ public class HeuristicBacktrack {
   }
   
   private long findUnsatCoreEarliestSet() {
-
     List<Integer> unsatCoreIds                 = m_smtChecker.getLastResult().getUnsatCoreIds();
     List<String> assertCmds                    = m_smtChecker.getLastTranslatedCommand().assertCmds;
     Hashtable<String, List<Condition>> mapping = m_smtChecker.getLastTranslatedCommand().assertCmdCondsMapping;
@@ -171,8 +172,9 @@ public class HeuristicBacktrack {
       List<Condition> unsatCoreConditions = mapping.get(unsatCoreCmd);
       if (unsatCoreConditions != null && unsatCoreConditions.size() > 0) {
         for (Condition unsatCoreCondition : unsatCoreConditions) {
-          long time1 = unsatCoreCondition.getConditionTerms().get(0).getInstance1().getLatestSetValueTime();
-          long time2 = unsatCoreCondition.getConditionTerms().get(0).getInstance2().getLatestSetValueTime();
+          BinaryConditionTerm binaryTerm = (BinaryConditionTerm) unsatCoreCondition.getConditionTerms().get(0); // only binary can be unsat core
+          long time1 = binaryTerm.getInstance1().getLatestSetValueTime();
+          long time2 = binaryTerm.getInstance2().getLatestSetValueTime();
           long condTime = time1 > time2 ? time1 : time2;
           if (condTime < earliest) {
             earliest = condTime;

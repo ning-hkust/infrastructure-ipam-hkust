@@ -56,6 +56,7 @@ public class SMTChecker {
           break;
         case ERROR:
           smtCheckResult = SMT_RESULT.ERROR;
+          System.out.println(m_lastSolverInput);
           break;
         case TIMEOUT:
           smtCheckResult = SMT_RESULT.TIMEOUT;

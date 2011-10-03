@@ -1,5 +1,6 @@
 package hk.ust.cse.Prevision.VirtualMachine;
 
+
 import java.util.Enumeration;
 import java.util.Hashtable;
 
@@ -7,15 +8,20 @@ public class AbstractMemory {
   
   // an empty memory
   public AbstractMemory () {
-    m_refMap = new Hashtable<String, Hashtable<String, Reference>>();
-    m_defMap = new Hashtable<String, Hashtable<String, Integer>>();
+    m_refMap      = new Hashtable<String, Hashtable<String, Reference>>();
+    m_defMap      = new Hashtable<String, Hashtable<String, Integer>>();
+    m_relationMap = new Hashtable<String, Relation>();
+    
+    // always have a special relation for array
+    m_relationMap.put("@array", new Relation("@array", 2));
   }
   
   public AbstractMemory(Hashtable<String, Hashtable<String, Reference>> refMap, 
-      Hashtable<String, Hashtable<String, Integer>> defMap) {
+      Hashtable<String, Hashtable<String, Integer>> defMap, Hashtable<String, Relation> relationMap) {
     
-    m_refMap = refMap;
-    m_defMap = defMap;
+    m_refMap      = refMap;
+    m_defMap      = defMap;
+    m_relationMap = relationMap;
   }
   
   public Hashtable<String, Hashtable<String, Reference>> getRefMap() {
@@ -26,10 +32,19 @@ public class AbstractMemory {
     return m_defMap;
   }
   
+  public Hashtable<String, Relation> getRelationMap() {
+    return m_relationMap;
+  }
+  
+  public Relation getRelation(String relationName) {
+    return m_relationMap.get(relationName);
+  }
+  
   public AbstractMemory deepClone(Hashtable<Object, Object> cloneMap) {
     Hashtable<String, Hashtable<String, Reference>> newRefMap = deepCloneRefMap(cloneMap);
     Hashtable<String, Hashtable<String, Integer>> newDefMap   = deepCloneDefMap();
-    return new AbstractMemory(newRefMap, newDefMap);
+    Hashtable<String, Relation> newRelationMap                = deepCloneRelationMap(cloneMap);
+    return new AbstractMemory(newRefMap, newDefMap, newRelationMap);
   }
   
   @SuppressWarnings("unchecked")
@@ -67,24 +82,19 @@ public class AbstractMemory {
     return newDefMap;
   }
   
-  public boolean equals(Object obj) {
-    if (obj == null) {
-      return false;
-    }
+  @SuppressWarnings("unchecked")
+  private Hashtable<String, Relation> deepCloneRelationMap(Hashtable<Object, Object> cloneMap) {
+    Hashtable<String, Relation> newRelationMap = (Hashtable<String, Relation>) m_relationMap.clone();
     
-    if (!(obj instanceof AbstractMemory)) {
-      return false;
+    Enumeration<String> keys = newRelationMap.keys();
+    while (keys.hasMoreElements()) {
+      String key = (String) keys.nextElement();
+      newRelationMap.put(key, newRelationMap.get(key).deepClone(cloneMap));
     }
-    
-    AbstractMemory memory = (AbstractMemory) obj;
-    return m_refMap.equals(memory.getRefMap()) && 
-           m_defMap.equals(memory.getDefMap());
-  }
-
-  public int hashCode() {
-    return m_refMap.hashCode() + m_defMap.hashCode();
+    return newRelationMap;
   }
   
-  private Hashtable<String, Hashtable<String, Reference>> m_refMap; // callSites -> {refName -> reference}
-  private Hashtable<String, Hashtable<String, Integer>>   m_defMap; // callSites -> {defName (no '@') -> defCount}
+  private final Hashtable<String, Hashtable<String, Reference>> m_refMap; // callSites -> {refName -> reference}
+  private final Hashtable<String, Hashtable<String, Integer>>   m_defMap; // callSites -> {defName (no '@') -> defCount}
+  private final Hashtable<String, Relation>                     m_relationMap;
 }

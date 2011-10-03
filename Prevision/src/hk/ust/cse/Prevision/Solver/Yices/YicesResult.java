@@ -1,7 +1,7 @@
 package hk.ust.cse.Prevision.Solver.Yices;
 
-import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
-import hk.ust.cse.Prevision.PathCondition.ConditionTerm.Comparator;
+import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm;
+import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm.Comparator;
 import hk.ust.cse.Prevision.Solver.ISolverResult;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
 
@@ -47,10 +47,10 @@ public class YicesResult implements ISolverResult {
       m_bSatisfactory = true;
       
       // analyze each model line
-      m_satModel = new ArrayList<ConditionTerm>();
+      m_satModel = new ArrayList<BinaryConditionTerm>();
       for (int i = 1; i < outLines.length; i++) {
         if (outLines[i].length() > 0) {
-          ConditionTerm term = toConditionTerm(outLines[i], nameInstanceMapping);
+          BinaryConditionTerm term = toConditionTerm(outLines[i], nameInstanceMapping);
           if (term != null) {
             m_satModel.add(term);
           }
@@ -77,12 +77,12 @@ public class YicesResult implements ISolverResult {
     return m_unsatCoreIds;
   }
   
-  public List<ConditionTerm> getSatModel() {
+  public List<BinaryConditionTerm> getSatModel() {
     return m_satModel;
   }
   
-  private ConditionTerm toConditionTerm(String str, Hashtable<String, Instance> nameInstanceMapping) {
-    ConditionTerm conditionTerm = null;
+  private BinaryConditionTerm toConditionTerm(String str, Hashtable<String, Instance> nameInstanceMapping) {
+    BinaryConditionTerm conditionTerm = null;
     
     Matcher matcher = null;
     if ((matcher = s_pattern1.matcher(str)).find()) {
@@ -114,7 +114,7 @@ public class YicesResult implements ISolverResult {
         }
         
         if (instance1 != null) {
-          conditionTerm = new ConditionTerm(instance1, Comparator.OP_EQUAL, instance2);
+          conditionTerm = new BinaryConditionTerm(instance1, Comparator.OP_EQUAL, instance2);
         }
         else {
           System.err.println("Unable to analyze model line: " + str);
@@ -163,9 +163,9 @@ public class YicesResult implements ISolverResult {
 //    }
   }
 
-  private String              m_output;
-  private boolean             m_bSatisfactory;
-  private List<Integer>       m_unsatCoreIds;
-  private List<ConditionTerm> m_satModel;
+  private String                    m_output;
+  private boolean                   m_bSatisfactory;
+  private List<Integer>             m_unsatCoreIds;
+  private List<BinaryConditionTerm> m_satModel;
   private static final String LINE_SEPARATOR = System.getProperty("line.separator");
 }

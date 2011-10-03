@@ -135,6 +135,10 @@ public class Instance {
                                m_value.equals("true") || m_value.equals("false"));
   }
   
+  public boolean isRelationRead() {
+    return m_lastRef != null && m_lastRef.getName().startsWith("read_");
+  }
+  
   public String getValue() {
     return m_value;
   }

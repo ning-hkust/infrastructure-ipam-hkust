@@ -71,8 +71,8 @@ public class Executor {
     public Stack<BBorInstInfo>                       workList;
     public SimpleEntry<SSAInvokeInstruction, CGNode> target;
     
-    public final Formula             postCond;
-    public final Formula             postCond4BB;
+    public Formula                   postCond;
+    public Formula                   postCond4BB;
     public final int                 sucessorType;
     public final boolean             isSkipToBB;
     public final ISSABasicBlock      currentBB;
@@ -133,9 +133,7 @@ public class Executor {
       // re-compute call graph with ir (outermost) since main()s may not be good enough
       HashSet<IMethod> additionalEntrypoints = new HashSet<IMethod>();
       additionalEntrypoints.add(ir.getMethod());
-      try {
-        m_walaAnalyzer.recomputeCallGraph(additionalEntrypoints);
-      } catch (Exception e) {e.printStackTrace(); /* should not throw */}
+      m_walaAnalyzer.recomputeCallGraph(additionalEntrypoints, execOptions.callGraphBuilder);
     }
       
     // get the initial cgNode
@@ -206,9 +204,7 @@ public class Executor {
 
       // create an initial Formula if postCond is null
       if (postCond == null) {
-        BBorInstInfo initInfoItem = new BBorInstInfo(startFromBB, false, null, null, 
-            Formula.NORMAL_SUCCESSOR, null, null, methMetaData, callSites, null, this);
-        postCond = PrepInitFormula.prepInitFormula(initInfoItem, execOptions, callStack);
+        postCond = new Formula(); // TRUE formula
       }
 
       // push in the first block
@@ -309,6 +305,12 @@ public class Executor {
     // if callStack's depth == 1, finished entering call stack
     if (execOptions.isEnteringCallStack() && callStack.getDepth() <= 1) {
       execOptions.finishedEnteringCallStack();
+      
+      // create the real initial post-condition according to crash type
+      BBorInstInfo initInfoItem = workList.peek();
+      Formula initFormula = PrepInitFormula.prepInitFormula(initInfoItem, execOptions, callStack);
+      initInfoItem.postCond    = initFormula;
+      initInfoItem.postCond4BB = initFormula;
     }
 
     // output method name
@@ -321,7 +323,6 @@ public class Executor {
     
     // start depth first search
     while (!workList.empty()) {
-
       // continue backtrack if necessary
       if (execOptions.heuristicBacktrack && m_heuristicBacktrack.isBacktracking()) {
         m_heuristicBacktrack.backtrack(workList, curInvokeDepth, execOptions.maxInvokeDepth);
@@ -342,15 +343,22 @@ public class Executor {
         // get visited records
         Hashtable<ISSABasicBlock, Integer> visitedBB = infoItem.postCond.getVisitedRecord();
         
-        int prevCondListSize = infoItem.postCond.getConditionList().size();
-        
         // compute for this BB
         int oriStackSize = workList.size();
-        Formula precond = computeBB(execOptions, cgNode, methData, infoItem, startLine, 
-            startingInst, inclLine, callStack, starting, curInvokeDepth, callSites, workList);
-
+        Formula precond = null;
+        try {
+          precond = computeBB(execOptions, cgNode, methData, infoItem, startLine, 
+              startingInst, inclLine, callStack, starting, curInvokeDepth, callSites, workList);
+        } catch (InvalidStackTraceException e) {
+          if (workList.size() == 0) {
+            // if we cannot enter call stack correctly, no need to continue
+            System.err.println(e.getMessage());
+            throw e;
+          }
+        }
+        
         if (precond == null || // an inner contradiction has been detected
-            workList.size() != oriStackSize) { // if new invocation targets have been pushed into stack 
+            workList.size() > oriStackSize) { // if new invocation targets have been pushed into stack 
                                                // due to target dispatch, skip the current instruction
           continue; 
         }
@@ -363,7 +371,7 @@ public class Executor {
           workList.push(infoItem);
           
           // add to watch list
-          m_heuristicBacktrack.addToWatchList(infoItem, precond, prevCondListSize);
+          m_heuristicBacktrack.addToWatchList(infoItem, precond);
         }
         else {
           // don't need to watch anymore
@@ -436,7 +444,7 @@ public class Executor {
               System.out.println(methData.getMethodSignature() + " is skipped, not useful!");
             }
           }
-          
+
           // decide phis if any
           Hashtable<ISSABasicBlock, Formula> phiedPreConds = null;
           boolean phiDefsUseful = phiDefsUseful(infoItem, precond);
@@ -452,7 +460,7 @@ public class Executor {
               phiedPreConds.put(normPred, precond);
             }
           }
-
+          
           // try to skip branches
           int totalSkipped = 0;
           List<Object[]> bbPreConds = new ArrayList<Object[]>();
@@ -625,104 +633,111 @@ public class Executor {
     while (currInstIndex >= 0 && currInstIndex >= firstInstIndex && preCond != null) {
       // get instruction
       SSAInstruction inst = allInsts[currInstIndex];
+      int currLine = methData.getLineNumber(currInstIndex);
 
-      IR ir = null;
-      if (inst instanceof SSAInvokeInstruction && (infoItem.target == null || !infoItem.target.getKey().equals(inst))) {
-        SSAInvokeInstruction invokeInst = (SSAInvokeInstruction)inst;
-        MethodReference mr = invokeInst.getDeclaredTarget();
-        
-        if (cgNode != null) {
-          // find the potential targets of this invocation
-          SimpleEntry<IR[], CGNode[]> ret = WalaUtils.findInvocationTargets(
-              m_walaAnalyzer, cgNode, invokeInst.getCallSite(), execOptions.maxDispatchTargets);
-          IR[] targetIRs       = ret.getKey();
-          CGNode[] targetNodes = ret.getValue();
-        
-          // if found new targets, add them
-          if (targetIRs.length > 0 && targetIRs[0] != null && !targetIRs[0].getMethod().getSignature().equals(mr.getSignature())) {
-            for (int i = 0; i < targetNodes.length; i++) {
-              BBorInstInfo newInfo = infoItem.clone();
-              newInfo.target = new SimpleEntry<SSAInvokeInstruction, CGNode>(invokeInst, targetNodes[i]);
-              workList.add(newInfo);
+      if (!starting[0] || (currLine - (inclLine ? 1 : 0)) < startLine) {
+        IR ir = null;
+        if (inst instanceof SSAInvokeInstruction && (infoItem.target == null || !infoItem.target.getKey().equals(inst))) {
+          SSAInvokeInstruction invokeInst = (SSAInvokeInstruction) inst;
+          MethodReference mr = invokeInst.getDeclaredTarget();
+          
+          if (cgNode != null) {
+            // find the potential targets of this invocation
+            int dispTargetsToGet = execOptions.isEnteringCallStack() ? Integer.MAX_VALUE : execOptions.maxDispatchTargets;
+            SimpleEntry<IR[], CGNode[]> ret = WalaUtils.findInvocationTargets(
+                m_walaAnalyzer, cgNode, invokeInst.getCallSite(), dispTargetsToGet);
+            IR[] targetIRs       = ret.getKey();
+            CGNode[] targetNodes = ret.getValue();
+          
+            // if found new targets, add them
+            if (targetIRs.length > 0 && targetIRs[0] != null && 
+               !targetIRs[0].getMethod().getSignature().equals(mr.getSignature())) {
+              System.out.println("Multiple invocation targets discovered: " + (targetIRs.length) + " target(s)!");
+              for (int i = 0; i < targetNodes.length; i++) {
+                if (!execOptions.isEnteringCallStack() || 
+                    isTheSameOrChildMethod(targetIRs[i].getMethod().getReference(), callStack.getNextMethodNameOrSign())) {
+                  
+                  // push invocation target to worklist
+                  BBorInstInfo newInfo = infoItem.clone();
+                  newInfo.target = new SimpleEntry<SSAInvokeInstruction, CGNode>(invokeInst, targetNodes[i]);
+                  workList.add(newInfo);
+                  
+                  // output pushed invocation target name
+                  MethodReference targetmr = targetIRs[i].getMethod().getReference();
+                  String targetName = Utils.getClassTypeJavaStr(targetmr.getDeclaringClass().getName() + "." + targetmr.getName());
+                  System.out.println("Pushed invocation target: " + targetName);
+                  if (execOptions.isEnteringCallStack()) {
+                    break; // only push the one matching the input call stack frame
+                  }
+                }
+              }
+              return infoItem.postCond;
             }
-            return infoItem.postCond;
-          }
-          else if (targetIRs.length > 0) {
-            infoItem.target = new SimpleEntry<SSAInvokeInstruction, CGNode>(invokeInst, targetNodes[0]);
+            else if (targetIRs.length > 0) {
+              infoItem.target = new SimpleEntry<SSAInvokeInstruction, CGNode>(invokeInst, targetNodes[0]);
+            }
+            else {
+              infoItem.target = new SimpleEntry<SSAInvokeInstruction, CGNode>(invokeInst, null);
+            }
           }
           else {
             infoItem.target = new SimpleEntry<SSAInvokeInstruction, CGNode>(invokeInst, null);
           }
         }
-        else {
-          infoItem.target = new SimpleEntry<SSAInvokeInstruction, CGNode>(invokeInst, null);
+        else if (inst instanceof SSAInvokeInstruction && infoItem.target != null && infoItem.target.getValue() != null) {
+          ir = infoItem.target.getValue().getIR();
         }
-      }
-      else if (inst instanceof SSAInvokeInstruction && infoItem.target != null && infoItem.target.getValue() != null) {
-        ir = infoItem.target.getValue().getIR();
-      }
-      
-      
-      // determine if entering call stack is still correct
-      int currLine = methData.getLineNumber(currInstIndex);
-      if (execOptions.isEnteringCallStack()) {
+        
         // determine if entering call stack is still correct
-        if (callStack.getCurLineNo() == currLine) {
-          if (inst instanceof SSAInvokeInstruction) {
-            String methodNameOrSign = callStack.getNextMethodNameOrSign();
-            
-            SSAInvokeInstruction invokeInst = (SSAInvokeInstruction)inst;
-            MethodReference mr = (ir == null) ? invokeInst.getDeclaredTarget() : ir.getMethod().getReference();
-            
-            // FIXME: Should handle polymorphism! mr could be a method
-            // of an interface while methodNameOrSign is the concrete method
+        if (execOptions.isEnteringCallStack()) {
+          // determine if entering call stack is still correct
+          if (callStack.getCurLineNo() == currLine) {
+            if (inst instanceof SSAInvokeInstruction) {
+              SSAInvokeInstruction invokeInst = (SSAInvokeInstruction) inst;
+              MethodReference mr = (ir == null) ? invokeInst.getDeclaredTarget() : ir.getMethod().getReference();
 
-            // determine if entering call stack is still correct
-            if (!isTheSameOrChildMethod(mr, methodNameOrSign)) {
+              // determine if entering call stack is still correct
+              if (!isTheSameOrChildMethod(mr, callStack.getNextMethodNameOrSign())) {
+                // skip this instruction
+                String targetName = Utils.getClassTypeJavaStr(mr.getDeclaringClass().getName() + "." + mr.getName().toString());
+                String msg = "Invocation target " + targetName + " doesn't match the call stack: " + 
+                  callStack.getNextMethodNameOrSign() + " at " + callStack.getCurMethodNameAndLineNo();
+                System.err.println(msg);
+                inst = null;
+              }
+            }
+            else {
               // skip this instruction
               inst = null;
             }
           }
           else {
-            // skip this instruction
-            inst = null;
+            // if we cannot enter call stack correctly, no need to continue
+            String msg = "Failed to enter call stack: " + callStack.getNextMethodNameOrSign() + 
+              " at " + callStack.getCurMethodNameAndLineNo();
+            throw new InvalidStackTraceException(msg);
           }
-        }
-        else {
-          // if we cannot enter call stack correctly, no need to continue
-          String msg = "Failed to enter call stack: " + callStack.getNextMethodNameOrSign() + 
-            " at " + callStack.getCurMethodNameOrSign() + ":" + callStack.getCurLineNo();
-          System.err.println(msg);
-          throw new InvalidStackTraceException(msg);
-        }
-      }
-      
-      if (inst != null && (!starting[0] || (currLine - (inclLine ? 1 : 0)) < startLine)) {
-        boolean inclStartingInst = execOptions.inclStartingInst;
-        
-        // if it is at the inner most frame, start from the starting index
-        if (!starting[0] || startingInst < 0 || 
-            (currInstIndex - (inclStartingInst ? 1 : 0)) < startingInst) {
           
-          // get precond for this instruction
-          if (lastInst) {
-            preCond = m_instHandler.handle(execOptions, cgNode, preCond, inst, 
-                infoItem, callStack, curInvokeDepth);
+          //FIXME: need checkcast
+          if (inst != null) {
+            // since we've already found the correct invocation target, we need to remove the rest
+            workList.clear();
           }
-          else {
-            // not the last instruction of the block
-            BBorInstInfo instInfo = new BBorInstInfo(infoItem.currentBB, 
+        }
+        
+        if (inst != null) {
+          // if it is at the inner most frame, start from the starting index
+          if (!starting[0] || startingInst < 0 || (currInstIndex - (execOptions.inclStartingInst ? 1 : 0)) < startingInst) {
+            // get precond for this instruction
+            BBorInstInfo instInfo = lastInst ? infoItem : new BBorInstInfo(infoItem.currentBB, 
                 infoItem.isSkipToBB, preCond, infoItem.postCond4BB, Formula.NORMAL_SUCCESSOR, 
                 infoItem.sucessorBB, infoItem.sucessorInfo, methData, callSites, infoItem.workList, this);
             preCond = m_instHandler.handle(execOptions, cgNode, preCond, inst, 
                 instInfo, callStack, curInvokeDepth);
           }
-        }
-
-        // already passed the nStartLine, no need to
-        // limit the currLine anymore
-        if (starting[0] && currLine < startLine) {
-          starting[0] = false;
+  
+          // already passed the startLine, no need to limit the currLine anymore
+          starting[0] &= (currLine >= startLine);
         }
       }
 
@@ -750,32 +765,21 @@ public class Executor {
     methodNameOrSign = methodNameOrSign.replace('$', '.');
     if (Utils.isMethodSignature(methodNameOrSign)) {
       // get invoking method signature
-      String invokingMethod = mr.getSignature();
-      isSame = invokingMethod.equals(methodNameOrSign);
+      isSame = mr.getSignature().equals(methodNameOrSign);
     }
     else {
       String declaringClass = mr.getDeclaringClass().getName().toString();
-      declaringClass = Utils.getClassTypeJavaStr(declaringClass);
       
       // get invoking method name
-      String invokingMethod = declaringClass + "." + mr.getName().toString();
+      String invokingMethod = Utils.getClassTypeJavaStr(declaringClass) + "." + mr.getName().toString();
       // naive compare first, sometimes can avoid including subject jar in the classpath
-      if (invokingMethod.equals(methodNameOrSign)) {
-        isSame = true;
+      if (!invokingMethod.equals(methodNameOrSign)) {
+        for (Class<?> c = Utils.findClass(declaringClass); c != null && !isSame; c = c.getSuperclass()) {
+          isSame = (c.getName() + "." + mr.getName().toString()).equals(methodNameOrSign);
+        }       
       }
       else {
-        try {
-          // get class object
-          Class<?> cls = Class.forName(declaringClass);
-          for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
-            // get invoking method name
-            invokingMethod = c.getName() + "." + mr.getName().toString();
-            if (invokingMethod.equals(methodNameOrSign)) {
-              isSame = true;
-              break;
-            }
-          }
-        } catch (ClassNotFoundException e) {}        
+        isSame = true;
       }
     }
     return isSame;
@@ -1094,12 +1098,13 @@ public class Executor {
       
       // set options
       ExecutionOptions execOptions = new ExecutionOptions(callStack, false);
-      execOptions.maxDispatchTargets = 2;
-      execOptions.maxRetrieve        = 10;
-      execOptions.maxSmtCheck        = 5000;
-      execOptions.maxInvokeDepth     = 1;
-      execOptions.maxLoop            = 7;
-      execOptions.checkOnTheFly      = true;
+      execOptions.maxDispatchTargets  = 2;
+      execOptions.maxRetrieve         = 10;
+      execOptions.maxSmtCheck         = 5000;
+      execOptions.maxInvokeDepth      = 1;
+      execOptions.maxLoop             = 7;
+      execOptions.skipUselessBranches = false;
+      execOptions.skipUselessMethods  = false;
       
       executor.compute(execOptions, null);
       // wp.heapTracer();
