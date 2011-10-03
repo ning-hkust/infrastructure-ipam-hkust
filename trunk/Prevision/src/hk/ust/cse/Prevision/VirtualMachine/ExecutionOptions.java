@@ -2,6 +2,7 @@ package hk.ust.cse.Prevision.VirtualMachine;
 
 import hk.ust.cse.Prevision.CallStack;
 import hk.ust.cse.Prevision.Summary;
+import hk.ust.cse.Wala.CallGraph.CallGraphBuilder;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -58,22 +59,23 @@ public class ExecutionOptions {
   }
 
   // global options
-  public boolean   inclInnerMostLine      = false;
-  public boolean   inclStartingInst       = false;
-  public boolean   saveNotSatResults      = false;
-  public boolean   checkOnTheFly          = true;
-  public boolean   skipUselessBranches    = true;
-  public boolean   skipUselessMethods     = true;
-  public boolean   heuristicBacktrack     = true;
-  public boolean   clearSatNonSolverData  = true;
-  public int       maxDispatchTargets     = Integer.MAX_VALUE;
-  public int       maxRetrieve            = 1;
-  public int       maxSmtCheck            = 1000;
-  public int       maxInvokeDepth         = 1;
-  public int       maxLoop                = 1;
-  public int       startingInst           = -1;   // -1 if don't want to specify the starting instruction index
-  public int[]     startingInstBranchesTo = null; // null if don't want to specify the instructions that the starting instruction is branching to
-  public EXCEPTION_TYPE exceptionType    = EXCEPTION_TYPE.CUSTOM;
+  public boolean   inclInnerMostLine       = false;
+  public boolean   inclStartingInst        = false;
+  public boolean   saveNotSatResults       = false;
+  public boolean   checkOnTheFly           = true;
+  public boolean   skipUselessBranches     = true;
+  public boolean   skipUselessMethods      = true;
+  public boolean   heuristicBacktrack      = true;
+  public boolean   clearSatNonSolverData   = true;
+  public int       maxDispatchTargets      = Integer.MAX_VALUE;
+  public int       maxRetrieve             = 1;
+  public int       maxSmtCheck             = 1000;
+  public int       maxInvokeDepth          = 1;
+  public int       maxLoop                 = 1;
+  public int       startingInst            = -1;   // -1 if don't want to specify the starting instruction index
+  public int[]     startingInstBranchesTo  = null; // null if don't want to specify the instructions that the starting instruction is branching to
+  public EXCEPTION_TYPE exceptionType      = EXCEPTION_TYPE.CUSTOM;
+  public CallGraphBuilder callGraphBuilder = CallGraphBuilder.ZeroOneCFA;
   
   public final CallStack fullCallStack;
   public final Summary   summary;

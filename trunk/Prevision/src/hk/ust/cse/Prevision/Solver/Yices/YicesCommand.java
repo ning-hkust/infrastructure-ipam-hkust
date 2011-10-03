@@ -1,13 +1,15 @@
 package hk.ust.cse.Prevision.Solver.Yices;
 
+import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm;
+import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm.Comparator;
 import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
-import hk.ust.cse.Prevision.PathCondition.ConditionTerm.Comparator;
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.Solver.ICommand;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.Prevision.VirtualMachine.Instance.INSTANCE_OP;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
+import hk.ust.cse.Prevision.VirtualMachine.Relation;
 import hk.ust.cse.Wala.MethodMetaData;
 
 import java.util.ArrayList;
@@ -20,10 +22,12 @@ public class YicesCommand implements ICommand {
 
   private class TranslatedInstance {
     public TranslatedInstance(String value, String type) {
-      m_value = value;
-      m_type  = type;
+      m_value     = value;
+      m_type      = type;
+      m_increment = -1;
     }
     
+    public int    m_increment;
     public String m_type;
     public String m_value;
   }
@@ -32,88 +36,74 @@ public class YicesCommand implements ICommand {
   public TranslatedCommand translateToCommand(Formula formula, 
       MethodMetaData methData, boolean keepUnboundedField, boolean retrieveUnsatCore) {
     
-    TranslatedCommand result = new TranslatedCommand();
+    // avoids too many parameter passing
+    m_formula            = formula;
+    m_methData           = methData;
+    m_keepUnboundedField = keepUnboundedField;
+    m_retrieveUnsatCore  = retrieveUnsatCore;
+    m_helperVars         = new Hashtable<String, TranslatedInstance>();
+    m_result             = new TranslatedCommand();
     
     Hashtable<String, Hashtable<String, Reference>> refMap = formula.getRefMap();
-    Hashtable<String, Reference> references = null;
-    if (refMap.size() > 0) {
-      references = refMap.values().iterator().next();
-    }
-    else {
-      references = new Hashtable<String, Reference>();
-    }
+    Hashtable<String, Reference> references = (refMap.size() > 0) ? refMap.values().iterator().next() : 
+                                                                    new Hashtable<String, Reference>();
     
     StringBuilder command = new StringBuilder();
-    command.append(defineTypes(references, formula.getConditionList(), methData));
-    command.append(defineVariables(formula.getConditionList(), methData, result));
-    
-    Hashtable<String, TranslatedInstance> helperVars = new Hashtable<String, TranslatedInstance>();
-    String translatedCondStr = translateConditions(
-        formula.getConditionList(), methData, result, keepUnboundedField, retrieveUnsatCore, helperVars);
-    
-    command.append(defineHelperVariables(helperVars));
+    command.append(defineTypes(references));
+    command.append(defineInstances());
+    String translatedCondStr = translateConditions();
+    command.append(defineHelperVariables());
+    command.append(defineRelations());
+    command.append(assertNumBitSame());
     command.append(translatedCondStr);
     command.append("(check)\n");
-    result.command = command.toString();
-    return result;
+    m_result.command = command.toString();
+    return m_result;
   }
   
-  private String defineTypes(Hashtable<String, Reference> references, List<Condition> conditionList, MethodMetaData methData) {
+  private String defineTypes(Hashtable<String, Reference> references) {
     StringBuilder command = new StringBuilder();
     
     // add primitive define-type statements
-    Hashtable<String, String> def_types = new Hashtable<String, String>();
-    def_types.put("I", "int");
-    def_types.put("J", "int");
-    def_types.put("S", "int");
-    def_types.put("B", "int");
-    def_types.put("C", "int");
-    def_types.put("D", "real");
-    def_types.put("F", "real");
-    def_types.put("Z", "bool");
-    def_types.put("Unknown-Type", "int");
-    
-    // add other define-type statements from references
-//    Enumeration<String> keys = references.keys();
-//    while (keys.hasMoreElements()) {
-//      String key = (String) keys.nextElement();
-//      Reference ref = references.get(key);
-//      
-//      String typeName = ref.getType();
-//      // when containing space, it is a constant definition
-//      // e.g., Fresh_0_(Ljava/lang/Object)::Ljava/lang/Object notnull
-//      // e.g., this::Ljava/lang/Object notnull
-//      int index = typeName.indexOf(' ');
-//      if (index >= 0) {
-//        typeName = typeName.substring(0, index);
-//      }
-//      
-//      if (!def_types.containsKey(typeName)) {
-//        def_types.put(typeName, "");
-//      }
-//    }
+    Hashtable<String, String> basic_types = new Hashtable<String, String>();
+    basic_types.put("I", "int");
+    basic_types.put("J", "int");
+    basic_types.put("S", "int");
+    basic_types.put("B", "int");
+    basic_types.put("C", "int");
+    basic_types.put("D", "real");
+    basic_types.put("F", "real");
+    basic_types.put("Z", "bool");
+    basic_types.put("Unknown-Type", "int");
+    basic_types.put("reference", "int");
     
     // add define-type statements from instances in conditions
-    for (Condition condition : conditionList) {
+    Hashtable<String, String> def_types = new Hashtable<String, String>();
+    for (Condition condition : m_formula.getConditionList()) {
       List<ConditionTerm> terms = condition.getConditionTerms();
       for (ConditionTerm term : terms) {
-        Instance[] instances = new Instance[] {term.getInstance1(), term.getInstance2()};
+        Instance[] instances = term.getInstances();
         for (Instance instance : instances) {
           if (!instance.isConstant()) {
             if (instance.isAtomic()) { // FreshInstanceOf(...)
-              if (!def_types.containsKey(instance.getType())) {
+              if (!basic_types.containsKey(instance.getType()) && !def_types.containsKey(instance.getType())) {
                 def_types.put(instance.getType(), "");
               }
             }
             else if (!instance.isBounded()) { // Ljava/lang/System.out
               Reference lastRef = instance.getLastReference();
               if (lastRef != null) {
-                Reference paramRef = tryCreateParamReference(methData, lastRef.getLongName()); // lastRef may be a parameter
+                Reference paramRef = tryCreateParamReference(lastRef.getLongName()); // lastRef may be a parameter
                 String varType = paramRef != null ? paramRef.getType() : lastRef.getType();
-                if (!def_types.containsKey(varType)) {
+                if (!basic_types.containsKey(varType) && !def_types.containsKey(varType)) {
                   def_types.put(varType, "");
                 }
               }
+            }
+          }
+          else if (instance.getValue().startsWith("##")) { // constant string
+            if (!def_types.containsKey("[C")) {
+              def_types.put("[C", "");
             }
           }
         }
@@ -126,49 +116,45 @@ public class YicesCommand implements ICommand {
     // set Yices Option to output a model
     command.append("(set-evidence! true)\n");
 
-    // the reference type needs to come at first
-    command.append("(define-type reference (scalar null notnull))\n");
-    
-    // define-types
-    Enumeration<String> define_types = def_types.keys();
-    while (define_types.hasMoreElements()) {
-      String define_type = (String) define_types.nextElement();
-      // not constant types
+    // define basic types
+    Enumeration<String> keys = basic_types.keys();
+    while (keys.hasMoreElements()) {
+      String key = (String) keys.nextElement();
       command.append("(define-type ");
-      command.append(Utils.filterChars(define_type));
+      command.append(Utils.filterChars(key));
       command.append(" ");
-
-      String basicType = def_types.get(define_type);
-      if (basicType != null && basicType.length() > 0) {
-        command.append(basicType);
-      }
-      else {
-        // everything else is treated as reference type
-        command.append("reference");
-      }
+      command.append(basic_types.get(key));
       command.append(")\n");
     }
-    return command.toString();
-  }
-
-  private String defineVariables(List<Condition> conditionList, MethodMetaData methData, TranslatedCommand result) {
-    StringBuilder command = new StringBuilder();
-    command.append(defineInstances(conditionList, methData, result));
+    
+    // define other types
+    keys = def_types.keys();
+    while (keys.hasMoreElements()) {
+      String key = (String) keys.nextElement();
+      command.append("(define-type ");
+      command.append(Utils.filterChars(key));
+      command.append(" ");
+      command.append("reference)\n");
+    }
+    
+    // define null
+    command.append("(define null::int 0)\n");
+    
     return command.toString();
   }
   
-  private String defineHelperVariables(Hashtable<String, TranslatedInstance> helperVars) {
+  private String defineHelperVariables() {
     StringBuilder command = new StringBuilder();
 
-    if (helperVars.size() > 0) {
+    if (m_helperVars.size() > 0) {
       command.append(numberToBVFunctions());
     }
     
-    // first time for define
-    Enumeration<String> keys = helperVars.keys();
+    // for define
+    Enumeration<String> keys = m_helperVars.keys();
     while (keys.hasMoreElements()) {
       String translatedInstance = (String) keys.nextElement();
-      TranslatedInstance helperInstance = helperVars.get(translatedInstance);
+      TranslatedInstance helperInstance = m_helperVars.get(translatedInstance);
       
       boolean isHelperBitVector = helperInstance.m_type.equals("bitvector32");
       command.append("(define ");
@@ -177,11 +163,17 @@ public class YicesCommand implements ICommand {
       command.append(isHelperBitVector ? "(bitvector 32))\n" : "int)\n");
     }
     
-    // second time for assert
-    keys = helperVars.keys();
+    return command.toString();
+  }
+  
+  private String assertNumBitSame() {
+    StringBuilder command = new StringBuilder();
+    
+    // for assert
+    Enumeration<String> keys = m_helperVars.keys();
     while (keys.hasMoreElements()) {
       String translatedInstance = (String) keys.nextElement();
-      TranslatedInstance helperInstance = helperVars.get(translatedInstance);
+      TranslatedInstance helperInstance = m_helperVars.get(translatedInstance);
       
       boolean isHelperBitVector = helperInstance.m_type.equals("bitvector32");
       command.append("(assert ($numBitSame ");
@@ -193,45 +185,18 @@ public class YicesCommand implements ICommand {
     
     return command.toString();
   }
-  
-//  private String defineReferences(Hashtable<String, Reference> references) {
-//    StringBuilder command = new StringBuilder();
-//    
-//    // defines
-//    HashSet<String> m_defined = new HashSet<String>();
-//    Enumeration<String> keys = references.keys();
-//    while (keys.hasMoreElements()) {
-//      String key = (String) keys.nextElement();
-//      Reference ref = references.get(key);
-//      
-//      if (ref.getInstance().isAtomic() && ref.getInstance().isBounded() && !ref.getInstance().isConstant()) {
-//        String define = translateToDefString(ref);
-//        if (define.length() > 0 && !m_defined.contains(define)) {
-//          command.append(define + "\n");
-//
-//          // avoid duplication
-//          m_defined.add(define);
-//        }
-//      }
-//    }
-//    return command.toString();
-//  }
-  
-//  private String translateToDefString(Reference ref) {
-//    return normalToYicesDefStr(ref);
-//  }
-  
-  private String defineInstances(List<Condition> conditionList, MethodMetaData methData, TranslatedCommand result) {
+
+  private String defineInstances() {
     StringBuilder command = new StringBuilder();
 
     // defines
     HashSet<String> defined = new HashSet<String>();
-    for (Condition condition : conditionList) {
+    for (Condition condition : m_formula.getConditionList()) {
       List<ConditionTerm> terms = condition.getConditionTerms();
       for (ConditionTerm term : terms) {
-        Instance[] instances = new Instance[] {term.getInstance1(), term.getInstance2()};
+        Instance[] instances = term.getInstances();
         for (Instance instance : instances) {
-          List<String> defines = translateToDefString(instance, methData, result);
+          List<String> defines = translateToDefString(instance);
           for (String define : defines) {
             if (define.length() > 0 && !defined.contains(define)) {
               command.append(define);
@@ -244,7 +209,68 @@ public class YicesCommand implements ICommand {
     return command.toString();
   }
   
-  private List<String> translateToDefString(Instance instance, MethodMetaData methData, TranslatedCommand result) {
+  private String defineRelations() {
+    StringBuilder command = new StringBuilder();
+    
+    Hashtable<String, Relation> relationMap = m_formula.getRelationMap();
+    Enumeration<String> keys = relationMap.keys();
+    while (keys.hasMoreElements()) {
+      String key = (String) keys.nextElement();
+      Relation relation = relationMap.get(key);
+      command.append(defineRelation(relation));
+    }
+    return command.toString();
+  }
+  
+  private String defineRelation(Relation relation) {
+    StringBuilder command = new StringBuilder();
+    
+    // define relation
+    command.append("(define ");
+    command.append(relation.getName());
+    command.append("::(-> reference ");
+    command.append(relation.isArrayRelation() ? "I " : "");
+    command.append("reference))\n");
+    
+    // updates and reads
+    List<Long> functionTimes = relation.getFunctionTimes();
+    for (int i = functionTimes.size() - 1; i >= 0; i--) {
+      Instance[] domainValues = relation.getDomainValues().get(i);
+      Instance rangeValue     = relation.getRangeValues().get(i);
+      if (rangeValue != null) { // it is an update function
+        StringBuilder updateCmd = new StringBuilder();
+        updateCmd.append("(define ");
+        updateCmd.append(relation.getName());
+        updateCmd.append("@");
+        updateCmd.append(relation.getFunctionCount() - i);
+        updateCmd.append("::(-> reference ");
+        updateCmd.append(relation.isArrayRelation() ? "I " : "");
+        updateCmd.append("reference) (update ");
+        updateCmd.append(relation.getName());
+        
+        int lastUpdate = relation.getLastUpdateIndex(i);
+        updateCmd.append(lastUpdate >= 0 ? ("@" + (relation.getFunctionCount() - lastUpdate)) : "");
+        updateCmd.append(" (");
+        for (int j = 0; j < domainValues.length; j++) {
+          updateCmd.append(translateInstance(domainValues[j]).m_value);
+          if (j != domainValues.length - 1) {
+            updateCmd.append(" ");
+          }
+        }
+        updateCmd.append(") ");
+        updateCmd.append(translateInstance(rangeValue).m_value);
+        updateCmd.append("))\n");
+        
+        String updateCmdStr = updateCmd.toString();
+        if (!updateCmdStr.contains("%%UnboundField%%")) {
+          command.append(updateCmdStr);
+        }
+      }
+    }
+    return command.toString();
+  }
+  
+  private List<String> translateToDefString(Instance instance) {
     List<String> defStrings = new ArrayList<String>();
     
     if (instance.isAtomic()) {
@@ -252,99 +278,91 @@ public class YicesCommand implements ICommand {
       if (instance.isConstant()) {
         String value = instance.getValue();
         if (value.startsWith("##")) {
-          defString.append(stringToDefStr(value));
+          defString.append(translateStringToDefStr(value));
         }
         else if (value.startsWith("#!")) {
-          defString.append(numberToDefStr(value));
+          defString.append(translateNumberToDefStr(value));
         }
       }
       else {
         // should only be FreshInstanceOf(...)
         String value = instance.getValue();
         if (value.startsWith("FreshInstanceOf(")) {
-          defString.append(freshToDefStr(instance));
+          defString.append(translateFreshToDefStr(instance));
         }
       }
       defStrings.add(defString.toString());
     }
     else if (instance.isBounded() /* not atomic but still bounded */) {
-      List<String> defStrings1 = translateToDefString(instance.getLeft(), methData, result);
-      List<String> defStrings2 = translateToDefString(instance.getRight(), methData, result);
+      List<String> defStrings1 = translateToDefString(instance.getLeft());
+      List<String> defStrings2 = translateToDefString(instance.getRight());
       defStrings.addAll(defStrings1);
       defStrings.addAll(defStrings2);
     }
-    else if (!instance.isBounded()){ // field reference
-      StringBuilder defString = new StringBuilder();
+    else if (!instance.isBounded()){ // field reference, array read
       // check if it is a constant string field, some of these fields have known values
       int type = isConstStringField(instance);
       if (type >= 0) {
-        defString.append(constStringFieldToDefStr(instance, type));
+        defStrings.add(constStringFieldToDefStr(instance, type));
       }
-      else {
-        defString.append(unboundToDefStr(instance, methData));
+      else if (!instance.isRelationRead()) {
+        defStrings.add(translateUnboundToDefStr(instance));
       }
-      defStrings.add(defString.toString());
     }
     
     // only save if there is an 1:1 matching
     if (defStrings.size() == 1 && defStrings.get(0).length() > 0) {
-      String defString = defStrings.get(0);
-      int index = defString.indexOf("::");
+      int index = defStrings.get(0).indexOf("::");
       if (index >= 0) {
-        result.nameInstanceMapping.put(defString.substring(8, index), instance);
+        m_result.nameInstanceMapping.put(defStrings.get(0).substring(8, index), instance);
       }
     }
     
     return defStrings;
   }
   
-  private String unboundToDefStr(Instance instance, MethodMetaData methData) {
+  // create bit-vector for string constant
+  // str in the form of ##somestr
+  private String translateStringToDefStr(String str) {
     StringBuilder defString = new StringBuilder();
-    Reference lastRef = instance.getLastReference();
-    if (lastRef != null) {
-      Reference paramRef = tryCreateParamReference(methData, lastRef.getLongName()); // lastRef may be a parameter
-      String callSites = (lastRef.getCallSites().length() > 0) ? "<" + lastRef.getCallSites() + ">" : "";
-      String varName   = paramRef != null ? callSites + paramRef.getName() : lastRef.getLongNameWithCallSites();
-      String varType   = paramRef != null ? paramRef.getType() : lastRef.getType();
-      defString.append("(define ");
-      defString.append(Utils.filterChars(varName)); // instance may be from inner method
-      defString.append("::");
-      defString.append(Utils.filterChars(varType));
-      defString.append(")\n");
-    }
+
+    String binaryStr = strToBinaryStr(str.substring(2));
+    defString.append("(define ");
+    defString.append(Utils.filterChars(str));
+    defString.append("::(bitvector ");
+    defString.append(binaryStr.length());
+    defString.append(")");
+    defString.append(" 0b" + binaryStr);
+    defString.append(")\n");
     return defString.toString();
   }
   
-  private String constStringFieldToDefStr(Instance instance, int type) {
-    StringBuilder defString = new StringBuilder();
-    
-    Reference lastRef = instance.getLastReference();
-    Instance lastDeclInstance = (lastRef != null) ? lastRef.getDeclaringInstance() : null;
-    switch (type) {
-    case 0:
-      defString.append("(define ");
-      defString.append(Utils.filterChars(lastDeclInstance.getValue() + ".count"));
-      defString.append("::I ");
-      defString.append(lastDeclInstance.getValue().length() - 2);
-      defString.append(")\n");
-      break;
-    case 1:
-      defString.append("(define ");
-      defString.append(Utils.filterChars(lastDeclInstance.getValue() + ".value"));
-      defString.append("::[C notnull)\n");
-      break;
-    case 2:
-      Reference lastLastRef = (lastDeclInstance != null) ? lastDeclInstance.getLastReference() : null;
-      Instance lastLastDeclInstance = (lastLastRef != null) ? lastLastRef.getDeclaringInstance() : null;
-      defString.append("(define ");
-      defString.append(Utils.filterChars(lastLastDeclInstance.getValue() + ".value.length"));
-      defString.append("::I ");
-      defString.append(lastLastDeclInstance.getValue().length() - 2);
-      defString.append(")\n");
-      break;
-    default:
-      break;
+  private String strToBinaryStr(String str) {
+    char[] strChar = str.toCharArray();
+    StringBuilder result = new StringBuilder();
+    for (char aChar : strChar) {
+      result.append(Integer.toBinaryString(aChar));
     }
+    return result.toString();
+  }
+  
+  // no need to define any thing for number constant
+  private String translateNumberToDefStr(String str) {
+    return "";
+  }
+  
+  private String translateFreshToDefStr(Instance instance) {
+    StringBuilder defString = new StringBuilder();
+    defString.append("(define ");
+    defString.append(Utils.filterChars(instance.getValue()));
+    defString.append("::");
+    defString.append(Utils.filterChars(instance.getType()));
+    
+    // get the new time
+    String freshName = instance.getValue();
+    String newTime = freshName.substring(freshName.lastIndexOf('_') + 1, freshName.length() - 1);
+    defString.append(" " + newTime + ")\n");
+    
     return defString.toString();
   }
 
@@ -377,193 +395,209 @@ public class YicesCommand implements ICommand {
     return type;
   }
   
-  private String freshToDefStr(Instance instance) {
+  private String constStringFieldToDefStr(Instance instance, int type) {
     StringBuilder defString = new StringBuilder();
-    defString.append("(define ");
-    defString.append(Utils.filterChars(instance.getValue()));
-    defString.append("::");
-    defString.append(Utils.filterChars(instance.getType()));
-    defString.append(" notnull)\n");
-    return defString.toString();
-  }
-  
-  // create bit-vector for string constant
-  // str in the form of ##somestr
-  private String stringToDefStr(String str) {
-    StringBuilder defString = new StringBuilder();
-
-    String binaryStr = strToBinaryStr(str.substring(2));
-    defString.append("(define ");
-    defString.append(Utils.filterChars(str));
-    defString.append("::(bitvector ");
-    defString.append(binaryStr.length());
-    defString.append(")");
-    defString.append(" 0b" + binaryStr);
-    defString.append(")\n");
-    return defString.toString();
-  }
-  
-  // no need to define any thing for number constant
-  private String numberToDefStr(String str) {
-    return "";
-  }
-  
-  private String strToBinaryStr(String str) {
-    char[] strChar = str.toCharArray();
-    StringBuilder result = new StringBuilder();
-    for (char aChar : strChar) {
-      result.append(Integer.toBinaryString(aChar));
-    }
-    return result.toString();
-  }
-  
-  private String translateConditions(List<Condition> conditionList, MethodMetaData methData, 
-      TranslatedCommand result, boolean keepUnboundedField, boolean retrieveUnsatCore, 
-      Hashtable<String, TranslatedInstance> helperVars) {
     
+    Reference lastRef = instance.getLastReference();
+    Instance lastDeclInstance = (lastRef != null) ? lastRef.getDeclaringInstance() : null;
+    switch (type) {
+    case 0:
+      defString.append("(define ");
+      defString.append(Utils.filterChars(lastDeclInstance.getValue() + ".count"));
+      defString.append("::I ");
+      defString.append(lastDeclInstance.getValue().length() - 2);
+      defString.append(")\n");
+      break;
+    case 1:
+      defString.append("(define ");
+      defString.append(Utils.filterChars(lastDeclInstance.getValue() + ".value"));
+      defString.append("::[C ");
+      defString.append(System.nanoTime());
+      defString.append(")\n");
+      break;
+    case 2:
+      Reference lastLastRef = (lastDeclInstance != null) ? lastDeclInstance.getLastReference() : null;
+      Instance lastLastDeclInstance = (lastLastRef != null) ? lastLastRef.getDeclaringInstance() : null;
+      defString.append("(define ");
+      defString.append(Utils.filterChars(lastLastDeclInstance.getValue() + ".value.length"));
+      defString.append("::I ");
+      defString.append(lastLastDeclInstance.getValue().length() - 2);
+      defString.append(")\n");
+      break;
+    default:
+      break;
+    }
+    return defString.toString();
+  }
+  
+  private String translateUnboundToDefStr(Instance instance) {
+    StringBuilder defString = new StringBuilder();
+    Reference lastRef = instance.getLastReference();
+    if (lastRef != null) {
+      Reference paramRef = tryCreateParamReference(lastRef.getLongName()); // lastRef may be a parameter
+      String callSites = (lastRef.getCallSites().length() > 0) ? "<" + lastRef.getCallSites() + ">" : "";
+      String varName   = paramRef != null ? callSites + paramRef.getName() : lastRef.getLongNameWithCallSites();
+      String varType   = paramRef != null ? paramRef.getType() : lastRef.getType();
+      defString.append("(define ");
+      defString.append(Utils.filterChars(varName)); // instance may be from inner method
+      defString.append("::");
+      defString.append(Utils.filterChars(varType));
+      defString.append(")\n");
+    }
+    return defString.toString();
+  }
+  
+  private String translateConditions() {
     StringBuilder command = new StringBuilder();
     
     HashSet<String> addedAssertCmds = new HashSet<String>();
-    for (Condition condition : conditionList) {
-      StringBuilder assertCmd = new StringBuilder();
-      assertCmd.append(retrieveUnsatCore ? "(assert+ " : "(assert ");
-      assertCmd.append(translateConditionTerms(condition.getConditionTerms(), methData, keepUnboundedField, helperVars));
-      assertCmd.append(")\n");
-      String assertCmdStr = assertCmd.toString();
-      if (assertCmdStr.length() > 0 && !assertCmdStr.contains("%%UnboundField%%")) {
-        if (!addedAssertCmds.contains(assertCmdStr)) {
-          command.append(assertCmdStr);
-          addedAssertCmds.add(assertCmdStr);
-
-          // save an assert command list
-          result.assertCmds.add(assertCmdStr);
-        }
+    for (Condition condition : m_formula.getConditionList()) {
+      // translate condition into assert command
+      String translated = translateConditionTerms(condition.getConditionTerms());
+      if (translated.length() > 0) {
+        StringBuilder assertCmd = new StringBuilder();
+        assertCmd.append(m_retrieveUnsatCore ? "(assert+ " : "(assert ");
+        assertCmd.append(translated);
+        assertCmd.append(")\n");
+        String assertCmdStr = assertCmd.toString();
         
-        // save a command and condition mapping
-        List<Condition> cmdConditions = result.assertCmdCondsMapping.get(assertCmdStr);
-        if (cmdConditions == null) {
-          cmdConditions = new ArrayList<Condition>();
-          result.assertCmdCondsMapping.put(assertCmdStr, cmdConditions);
+        // add condition to command
+        if (!assertCmdStr.contains("%%UnboundField%%")) {
+          if (!addedAssertCmds.contains(assertCmdStr)) {
+            command.append(assertCmdStr);
+            addedAssertCmds.add(assertCmdStr);
+
+            // save an assert command list
+            m_result.assertCmds.add(assertCmdStr);
+          }
+          
+          // save a command and condition mapping
+          List<Condition> cmdConditions = m_result.assertCmdCondsMapping.get(assertCmdStr);
+          if (cmdConditions == null) {
+            cmdConditions = new ArrayList<Condition>();
+            m_result.assertCmdCondsMapping.put(assertCmdStr, cmdConditions);
+          }
+          cmdConditions.add(condition);
         }
-        cmdConditions.add(condition);
       }
     }
     return command.toString();
   }
   
-  private String translateConditionTerms(List<ConditionTerm> terms, MethodMetaData methData, 
-      boolean keepUnboundedField, Hashtable<String, TranslatedInstance> helperVars) {
-    
+  private String translateConditionTerms(List<ConditionTerm> terms) {
     StringBuilder command = new StringBuilder();
     
     command.append((terms.size() > 1) ? "(or " : "");
     for (int i = 0, size = terms.size(); i < size; i++) {
       ConditionTerm term = terms.get(i);
-      TranslatedInstance instance1 = translateInstance(term.getInstance1(), methData, keepUnboundedField, helperVars);
-      TranslatedInstance instance2 = translateInstance(term.getInstance2(), methData, keepUnboundedField, helperVars);
-      
-      // always convert to number
-      if (!instance1.m_type.equals("number") && !instance1.m_value.contains("%%UnboundField%%")) {
-        TranslatedInstance instance1Num = helperVars.get(instance1.m_value);
-        if (instance1Num == null) {
-          instance1Num = new TranslatedInstance("$tmp_" + helperVars.size(), "number");
-          helperVars.put(instance1.m_value, instance1Num);
+      if (term instanceof BinaryConditionTerm) { // only translates binary condition terms
+        BinaryConditionTerm binaryTerm = (BinaryConditionTerm) term;
+        TranslatedInstance instance1 = translateInstance(binaryTerm.getInstance1());
+        TranslatedInstance instance2 = translateInstance(binaryTerm.getInstance2());
+        
+        // always convert to number
+        instance1 = makeHelperWhenNecessary(instance1, "number");
+        instance2 = makeHelperWhenNecessary(instance2, "number");
+        
+        // convert #!0/#!1 to false/true
+        convertTrueFalse(binaryTerm, instance1, instance2);
+        
+        if (!instance1.m_value.equals("NaN") && !instance2.m_value.equals("NaN")) {
+          command.append("(");
+          switch (binaryTerm.getComparator()) {
+          case OP_EQUAL:
+            command.append("= ");
+            break;
+          case OP_INEQUAL:
+            command.append("/= ");
+            break;
+          case OP_GREATER:
+            command.append("> ");
+            break;
+          case OP_GREATER_EQUAL:
+            command.append(">= ");
+            break;
+          case OP_SMALLER:
+            command.append("< ");
+            break;
+          case OP_SMALLER_EQUAL:
+            command.append("<= ");
+            break;
+          default:
+            command.append("? ");
+            break;
+          }
+          command.append(instance1.m_value);
+          command.append(" ");
+          command.append(instance2.m_value);
+          command.append(")");
         }
-        instance1 = instance1Num;
+        else {
+          // boolean expression with NaN (NaN is not equal to everything!)
+          command.append((binaryTerm.getComparator() == Comparator.OP_INEQUAL) ? "true" : "false");
+        }
       }
-      if (!instance2.m_type.equals("number") && !instance2.m_value.contains("%%UnboundField%%")) {
-        TranslatedInstance instance2Num = helperVars.get(instance2.m_value);
-        if (instance2Num == null) {
-          instance2Num = new TranslatedInstance("$tmp_" + helperVars.size(), "number");
-          helperVars.put(instance2.m_value, instance2Num);
-        }
-        instance2 = instance2Num;
-      }
-      
-      // convert #!0/#!1 to false/true
-      String type1 = term.getInstance1().getLastReference() != null ? term.getInstance1().getLastReference().getType() : null;
-      String type2 = term.getInstance2().getLastReference() != null ? term.getInstance2().getLastReference().getType() : null;
-      if ((type1 != null && type1.equals("Z")) || (type2 != null && type2.equals("Z"))) {
-        if (instance1.m_value.equals("0")) {
-          instance1.m_value = "false";
-        }
-        else if (instance1.m_value.equals("1")) {
-          instance1.m_value = "true";
-        }
-        if (instance2.m_value.equals("0")) {
-          instance2.m_value = "false";
-        }
-        else if (instance2.m_value.equals("1")) {
-          instance2.m_value = "true";
-        }
-      }
-      
-      if (!instance1.m_value.equals("NaN") && !instance2.m_value.equals("NaN")) {
-        command.append("(");
-        switch (term.getComparator()) {
-        case OP_EQUAL:
-          command.append("= ");
-          break;
-        case OP_INEQUAL:
-          command.append("/= ");
-          break;
-        case OP_GREATER:
-          command.append("> ");
-          break;
-        case OP_GREATER_EQUAL:
-          command.append(">= ");
-          break;
-        case OP_SMALLER:
-          command.append("< ");
-          break;
-        case OP_SMALLER_EQUAL:
-          command.append("<= ");
-          break;
-        default:
-          command.append("? ");
-          break;
-        }
-        command.append(instance1.m_value);
-        command.append(" ");
-        command.append(instance2.m_value);
-        command.append(")");
-      }
-      else {
-        // boolean expression with NaN (NaN is not equal to everything!)
-        command.append((term.getComparator() == Comparator.OP_INEQUAL) ? "true" : "false");
+      else { // for type condition term
+        command.append("true");
       }
       command.append((i != terms.size() - 1) ? " " : "");
     }
     command.append((terms.size() > 1) ? ")" : "");
-
     return command.toString();
   }
 
   
-  private TranslatedInstance translateInstance(Instance instance, MethodMetaData methData, 
-      boolean keepUnboundedField, Hashtable<String, TranslatedInstance> helperVars) {
+  private TranslatedInstance translateInstance(Instance instance) {
     TranslatedInstance transIntance = null;
     
     // if instance is not bound, try to show its last reference name
     if (!instance.isBounded()) {
-      String lastRefName = null;
       Reference lastRef = instance.getLastReference();
       if (lastRef != null) {
-        Reference paramRef = tryCreateParamReference(methData, lastRef.getLongName());
-        if (paramRef != null) {
-          String callSites = (lastRef.getCallSites().length() > 0) ? "<" + lastRef.getCallSites() + ">" : "";
-          lastRefName = callSites + paramRef.getName();
-        }
-        else if (keepUnboundedField || lastRef.getDeclaringInstance() == null) {
-          lastRefName = lastRef.getLongNameWithCallSites();
+        if (instance.isRelationRead()) { // read from a relation
+          StringBuilder readRelation = new StringBuilder();
+          
+          String readStr    = instance.getLastReference().getName();
+          Relation relation = m_formula.getRelation(readStr);
+          readRelation.append("(");
+          readRelation.append(relation.getName());
+
+          int readIndex = relation.getIndex(relation.getReadStringTime(readStr));
+          int lastUpdate = relation.getLastUpdateIndex(readIndex);
+          readRelation.append(lastUpdate >= 0 ? ("@" + (relation.getFunctionCount() - lastUpdate)) : "");
+          readRelation.append(" ");
+
+          Instance[] domainValues = relation.getDomainValues().get(readIndex);
+          for (int i = 0; i < domainValues.length; i++) {
+            readRelation.append(translateInstance(domainValues[i]).m_value);
+            if (i != domainValues.length - 1) {
+              readRelation.append(" ");
+            }
+          }
+          readRelation.append(")");
+          transIntance = new TranslatedInstance(readRelation.toString(), "number");
         }
         else {
-          // since fields could be assigned many times at different time
-          // we may not want to compare fields that are not yet bounded
-          lastRefName = "%%UnboundField%%";
+          String lastRefName = null;
+          Reference paramRef = tryCreateParamReference(lastRef.getLongName());
+          if (paramRef != null) {
+            String callSites = (lastRef.getCallSites().length() > 0) ? "<" + lastRef.getCallSites() + ">" : "";
+            lastRefName = callSites + paramRef.getName();
+          }
+          else if (m_keepUnboundedField || lastRef.getDeclaringInstance() == null) {
+            lastRefName = lastRef.getLongNameWithCallSites();
+          }
+          else {
+            // since fields could be assigned many times at different time
+            // we may not want to compare fields that are not yet bounded
+            lastRefName = "%%UnboundField%%";
+          }
+          transIntance = new TranslatedInstance(Utils.filterChars(lastRefName), "number");
         }
       }
-      transIntance = new TranslatedInstance(lastRefName == null ? "{Unbounded}" : Utils.filterChars(lastRefName), "number");
+      else {
+        transIntance = new TranslatedInstance("{Unbounded}", "number");
+      }
     }
     else if (instance.isAtomic()) {
       if (instance.getValue().startsWith("##")) {
@@ -574,8 +608,8 @@ public class YicesCommand implements ICommand {
       }
     }
     else {
-      TranslatedInstance leftInstance  = translateInstance(instance.getLeft(), methData, keepUnboundedField, helperVars);
-      TranslatedInstance rightInstance = translateInstance(instance.getRight(), methData, keepUnboundedField, helperVars);
+      TranslatedInstance leftInstance  = translateInstance(instance.getLeft());
+      TranslatedInstance rightInstance = translateInstance(instance.getRight());
       
       // watch out for NaN, NaN +-*/ any number is still NaN
       if (leftInstance.m_value.equals("NaN") || rightInstance.m_value.equals("NaN")) {
@@ -588,7 +622,7 @@ public class YicesCommand implements ICommand {
         case MUL:
         case DIV:
         case REM:
-          transIntance = translateNumberInstance(leftInstance, instance.getOp(), rightInstance, helperVars);
+          transIntance = translateNumberInstance(leftInstance, instance.getOp(), rightInstance);
           break;
         case SHL:
         case SHR:
@@ -597,7 +631,7 @@ public class YicesCommand implements ICommand {
         case OR:
         case XOR:
         default:
-          transIntance = translateBitVectorInstance(leftInstance, instance.getOp(), rightInstance, helperVars);
+          transIntance = translateBitVectorInstance(leftInstance, instance.getOp(), rightInstance);
           break;
         }
       }
@@ -606,37 +640,14 @@ public class YicesCommand implements ICommand {
   }
   
   private TranslatedInstance translateBitVectorInstance(TranslatedInstance leftInstance, 
-      INSTANCE_OP op, TranslatedInstance rightInstance, Hashtable<String, TranslatedInstance> helperVars) {
+      INSTANCE_OP op, TranslatedInstance rightInstance) {
     
     StringBuilder ret = new StringBuilder();
 
     // create bit vector helper variables for the bit vector operation
-    if (!leftInstance.m_type.equals("bitvector32") && !leftInstance.m_value.contains("%%UnboundField%%")) {
-      TranslatedInstance leftInstanceBV = helperVars.get(leftInstance.m_value);
-      if (leftInstanceBV == null) {
-        leftInstanceBV = new TranslatedInstance("$tmp_" + helperVars.size(), "bitvector32");
-        helperVars.put(leftInstance.m_value, leftInstanceBV);
-      }
-      leftInstance = leftInstanceBV;
-    }
-    if (op.equals(INSTANCE_OP.AND) || op.equals(INSTANCE_OP.OR) || op.equals(INSTANCE_OP.XOR)) {
-      if (!rightInstance.m_type.equals("bitvector32") && !rightInstance.m_value.contains("%%UnboundField%%")) {
-        TranslatedInstance rightInstanceBV = helperVars.get(rightInstance.m_value);
-        if (rightInstanceBV == null) {
-          rightInstanceBV = new TranslatedInstance("$tmp_" + helperVars.size(), "bitvector32");
-          helperVars.put(rightInstance.m_value, rightInstanceBV);
-        }
-        rightInstance = rightInstanceBV;
-      }
-    }
-    else if (!rightInstance.m_type.equals("number") && !rightInstance.m_value.contains("%%UnboundField%%")) {
-      TranslatedInstance rightInstanceNum = helperVars.get(rightInstance.m_value);
-      if (rightInstanceNum == null) {
-        rightInstanceNum = new TranslatedInstance("$tmp_" + helperVars.size(), "number");
-        helperVars.put(rightInstance.m_value, rightInstanceNum);
-      }
-      rightInstance = rightInstanceNum;
-    }
+    leftInstance  = makeHelperWhenNecessary(leftInstance, "bitvector32");
+    rightInstance = makeHelperWhenNecessary(rightInstance, (op.equals(INSTANCE_OP.AND) || 
+        op.equals(INSTANCE_OP.OR) || op.equals(INSTANCE_OP.XOR)) ? "bitvector32" : "number");
     
     ret.append("(");
     switch (op) {
@@ -667,59 +678,56 @@ public class YicesCommand implements ICommand {
     return new TranslatedInstance(ret.toString(), "bitvector32");
   }
   
-
   private TranslatedInstance translateNumberInstance(TranslatedInstance leftInstance, 
-      INSTANCE_OP op, TranslatedInstance rightInstance, Hashtable<String, TranslatedInstance> helperVars) {
-    
-    StringBuilder ret = new StringBuilder();
+      INSTANCE_OP op, TranslatedInstance rightInstance) {
 
     // create number helper variables for the number operation
-    if (!leftInstance.m_type.equals("number") && !leftInstance.m_value.contains("%%UnboundField%%")) {
-      TranslatedInstance leftInstanceNum = helperVars.get(leftInstance.m_value);
-      if (leftInstanceNum == null) {
-        leftInstanceNum = new TranslatedInstance("$tmp_" + helperVars.size(), "number");
-        helperVars.put(leftInstance.m_value, leftInstanceNum);
+    leftInstance  = makeHelperWhenNecessary(leftInstance, "number");
+    rightInstance = makeHelperWhenNecessary(rightInstance, "number");
+
+    TranslatedInstance translated = null;
+    if (op == INSTANCE_OP.ADD && rightInstance.m_value.equals("1")) {
+      if (leftInstance.m_increment > 0) {
+        String cut = leftInstance.m_value.substring(0, leftInstance.m_value.lastIndexOf(' '));
+        translated = new TranslatedInstance(cut + " " + (leftInstance.m_increment + 1) + ")", "number");
       }
-      leftInstance = leftInstanceNum;
-    }
-    if (!rightInstance.m_type.equals("number") && !rightInstance.m_value.contains("%%UnboundField%%")) {
-      TranslatedInstance rightInstanceNum = helperVars.get(rightInstance.m_value);
-      if (rightInstanceNum == null) {
-        rightInstanceNum = new TranslatedInstance("$tmp_" + helperVars.size(), "number");
-        helperVars.put(rightInstance.m_value, rightInstanceNum);
+      else {
+        translated = new TranslatedInstance("(+ " + leftInstance.m_value + " 1)", "number");
       }
-      rightInstance = rightInstanceNum;
+      translated.m_increment = leftInstance.m_increment > 0 ? leftInstance.m_increment + 1 : 1;
     }
-    
-    ret.append("(");
-    switch (op) {
-      case ADD:
-        ret.append("+ ");
-        break;
-      case SUB:
-        ret.append("- ");
-        break;
-      case MUL:
-        ret.append("* ");
-        break;
-      case DIV:
-        ret.append("/ ");
-        break;
-      case REM:
-        ret.append("mod ");
-        break;
+    else {
+      StringBuilder ret = new StringBuilder();
+      ret.append("(");
+      switch (op) {
+        case ADD:
+          ret.append("+ ");
+          break;
+        case SUB:
+          ret.append("- ");
+          break;
+        case MUL:
+          ret.append("* ");
+          break;
+        case DIV:
+          ret.append("/ ");
+          break;
+        case REM:
+          ret.append("mod ");
+          break;
+      }
+      ret.append(leftInstance.m_value);
+      ret.append(" ");
+      ret.append(rightInstance.m_value);
+      ret.append(")");
+      translated = new TranslatedInstance(ret.toString(), "number");
     }
-    ret.append(leftInstance.m_value);
-    ret.append(" ");
-    ret.append(rightInstance.m_value);
-    ret.append(")");
-    
-    return new TranslatedInstance(ret.toString(), "number");
+    return translated;
   }
   
-  private Reference tryCreateParamReference(MethodMetaData methData, String refName) {
+  private Reference tryCreateParamReference(String refName) {
     Reference paramRef = null;
-    String param = methData.getParamStr(refName);
+    String param = m_methData.getParamStr(refName);
     if (param != null) {
       int index = param.indexOf(')');
       String paramType = param.substring(1, index);
@@ -727,6 +735,39 @@ public class YicesCommand implements ICommand {
       paramRef = new Reference(paramName, paramType, "", new Instance("", null) /* just a dummy */, null);
     }
     return paramRef;
+  }
+  
+  private TranslatedInstance makeHelperWhenNecessary(TranslatedInstance instance, String destType) {
+    
+    if (!instance.m_type.equals(destType) && !instance.m_value.contains("%%UnboundField%%")) {
+      TranslatedInstance instance1Helper = m_helperVars.get(instance.m_value);
+      if (instance1Helper == null) {
+        instance1Helper = new TranslatedInstance("$tmp_" + m_helperVars.size(), destType);
+        m_helperVars.put(instance.m_value, instance1Helper);
+      }
+      instance = instance1Helper;
+    }
+    return instance;
+  }
+  
+  private void convertTrueFalse(BinaryConditionTerm term, TranslatedInstance instance1, TranslatedInstance instance2) {
+    // convert #!0/#!1 to false/true
+    String type1 = term.getInstance1().getLastReference() != null ? term.getInstance1().getLastReference().getType() : null;
+    String type2 = term.getInstance2().getLastReference() != null ? term.getInstance2().getLastReference().getType() : null;
+    if ((type1 != null && type1.equals("Z")) || (type2 != null && type2.equals("Z"))) {
+      if (instance1.m_value.equals("0")) {
+        instance1.m_value = "false";
+      }
+      else if (instance1.m_value.equals("1")) {
+        instance1.m_value = "true";
+      }
+      if (instance2.m_value.equals("0")) {
+        instance2.m_value = "false";
+      }
+      else if (instance2.m_value.equals("1")) {
+        instance2.m_value = "true";
+      }
+    }
   }
   
   private String numberToBVFunctions() {
@@ -741,5 +782,12 @@ public class YicesCommand implements ICommand {
     functions.append("(define $numBitSame::(-> (bitvector 32) int bool) (lambda (bv::(bitvector 32) num::int) (if (= ($convertSigned ($funcBitNum5 bv)) num) true false)))\n");
     return functions.toString();
   }
+  
+  private Formula                               m_formula;
+  private MethodMetaData                        m_methData;
+  private boolean                               m_keepUnboundedField;
+  private boolean                               m_retrieveUnsatCore;
+  private Hashtable<String, TranslatedInstance> m_helperVars;
+  private TranslatedCommand                     m_result;
 
 }

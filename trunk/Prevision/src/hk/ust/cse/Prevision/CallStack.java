@@ -89,6 +89,15 @@ public class CallStack implements Cloneable {
       return -1;
     }
   }
+  
+  public String getCurMethodNameAndLineNo() {
+    if (m_callStack.size() > 0) {
+      return m_callStack.get(0).getMethodNameOrSign() + ":" + m_callStack.get(0).getLineNo();
+    }
+    else {
+      return null;
+    }
+  }
 
   public String getNextMethodNameOrSign() {
     if (m_callStack.size() > 1) {

@@ -5,6 +5,7 @@ import hk.ust.cse.Prevision.InvalidStackTraceException;
 import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Formula;
+import hk.ust.cse.Prevision.PathCondition.TypeConditionTerm;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionOptions;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionResult;
 import hk.ust.cse.Prevision.VirtualMachine.Executor.BBorInstInfo;
@@ -311,7 +312,7 @@ public abstract class AbstractHandler {
   
   protected static final Formula computeToEnterCallSite(SSAInvokeInstruction invokeInst,
       BBorInstInfo instInfo, ExecutionOptions execOptions, CGNode caller, 
-      CallStack callStack, int curInvokeDepth, String callSites, Formula postCond) throws InvalidStackTraceException {
+      CallStack callStack, int curInvokeDepth, String callSites, Formula newPostCond) throws InvalidStackTraceException {
     Formula preCond = null;
     
     // get method signature
@@ -321,6 +322,18 @@ public abstract class AbstractHandler {
                                    instInfo.target.getValue() != null) {
       methodSig  = instInfo.target.getValue().getMethod().getSignature();
       methodNode = instInfo.target.getValue();
+      
+      // add type constraint
+      if (!invokeInst.isStatic()) {
+        String thisCallSite = String.format("%04d", invokeInst.getProgramCounter());
+        String declClass = instInfo.target.getValue().getMethod().getDeclaringClass().getName().toString();
+        
+        Reference refRef = findOrCreateReference("v1", "Unknown-Type", callSites + thisCallSite, null, newPostCond.getRefMap());
+        List<ConditionTerm> conditionTerms = new ArrayList<ConditionTerm>();
+        conditionTerms.add(new TypeConditionTerm(
+            refRef.getInstance(), TypeConditionTerm.Comparator.OP_INSTANCEOF, declClass)); 
+        newPostCond.getConditionList().add(new Condition(conditionTerms));
+      }
     }
     else {
       methodSig  = invokeInst.getDeclaredTarget().getSignature();
@@ -340,8 +353,8 @@ public abstract class AbstractHandler {
     
     // call compute
     String newCallSites = callSites + String.format("%04d", invokeInst.getProgramCounter());
-    ExecutionResult execResult = instInfo.executor.computeRec(execOptions, methodNode, methodSig, 
-        lineNo, startingInst, inclLine, innerCallStack, curInvokeDepth, newCallSites, instInfo.workList, postCond);
+    ExecutionResult execResult = instInfo.executor.computeRec(execOptions, methodNode, methodSig, lineNo, 
+        startingInst, inclLine, innerCallStack, curInvokeDepth, newCallSites, instInfo.workList, newPostCond);
     preCond = execResult.getFirstSatisfiable();
     
     return preCond;
@@ -359,6 +372,18 @@ public abstract class AbstractHandler {
                                    instInfo.target.getValue() != null) {
       methodSig  = instInfo.target.getValue().getMethod().getSignature();
       methodNode = instInfo.target.getValue();
+      
+      // add type constraint
+      if (!invokeInst.isStatic()) {
+        String thisCallSite = String.format("%04d", invokeInst.getProgramCounter());
+        String declClass = instInfo.target.getValue().getMethod().getDeclaringClass().getName().toString();
+        
+        Reference refRef = findOrCreateReference("v1", "Unknown-Type", callSites + thisCallSite, null, newPostCond.getRefMap());
+        List<ConditionTerm> conditionTerms = new ArrayList<ConditionTerm>();
+        conditionTerms.add(new TypeConditionTerm(
+            refRef.getInstance(), TypeConditionTerm.Comparator.OP_INSTANCEOF, declClass)); 
+        newPostCond.getConditionList().add(new Condition(conditionTerms));
+      }
     }
     else {
       methodSig  = invokeInst.getDeclaredTarget().getSignature();
@@ -1008,7 +1033,7 @@ public abstract class AbstractHandler {
     for (Condition condition : conditionList) {
       List<ConditionTerm> conditionTerms = condition.getConditionTerms();
       for (ConditionTerm term : conditionTerms) {
-        Instance[] instances = new Instance[] {term.getInstance1(), term.getInstance2()};
+        Instance[] instances = term.getInstances();
         for (Instance instance : instances) {
           if (!instance.isBounded() && instance.getBoundedValues().size() > 0) {
             // supposedly there is only one bounded value at most 

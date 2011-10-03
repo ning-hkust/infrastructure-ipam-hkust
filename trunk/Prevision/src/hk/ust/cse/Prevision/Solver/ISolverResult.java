@@ -1,7 +1,7 @@
 package hk.ust.cse.Prevision.Solver;
 
 
-import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
+import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
 
 import java.util.Hashtable;
@@ -17,6 +17,6 @@ public interface ISolverResult {
 
   public abstract List<Integer> getUnsatCoreIds();
 
-  public abstract List<ConditionTerm> getSatModel();
+  public abstract List<BinaryConditionTerm> getSatModel();
 
 }

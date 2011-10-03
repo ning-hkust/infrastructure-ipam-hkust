@@ -46,9 +46,16 @@ public class Reference {
     
     if (name.equals("null") || name.startsWith("#") || name.equals("true") || name.equals("false")) { // is constant
       // ignore original instance
-      Instance instance = new Instance(name, null, instances.iterator().next().getCreateBlock());
-      m_instances.add(instance);
-      startInstanceLiftTime(instance);
+      Instance constInstance = new Instance(name, null, instances.iterator().next().getCreateBlock());
+      m_instances.addAll(instances);
+      startInstanceLiftTime(instances);
+      for (Instance instance : instances) {
+        if (!instance.isBounded()) {
+          try {
+            instance.setValue(constInstance);
+          } catch (Exception e) {e.printStackTrace();}
+        }
+      }
     }
     else if (instances != null) {
       m_instances.addAll(instances);
@@ -224,6 +231,10 @@ public class Reference {
     return m_type.equals("Unknown-Type");
   }
   
+  public void setType(String type) {
+    m_type = type;
+  }
+  
   public String getName() {
     return m_name;
   }
@@ -313,7 +324,21 @@ public class Reference {
   }
   
   public boolean isSSAVariable() {
-    return m_name.startsWith("v") && !m_name.contains(".");
+    boolean isSSAVar = false;
+    
+    int index = m_name.lastIndexOf('@');
+    String cutName = index < 0 ? m_name : m_name.substring(0, index);
+    if (cutName.startsWith("v") && !cutName.contains(".")) {
+      try {
+        Integer.parseInt(cutName.substring(1));
+        isSSAVar = true;
+      } catch (Exception e) {}
+    }
+    return isSSAVar;
+  }
+  
+  public boolean isStaticField() {
+    return m_callSites.length() == 0 && m_name.startsWith("L");
   }
   
   public boolean isConstantReference() {
@@ -404,9 +429,9 @@ public class Reference {
       }
     }
   }
-  
+
+  private String                            m_type;
   private final String                      m_name;
-  private final String                      m_type;
   private final String                      m_callSites;
   private final HashSet<Instance>           m_instances;    // instance should never be null, even if it is a null reference, use a 'null' instance
   private final HashSet<Instance>           m_oldInstances;

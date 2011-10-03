@@ -1,6 +1,7 @@
 package hk.ust.cse.Prevision.VirtualMachine;
 
 import hk.ust.cse.Prevision.CallStack;
+import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Formula;
@@ -10,6 +11,7 @@ import hk.ust.cse.Wala.MethodMetaData;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.ibm.wala.ssa.SSAArrayLengthInstruction;
 import com.ibm.wala.ssa.SSAArrayReferenceInstruction;
 import com.ibm.wala.ssa.SSACheckCastInstruction;
 import com.ibm.wala.ssa.SSAGetInstruction;
@@ -32,15 +34,16 @@ public class PrepInitFormula {
     case CUSTOM:
       return new Formula();
     case NPE:
-      return prepNullPointerException(excepLineNo, initInfoItem, callStack);
+      return prepNullPointerException(excepLineNo, initInfoItem, execOptions, callStack);
     case AIOBE:
-      return prepArrayIndexOutOfBoundsException(excepLineNo, initInfoItem, callStack);
+      return prepArrayIndexOutOfBoundsException(excepLineNo, initInfoItem, execOptions, callStack);
     default:
       return new Formula();
     }
   }
   
-  private static Formula prepNullPointerException(int excepLineNo, BBorInstInfo initInfoItem, CallStack callStack) {
+  private static Formula prepNullPointerException(int excepLineNo, 
+      BBorInstInfo initInfoItem, ExecutionOptions execOptions, CallStack callStack) {
     
     // should be a "TRUE" Formula to begin with
     Formula initFormula = new Formula();
@@ -48,10 +51,6 @@ public class PrepInitFormula {
     MethodMetaData methData = initInfoItem.methData;
     int index = methData.getLastInstructionIndexForLine(excepLineNo);
     if (index >= 0) {
-      // a dummy optAndStates
-      ExecutionOptions execOptions = new ExecutionOptions(null, false);
-      execOptions.finishedEnteringCallStack();
-      
       // go through exception line
       int orCondIndex = -1;
       SSAInstruction[] methodInsts = methData.getcfg().getInstructions();
@@ -71,6 +70,7 @@ public class PrepInitFormula {
               initFormula, methodInsts[i], instInfo, callStack, Integer.MAX_VALUE /* do not get into method */);
           
           if (!(methodInsts[i] instanceof SSAArrayReferenceInstruction) && 
+              !(methodInsts[i] instanceof SSAArrayLengthInstruction) && 
               !(methodInsts[i] instanceof SSAGetInstruction) && 
               !(methodInsts[i] instanceof SSAInvokeInstruction) && 
               !(methodInsts[i] instanceof SSAPutInstruction) && 
@@ -88,22 +88,25 @@ public class PrepInitFormula {
             Condition condition = conditionsList.get(j);
             ConditionTerm term = condition.getConditionTerms().get(0);
 
-            if (condition.getConditionTerms().size() == 1 && term.getComparator().equals(ConditionTerm.Comparator.OP_INEQUAL) && 
-                term.getInstance2().isAtomic() && term.getInstance2().getValue().equals("null")) {
-              ConditionTerm nullTerm = 
-                new ConditionTerm(term.getInstance1(), ConditionTerm.Comparator.OP_EQUAL, term.getInstance2());
-              if (orCondIndex == -1) {
-                condition.getConditionTerms().remove(0);
-                condition.getConditionTerms().add(nullTerm);
-                // remove the previous conditions
-                for (int k = 0; k < j; k++) {
-                  conditionsToRemove.add(conditionsList.get(k));
+            if (condition.getConditionTerms().size() == 1 && term instanceof BinaryConditionTerm) {
+              BinaryConditionTerm binaryTerm = (BinaryConditionTerm) term;
+              if (binaryTerm.getComparator().equals(BinaryConditionTerm.Comparator.OP_INEQUAL) && 
+                  binaryTerm.getInstance2().isAtomic() && binaryTerm.getInstance2().getValue().equals("null")) {
+                BinaryConditionTerm nullTerm = new BinaryConditionTerm(
+                    binaryTerm.getInstance1(), BinaryConditionTerm.Comparator.OP_EQUAL, binaryTerm.getInstance2());
+                if (orCondIndex == -1) {
+                  condition.getConditionTerms().remove(0);
+                  condition.getConditionTerms().add(nullTerm);
+                  // remove the previous conditions
+                  for (int k = 0; k < j; k++) {
+                    conditionsToRemove.add(conditionsList.get(k));
+                  }
+                  orCondIndex = 0;
                 }
-                orCondIndex = 0;
-              }
-              else if (j != orCondIndex) {
-                conditionsList.get(orCondIndex).getConditionTerms().add(nullTerm);
-                conditionsToRemove.add(condition);
+                else if (j != orCondIndex) {
+                  conditionsList.get(orCondIndex).getConditionTerms().add(nullTerm);
+                  conditionsToRemove.add(condition);
+                }
               }
             }
           }
@@ -119,7 +122,8 @@ public class PrepInitFormula {
   }
   
   //XXX
-  private static Formula prepArrayIndexOutOfBoundsException(int excepLineNo, BBorInstInfo initInfoItem, CallStack callStack) {
+  private static Formula prepArrayIndexOutOfBoundsException(int excepLineNo, 
+      BBorInstInfo initInfoItem, ExecutionOptions execOptions, CallStack callStack) {
     
     // should be a "TRUE" Formula to begin with
     Formula initFormula = new Formula();
@@ -127,10 +131,6 @@ public class PrepInitFormula {
     MethodMetaData methData = initInfoItem.methData;
     int index = methData.getLastInstructionIndexForLine(excepLineNo);
     if (index >= 0) {
-      // a dummy optAndStates
-      ExecutionOptions execOptions = new ExecutionOptions(null, false);
-      execOptions.finishedEnteringCallStack();
-      
       // go through exception line
       int orCondIndex = -1;
       boolean started = false;
@@ -159,17 +159,20 @@ public class PrepInitFormula {
           List<Condition> conditionsList = initFormula.getConditionList();
           for (int j = 0; j < conditionsList.size(); j++) {
             Condition condition = conditionsList.get(j);
-
-            if (condition.getConditionTerms().size() == 1) {
-              ConditionTerm term = condition.getConditionTerms().get(0);
+            ConditionTerm term = condition.getConditionTerms().get(0);
+            
+            if (condition.getConditionTerms().size() == 1 && term instanceof BinaryConditionTerm) {
+              BinaryConditionTerm binaryTerm = (BinaryConditionTerm) term;
               ConditionTerm changedTerm = null;
-              if (term.getComparator().equals(ConditionTerm.Comparator.OP_GREATER_EQUAL) && 
-                  term.getInstance2().isAtomic() && term.getInstance2().getValue().equals("#!0")) {
-                changedTerm = new ConditionTerm(term.getInstance1(), ConditionTerm.Comparator.OP_SMALLER, term.getInstance2());;
+              if (binaryTerm.getComparator().equals(BinaryConditionTerm.Comparator.OP_GREATER_EQUAL) && 
+                  binaryTerm.getInstance2().isAtomic() && binaryTerm.getInstance2().getValue().equals("#!0")) {
+                changedTerm = new BinaryConditionTerm(
+                    binaryTerm.getInstance1(), BinaryConditionTerm.Comparator.OP_SMALLER, binaryTerm.getInstance2());
               }
-              else if (term.getComparator().equals(ConditionTerm.Comparator.OP_SMALLER) && 
-                       !term.getInstance2().isBounded() && term.getInstance2().getLastReference().getName().equals("length")) {
-                changedTerm = new ConditionTerm(term.getInstance1(), ConditionTerm.Comparator.OP_GREATER_EQUAL, term.getInstance2());;
+              else if (binaryTerm.getComparator().equals(BinaryConditionTerm.Comparator.OP_SMALLER) && 
+                       !binaryTerm.getInstance2().isBounded() && binaryTerm.getInstance2().getLastReference().getName().equals("length")) {
+                changedTerm = new BinaryConditionTerm(
+                    binaryTerm.getInstance1(), BinaryConditionTerm.Comparator.OP_GREATER_EQUAL, binaryTerm.getInstance2());
               }
             
               if (changedTerm != null) {

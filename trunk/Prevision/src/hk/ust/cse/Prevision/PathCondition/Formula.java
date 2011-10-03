@@ -5,6 +5,7 @@ import hk.ust.cse.Prevision.Solver.SMTChecker;
 import hk.ust.cse.Prevision.VirtualMachine.AbstractMemory;
 import hk.ust.cse.Prevision.VirtualMachine.Executor.BBorInstInfo;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
+import hk.ust.cse.Prevision.VirtualMachine.Relation;
 import hk.ust.cse.Wala.MethodMetaData;
 
 import java.util.ArrayList;
@@ -34,7 +35,7 @@ public class Formula {
     // remember, each Formula instance should own a unique
     // instance of conditions and varMap!
     m_conditionList    = formula.getConditionList();
-    m_abstractMemory   = new AbstractMemory(formula.getRefMap(), formula.getDefMap());
+    m_abstractMemory   = new AbstractMemory(formula.getRefMap(), formula.getDefMap(), formula.getRelationMap());
     m_fieldAssignTimes = formula.getFieldAssignTimes();
     m_traversedPath    = formula.getTraversedPath();
     m_timeStamp        = System.nanoTime(); // time stamp for this formula
@@ -135,6 +136,17 @@ public class Formula {
 
   public Hashtable<String, Hashtable<String, Integer>> getDefMap() {
     return m_abstractMemory.getDefMap();
+  }
+  
+  public Hashtable<String, Relation> getRelationMap() {
+    return m_abstractMemory.getRelationMap();
+  }
+  
+  public Relation getRelation(String relationName) {
+    if (relationName.startsWith("read_")) {
+      relationName = relationName.substring(5, relationName.lastIndexOf("_"));
+    }
+    return m_abstractMemory.getRelation(relationName);
   }
 
   public Hashtable<ISSABasicBlock, Integer> getVisitedRecord() {
