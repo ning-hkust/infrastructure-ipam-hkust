@@ -377,21 +377,28 @@ public class DefAnalyzer {
   private ISSABasicBlock findMergingBB(SSACFG cfg, ISSABasicBlock condBranchBB) {
     Iterator<ISSABasicBlock> succNodes = cfg.getSuccNodes(condBranchBB);
     ISSABasicBlock succNode1 = succNodes.next();
-    ISSABasicBlock succNode2 = succNodes.next();
-    // make sure succNode1 is smaller
-    if (succNode1.getNumber() > succNode2.getNumber()) {
-      ISSABasicBlock tmp = succNode1;
-      succNode1 = succNode2;
-      succNode2 = tmp;
-    }
     
     // find the merging block
     ISSABasicBlock mergingBlock = null;
-    ISSABasicBlock firstBranchLastBB = cfg.getBasicBlock(succNode2.getNumber() - 1);
-    Iterator<ISSABasicBlock> bbs = cfg.getSuccNodes(firstBranchLastBB);
-    if (bbs.hasNext()) {
-      mergingBlock = bbs.next();
+    if (succNodes.hasNext()) {
+      ISSABasicBlock succNode2 = succNodes.next();
+      // make sure succNode1 is smaller
+      if (succNode1.getNumber() > succNode2.getNumber()) {
+        ISSABasicBlock tmp = succNode1;
+        succNode1 = succNode2;
+        succNode2 = tmp;
+      }
+      
+      ISSABasicBlock firstBranchLastBB = cfg.getBasicBlock(succNode2.getNumber() - 1);
+      Iterator<ISSABasicBlock> bbs = cfg.getSuccNodes(firstBranchLastBB);
+      if (bbs.hasNext()) {
+        mergingBlock = bbs.next();
+      }
     }
+    else { // very very rare case, such as: if (retval != 0);
+      mergingBlock = succNode1;
+    }
+
     return mergingBlock;
   }
   

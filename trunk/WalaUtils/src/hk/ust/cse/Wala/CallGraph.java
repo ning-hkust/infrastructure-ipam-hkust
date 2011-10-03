@@ -17,12 +17,39 @@ import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.util.CancelException;
 
 public class CallGraph {
+  // http://wala.sourceforge.net/wiki/index.php/UserGuide:PointerAnalysis
+  public enum CallGraphBuilder {ZeroCFA, ZeroOneCFA, VanillaZeroOneCFA, 
+    ZeroContainerCFA, ZeroOneContainerCFA, VanillaZeroOneContainerCFA}
+  
   public CallGraph(AnalysisOptions options, AnalysisCache cache, 
-      IClassHierarchy cha, AnalysisScope scope) throws IllegalArgumentException, CancelException {
-    // create a call graph builder (use the ZeroOneCFA pointer analysis policy)
-    SSAPropagationCallGraphBuilder callGraphBuilder = 
-      Util.makeZeroOneCFABuilder(options, cache, cha, scope);
+      IClassHierarchy cha, AnalysisScope scope, CallGraphBuilder builder) throws IllegalArgumentException, CancelException {
     
+    // create a call graph builder (use the ZeroOneCFA pointer analysis policy)
+    SSAPropagationCallGraphBuilder callGraphBuilder = null;
+    switch (builder) {
+    case ZeroCFA:
+      callGraphBuilder = Util.makeZeroCFABuilder(options, cache, cha, scope);
+      break;
+    case ZeroOneCFA:
+      callGraphBuilder = Util.makeZeroOneCFABuilder(options, cache, cha, scope);
+      break;
+    case VanillaZeroOneCFA:
+      callGraphBuilder = Util.makeVanillaZeroOneCFABuilder(options, cache, cha, scope);
+      break;
+    case ZeroContainerCFA:
+      callGraphBuilder = Util.makeZeroContainerCFABuilder(options, cache, cha, scope);
+      break;
+    case ZeroOneContainerCFA:
+      callGraphBuilder = Util.makeZeroOneContainerCFABuilder(options, cache, cha, scope);
+      break;
+    case VanillaZeroOneContainerCFA:
+      callGraphBuilder = Util.makeVanillaZeroOneContainerCFABuilder(options, cache, cha, scope);
+      break;
+    default:
+      callGraphBuilder = Util.makeZeroOneCFABuilder(options, cache, cha, scope);
+      break;
+    }
+
     // build call graph
     callGraphBuilder.makeCallGraph(options);
     
