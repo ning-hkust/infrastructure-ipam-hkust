@@ -1,8 +1,11 @@
 package hk.ust.cse.util;
 
+import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -222,7 +225,7 @@ public class Utils {
       else {
         cls = Class.forName(clsName);
       }
-    } catch (ClassNotFoundException e1) {
+    } catch (Throwable e1) {
       System.err.println("Cannot find class: " + clsName);
     }
     return cls;
@@ -547,6 +550,22 @@ public class Utils {
       }
     }
     return str.toString();
+  }
+  
+  public static boolean loadJarFile(String jarFilePath) {
+    boolean succeeded = false;
+    try {
+      // assuming the system classLoader is a URLClassLoader
+      URLClassLoader classLoader = (URLClassLoader) ClassLoader.getSystemClassLoader();
+
+      Method method = URLClassLoader.class.getDeclaredMethod("addURL", new Class[]{URL.class});
+      boolean accessible = method.isAccessible();
+      method.setAccessible(true);
+      method.invoke(classLoader, new Object[]{new File(jarFilePath).toURI().toURL()});
+      method.setAccessible(accessible);
+      succeeded = true;
+    } catch (Exception e) {e.printStackTrace();}
+    return succeeded;
   }
   
   private static Hashtable<Class<?>, Class<?>> s_boxClassMap;
