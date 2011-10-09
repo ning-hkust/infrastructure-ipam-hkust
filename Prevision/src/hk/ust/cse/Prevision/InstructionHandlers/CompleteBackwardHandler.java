@@ -192,7 +192,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
       
       Reference defRef = findOrCreateReference(def, elemType, callSites, currentBB, newRefMap);
 
-      Relation relation = postCond.getRelation("@array");
+      Relation relation = postCond.getRelation("@@array");
       Reference readRef = relation.read(new Instance[] {arrayRefRef.getInstance(), 
                                         arrayIndexRef.getInstance()}, elemType, currentBB);
       
@@ -310,7 +310,7 @@ public class CompleteBackwardHandler extends AbstractHandler {
 
       Reference storeValRef = findOrCreateReference(storeValue, elemType, callSites, currentBB, newRefMap);
 
-      Relation relation = postCond.getRelation("@array");
+      Relation relation = postCond.getRelation("@@array");
       relation.update(new Instance[] {arrayRefRef.getInstance(), arrayIndexRef.getInstance()}, storeValRef.getInstance());
       addRefToRefMap(newRefMap, storeValRef);
       break;
@@ -1127,12 +1127,17 @@ public class CompleteBackwardHandler extends AbstractHandler {
     List<Condition> conditionList = new ArrayList<Condition>();
     switch (instInfo.sucessorType) {
     case Formula.NORMAL_SUCCESSOR:
+      // check if method name is in the filter list, if so, not step in
+      if (isMethodNameFiltered(invokeInst.getDeclaredTarget().getSignature())) {
+        return handle_invokenonstatic(postCond, inst, instInfo); // use not step in version
+      }
+      
       Reference refRef  = findOrCreateReference(ref, refType, callSites, currentBB, newRefMap);
       Reference nullRef = null;
 
       String invocationType = invokeInst.getDeclaredResultType().getName().toString();
       Reference defRef = findOrCreateReference(def, invocationType, callSites, currentBB, newRefMap);
-      
+
       // since there is a new def, add to defMap
       addDefToDefMap(newDefMap, defRef);
 
@@ -1225,6 +1230,11 @@ public class CompleteBackwardHandler extends AbstractHandler {
     Hashtable<String, Hashtable<String, Reference>> newRefMap = newPostCond.getRefMap();
     Hashtable<String, Hashtable<String, Integer>> newDefMap   = newPostCond.getDefMap();
     SSAInvokeInstruction invokestaticInst                     = (SSAInvokeInstruction) inst;
+    
+    // check if method name is in the filter list, if so, not step in
+    if (isMethodNameFiltered(invokestaticInst.getDeclaredTarget().getName().toString())) {
+      return handle_invokenonstatic(postCond, inst, instInfo); // use not step in version
+    }
     
     // the variable(result) define by the invokestatic instruction
     String def = getSymbol(invokestaticInst.getDef(), methData, callSites, newDefMap);

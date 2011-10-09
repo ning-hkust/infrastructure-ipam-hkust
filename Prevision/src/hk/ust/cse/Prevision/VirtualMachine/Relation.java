@@ -48,7 +48,7 @@ public class Relation {
   }
   
   public boolean isArrayRelation() {
-    return m_name.equals("@array");
+    return m_name.equals("@@array");
   }
   
   public boolean isFieldRelation() {

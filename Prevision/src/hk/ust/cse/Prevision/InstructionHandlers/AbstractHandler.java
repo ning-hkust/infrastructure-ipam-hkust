@@ -13,6 +13,9 @@ import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
 import hk.ust.cse.Wala.MethodMetaData;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -165,12 +168,41 @@ public abstract class AbstractHandler {
   }
   
   /**
+   * some methods are not stepped in when met during the execution
+   */
+  public final void setMethodStepInFilters(String filterFilePath) {
+    try {
+      if (filterFilePath != null) {
+        m_methodStepInFilters = new ArrayList<String>();
+        
+        String line = null;
+        BufferedReader reader = new BufferedReader(new FileReader(filterFilePath));
+        while ((line = reader.readLine()) != null) {
+          if (line.length() > 0) {
+            m_methodStepInFilters.add(line);
+          }
+        }
+        reader.close();
+      }
+    } catch (IOException e) {}
+  }
+  
+  protected final boolean isMethodNameFiltered(String methodName) {
+    boolean filtered = false;
+    if (m_methodStepInFilters != null) {
+      for (int i = 0, size = m_methodStepInFilters.size(); i < size && !filtered; i++) {
+        filtered |= methodName.matches(m_methodStepInFilters.get(i));
+      }
+    }
+    return filtered;
+  }
+  
+  /**
    * create a new refMap clone only when necessary
    * create necessary 'this', 'parameter' and 'return' references for the invocation
    */
-  protected static final void beforeInvocation(SSAInvokeInstruction invokeInst, 
-      Reference ref, Reference def, List<Reference> params, 
-      Hashtable<String, Hashtable<String, Reference>> refMap) {
+  protected final void beforeInvocation(SSAInvokeInstruction invokeInst, Reference ref, Reference 
+      def, List<Reference> params, Hashtable<String, Hashtable<String, Reference>> refMap) {
 
     String thisCallSite = String.format("%04d", invokeInst.getProgramCounter());
     
@@ -220,9 +252,8 @@ public abstract class AbstractHandler {
    * if we have finished an invocation, remove all references of this method
    * from refMap, re-assign lastRef
    */
-  protected static final void afterInvocation(SSAInvokeInstruction invokeInst, 
-      String callSites, ISSABasicBlock currentBB, String refName, String defName, 
-      List<String> paramNames, Hashtable<String, Hashtable<String, Reference>> refMap, 
+  protected final void afterInvocation(SSAInvokeInstruction invokeInst, String callSites, ISSABasicBlock currentBB, 
+      String refName, String defName, List<String> paramNames, Hashtable<String, Hashtable<String, Reference>> refMap, 
       Hashtable<String, Hashtable<String, Integer>> defMap) {
     
     String thisCallSite = String.format("%04d", invokeInst.getProgramCounter());
@@ -297,7 +328,7 @@ public abstract class AbstractHandler {
   /**
    * would not make a new clone
    */
-  private static void removeMethodReferences(SSAInvokeInstruction invokeInst, 
+  private void removeMethodReferences(SSAInvokeInstruction invokeInst, 
       String callSites, Hashtable<String, Hashtable<String, Reference>> refMap) {
     refMap.remove(callSites + String.format("%04d", invokeInst.getProgramCounter()));
   }
@@ -305,14 +336,14 @@ public abstract class AbstractHandler {
   /**
    * would not make a new clone
    */
-  private static void removeMethodDefCounts(SSAInvokeInstruction invokeInst, 
+  private void removeMethodDefCounts(SSAInvokeInstruction invokeInst, 
       String callSites, Hashtable<String, Hashtable<String, Integer>> defMap) {
     defMap.remove(callSites + String.format("%04d", invokeInst.getProgramCounter()));
   }
   
-  protected static final Formula computeToEnterCallSite(SSAInvokeInstruction invokeInst,
-      BBorInstInfo instInfo, ExecutionOptions execOptions, CGNode caller, 
-      CallStack callStack, int curInvokeDepth, String callSites, Formula newPostCond) throws InvalidStackTraceException {
+  protected final Formula computeToEnterCallSite(SSAInvokeInstruction invokeInst,BBorInstInfo instInfo, 
+      ExecutionOptions execOptions, CGNode caller, CallStack callStack, int curInvokeDepth, 
+      String callSites, Formula newPostCond) throws InvalidStackTraceException {
     Formula preCond = null;
     
     // get method signature
@@ -360,9 +391,9 @@ public abstract class AbstractHandler {
     return preCond;
   }
   
-  protected static final Formula computeAtCallSite(SSAInvokeInstruction invokeInst,
-      BBorInstInfo instInfo, ExecutionOptions execOptions, CGNode caller, 
-      CallStack callStack, int curInvokeDepth, String callSites, Formula newPostCond) throws InvalidStackTraceException {
+  protected final Formula computeAtCallSite(SSAInvokeInstruction invokeInst, BBorInstInfo instInfo, 
+      ExecutionOptions execOptions, CGNode caller, CallStack callStack, int curInvokeDepth, 
+      String callSites, Formula newPostCond) throws InvalidStackTraceException {
     Formula preCond = null;
   
     // get method signature
@@ -426,9 +457,7 @@ public abstract class AbstractHandler {
   /**
    * would not make a new clone
    */
-  protected static final void addRefToRefMap(
-      Hashtable<String, Hashtable<String, Reference>> refMap, Reference newReference) {
-    
+  protected final void addRefToRefMap(Hashtable<String, Hashtable<String, Reference>> refMap, Reference newReference) {
     if (!newReference.isConstantReference()) { // do not add constant refs to refMap
       Hashtable<String, Reference> methodRefs = refMap.get(newReference.getCallSites());
       if (methodRefs == null) {
@@ -442,7 +471,7 @@ public abstract class AbstractHandler {
   /**
    * would not make a new clone
    */
-  protected static final void addDefToDefMap(Hashtable<String, Hashtable<String, Integer>> defMap, Reference def) {
+  protected final void addDefToDefMap(Hashtable<String, Hashtable<String, Integer>> defMap, Reference def) {
     if (def.isSSAVariable()) {
       Hashtable<String, Integer> methodDefCounts = defMap.get(def.getCallSites());
       if (methodDefCounts == null) {
@@ -461,15 +490,13 @@ public abstract class AbstractHandler {
     }
   }
   
-  protected static final Reference findOrCreateReference(String refName, 
-      String refType, String callSites, ISSABasicBlock createBlock, 
-      Hashtable<String, Hashtable<String, Reference>> refMap) {
+  protected final Reference findOrCreateReference(String refName, String refType, String callSites, 
+      ISSABasicBlock createBlock, Hashtable<String, Hashtable<String, Reference>> refMap) {
     return findOrCreateReference(refName, refType, callSites, createBlock, null, refMap);
   }
   
-  protected static final Reference findOrCreateReference(String refName, 
-      String refType, String callSites, ISSABasicBlock createBlock, Instance declInstance, 
-      Hashtable<String, Hashtable<String, Reference>> refMap) {
+  protected final Reference findOrCreateReference(String refName, String refType, String callSites, 
+      ISSABasicBlock createBlock, Instance declInstance, Hashtable<String, Hashtable<String, Reference>> refMap) {
     
     Reference ref = findReference(refName, callSites, refMap);
     // cannot find, create a new one
@@ -480,7 +507,7 @@ public abstract class AbstractHandler {
     return ref;
   }
   
-  protected static final Reference findReference(String refName, String callSites, 
+  protected final Reference findReference(String refName, String callSites, 
       Hashtable<String, Hashtable<String, Reference>> refMap) {
     
     Reference ref = null;
@@ -491,19 +518,19 @@ public abstract class AbstractHandler {
     return ref;
   }
   
-  protected static final boolean containsRef(String refName, String callSites, 
+  protected final boolean containsRef(String refName, String callSites, 
       Hashtable<String, Hashtable<String, Reference>> refMap) {
 
     Hashtable<String, Reference> methodRefs = refMap.get(callSites);
     return methodRefs != null && methodRefs.containsKey(refName);
   }
   
-  protected static final boolean containsFieldName(String fieldName, Formula formula) {
+  protected final boolean containsFieldName(String fieldName, Formula formula) {
     HashSet<String> allFieldNames = findAllFieldNames(formula);
     return allFieldNames.contains(fieldName);
   }
   
-  private static HashSet<String> findAllFieldNames(Formula formula) {
+  private HashSet<String> findAllFieldNames(Formula formula) {
     List<String> allFieldNames = new ArrayList<String>();
     Hashtable<String, Hashtable<String, Reference>> refMap = formula.getRefMap();
     for (Hashtable<String, Reference> methodRefs : refMap.values()) {
@@ -514,7 +541,7 @@ public abstract class AbstractHandler {
     return new HashSet<String>(allFieldNames);
   }
   
-  private static void findAllFieldNames(Reference ref, List<String> allFieldNames, boolean isField) {
+  private void findAllFieldNames(Reference ref, List<String> allFieldNames, boolean isField) {
     if (isField) {
       allFieldNames.add(ref.getName());
     }
@@ -527,7 +554,7 @@ public abstract class AbstractHandler {
     }
   }
   
-  protected static final void assignInstance(Reference defRef, Reference fromRef,
+  protected final void assignInstance(Reference defRef, Reference fromRef,
       Hashtable<String, Hashtable<String, Reference>> newRefMap, 
       Hashtable<String, Hashtable<String, Integer>> newDefMap) {
     
@@ -558,7 +585,7 @@ public abstract class AbstractHandler {
     }
   }
   
-  protected static final void assignInstance(Reference defRef, Instance fromInstance,
+  protected final void assignInstance(Reference defRef, Instance fromInstance,
       Hashtable<String, Hashtable<String, Reference>> newRefMap, 
       Hashtable<String, Hashtable<String, Integer>> newDefMap) {
 
@@ -581,7 +608,7 @@ public abstract class AbstractHandler {
 //  /**
 //   * Assuming there is at most one 'Caught ...' at a time.
 //   */
-//  protected static final String findCaughtExceptionTypeStr(Predicate predicate) {
+//  protected final String findCaughtExceptionTypeStr(Predicate predicate) {
 //    String caughtStr = null;
 //    if (predicate.getVarMap().containsKey("Caught")) {
 //      caughtStr = predicate.getVarMap().get("Caught").get(0);
@@ -589,7 +616,7 @@ public abstract class AbstractHandler {
 //    return caughtStr;
 //  }
 //  
-//  protected static final Hashtable<String, List<String>> setExceptionCaught(
+//  protected final Hashtable<String, List<String>> setExceptionCaught(
 //      Predicate predicate, Hashtable<String, List<String>> varMapToSet, String caughtExcepTypeStr) {
 //    // create clone on demand
 //    if (varMapToSet == predicate.getVarMap()) {
@@ -603,7 +630,7 @@ public abstract class AbstractHandler {
 //    return varMapToSet;
 //  }
 //  
-//  protected static final Hashtable<String, List<String>> setExceptionTriggered(
+//  protected final Hashtable<String, List<String>> setExceptionTriggered(
 //      Predicate predicate, Hashtable<String, List<String>> varMapToSet, String triggeredExcepTypeStr) {
 //    if (varMapToSet.containsKey("Caught")) {
 //      List<String> caughtExcepTypeStr = varMapToSet.get("Caught");
@@ -622,7 +649,7 @@ public abstract class AbstractHandler {
 //    return varMapToSet;
 //  }
 //  
-//  protected static final Hashtable<String, List<String>> setExceptionThrownCurrent(
+//  protected final Hashtable<String, List<String>> setExceptionThrownCurrent(
 //      Predicate predicate, Hashtable<String, List<String>> varMapToSet, String exceptionVal) {
 //    // create clone on demand
 //    if (varMapToSet == predicate.getVarMap()) {
@@ -636,7 +663,7 @@ public abstract class AbstractHandler {
 //    return varMapToSet;
 //  }
 //  
-//  protected static final Hashtable<String, List<String>> checkExceptionThrown(
+//  protected final Hashtable<String, List<String>> checkExceptionThrown(
 //      Predicate predicate, Hashtable<String, List<String>> varMapToSet) {
 //    if (varMapToSet.containsKey("Caught") && varMapToSet.containsKey("ThrownInstCurrent")) {
 //      String caughtExcepTypeStr = varMapToSet.get("Caught").get(0);
@@ -688,7 +715,7 @@ public abstract class AbstractHandler {
    * @return if variable "varID" is a constant, return the prefixed 
    * string representing that constant, otherwise return vVarID
    */
-  public static final String getSymbol(int varID, MethodMetaData methData, 
+  public final String getSymbol(int varID, MethodMetaData methData, 
       String callSites, Hashtable<String, Hashtable<String, Integer>> defCountMap) {
     
     String var = null;
@@ -713,7 +740,7 @@ public abstract class AbstractHandler {
     return var;
   }
 
-  private static String getConstantPrefix(int varID, MethodMetaData methData) {
+  private String getConstantPrefix(int varID, MethodMetaData methData) {
     if (!methData.getSymbolTable().isConstant(varID)) {
       return "";
     }
@@ -729,7 +756,7 @@ public abstract class AbstractHandler {
   }
   
   @SuppressWarnings("unchecked")
-  protected static Formula setEquivalentInstances(Formula preCond, String callSites) {
+  protected Formula setEquivalentInstances(Formula preCond, String callSites) {
     List<Object[]> prevSets = new ArrayList<Object[]>();
     
     // phase 0: prepare the sequence of set
@@ -908,7 +935,7 @@ public abstract class AbstractHandler {
     return preCond;
   }
 
-  private static void findSetInstances(String lastPath, List<Instance> preInstances, 
+  private void findSetInstances(String lastPath, List<Instance> preInstances, 
       Reference ref, Hashtable<String, List<Instance>> settedInstances) {
     
     // build current path
@@ -954,7 +981,7 @@ public abstract class AbstractHandler {
     }
   }
 
-  private static void getSetSequence(List<Instance> preInstances, 
+  private void getSetSequence(List<Instance> preInstances, 
       List<Reference> preReferences, Reference ref, List<Object[]> sequence) {
     
     List<Instance> refInstances = new ArrayList<Instance>(ref.getInstances());
@@ -974,7 +1001,7 @@ public abstract class AbstractHandler {
     }
   }
 
-  private static Object[] setEquivalentInstances(Formula preCond, Instance refInstance, 
+  private Object[] setEquivalentInstances(Formula preCond, Instance refInstance, 
       Reference ref, List<Instance> preInstances, List<Reference> preReferences, 
       Hashtable<String, List<Instance>> settedInstances, String callSites, int setIndex) {
 
@@ -1029,7 +1056,7 @@ public abstract class AbstractHandler {
     return ret;
   }
   
-  private static void setSoloInstances(List<Condition> conditionList) {
+  private void setSoloInstances(List<Condition> conditionList) {
     for (Condition condition : conditionList) {
       List<ConditionTerm> conditionTerms = condition.getConditionTerms();
       for (ConditionTerm term : conditionTerms) {
@@ -1047,7 +1074,9 @@ public abstract class AbstractHandler {
     }
   }
   
-  protected static final Formula defaultHandler(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
+  protected final Formula defaultHandler(Formula postCond, SSAInstruction inst, BBorInstInfo instInfo) {
     return new Formula(postCond);
   }
+  
+  private List<String> m_methodStepInFilters;
 }
