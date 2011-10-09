@@ -66,13 +66,17 @@ public class WalaUtils {
     CGNode[] targets = callGraph.getDispatchTargets(caller, callSite);
     
     // get target IRs
-    int size = targets.length < maxToGet ? targets.length : maxToGet;
-    IR[] targetIRs       = new IR[size];
-    CGNode[] targetNodes = new CGNode[size];
-    for (int i = 0; i < size; i++) {
-      targetIRs[i]   = Jar2IR.getIR(walaAnalyzer, targets[i].getMethod().getSignature());
-      targetNodes[i] = targets[i];
+    List<IR> targetIRs       = new ArrayList<IR>();
+    List<CGNode> targetNodes = new ArrayList<CGNode>();
+    for (int i = 0; i < targets.length && targetIRs.size() < maxToGet; i++) {
+      IR ir = Jar2IR.getIR(walaAnalyzer, targets[i].getMethod().getSignature());
+      if (ir != null) {
+        targetIRs.add(ir);
+        targetNodes.add(targets[i]);
+      }
     }
-    return new SimpleEntry<IR[], CGNode[]>(targetIRs, targetNodes);
+    
+    int size = targetIRs.size();
+    return new SimpleEntry<IR[], CGNode[]>(targetIRs.toArray(new IR[size]), targetNodes.toArray(new CGNode[size]));
   }
 }
