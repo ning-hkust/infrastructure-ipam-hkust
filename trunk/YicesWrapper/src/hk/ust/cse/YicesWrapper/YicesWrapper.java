@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.net.URL;
 
 public class YicesWrapper {
   // Yices Lite API Definitions
@@ -20,20 +21,23 @@ public class YicesWrapper {
   
   static {
     // use an absolute path
-    String currDir = System.getProperty("user.dir");
+    //String currDir = System.getProperty("user.dir");
     
     // load libraries according to os type
     if (System.getProperty("os.name").startsWith("Windows")) {
       // do not use loadLibrary(), since it only accepts library name
       // use load() with an absolute path to the library instead!
-      System.load(currDir + "/yices/libyices.dll");
-      System.load(currDir + "/yices/hk_ust_cse_YicesWrapper_YicesWrapper.dll");
+      URL yicesLib     = YicesWrapper.class.getClassLoader().getResource("libyices.dll");
+      URL yicesWrapper = YicesWrapper.class.getClassLoader().getResource("hk_ust_cse_YicesWrapper_YicesWrapper.dll");
+      System.load(yicesLib.getPath());
+      System.load(yicesWrapper.getPath());
     }
     else {
       // we are using a hk_ust_cse_YicesWrapper_YicesWrapper.so that is 
       // statically linked against libyices.a. That's because linux might 
       // not have the right libgmp.so v4.1.2. Thus, we use a static libyices.a
-      System.load(currDir + "/yices/hk_ust_cse_YicesWrapper_YicesWrapper.so");
+      URL yicesWrapper = YicesWrapper.class.getClassLoader().getResource("hk_ust_cse_YicesWrapper_YicesWrapper.so");
+      System.load(yicesWrapper.getPath());
     }
     
     // create temporary output file
