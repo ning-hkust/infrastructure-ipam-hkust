@@ -412,7 +412,7 @@ public class YicesCommand implements ICommand {
       defString.append("(define ");
       defString.append(Utils.filterChars(lastDeclInstance.getValue() + ".value"));
       defString.append("::[C ");
-      defString.append(System.nanoTime());
+      defString.append(lastDeclInstance.getSetValueTime());
       defString.append(")\n");
       break;
     case 2:
@@ -569,7 +569,12 @@ public class YicesCommand implements ICommand {
 
           Instance[] domainValues = relation.getDomainValues().get(readIndex);
           for (int i = 0; i < domainValues.length; i++) {
-            readRelation.append(translateInstance(domainValues[i]).m_value);
+            TranslatedInstance domainInstance = translateInstance(domainValues[i]);
+            if (relation.isArrayRelation() && i == 1) { 
+              domainInstance = makeHelperWhenNecessary(domainInstance, "number"); // the index should always be number
+            }
+            readRelation.append(domainInstance.m_value);
+
             if (i != domainValues.length - 1) {
               readRelation.append(" ");
             }

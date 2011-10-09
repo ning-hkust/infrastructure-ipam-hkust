@@ -931,7 +931,7 @@ public class Executor {
     for (Iterator<SSAPhiInstruction> it = phiInsts; it.hasNext() && !useful;) {
       SSAPhiInstruction phiInst = (SSAPhiInstruction) it.next();
       if (phiInst != null) {
-        String def = AbstractHandler.getSymbol(phiInst.getDef(), 
+        String def = m_instHandler.getSymbol(phiInst.getDef(), 
             instInfo.methData, instInfo.callSites, postCond.getDefMap());
         useful = methodRefs != null && methodRefs.containsKey(def);
       }

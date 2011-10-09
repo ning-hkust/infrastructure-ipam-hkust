@@ -49,7 +49,7 @@ public class YicesResult implements ISolverResult {
       // analyze each model line
       m_satModel = new ArrayList<BinaryConditionTerm>();
       for (int i = 1; i < outLines.length; i++) {
-        if (outLines[i].length() > 0) {
+        if (outLines[i].length() > 0 && !isRelationInterpretaion(outLines[i])) {
           BinaryConditionTerm term = toConditionTerm(outLines[i], nameInstanceMapping);
           if (term != null) {
             m_satModel.add(term);
@@ -125,6 +125,10 @@ public class YicesResult implements ISolverResult {
       System.err.println("Unable to analyze model line: " + str);
     }
     return conditionTerm;
+  }
+  
+  private boolean isRelationInterpretaion(String str) {
+    return str.startsWith("(= (@");
   }
   
   private void removeConvHelperTerm() {

@@ -13,7 +13,7 @@ public class AbstractMemory {
     m_relationMap = new Hashtable<String, Relation>();
     
     // always have a special relation for array
-    m_relationMap.put("@array", new Relation("@array", 2));
+    m_relationMap.put("@@array", new Relation("@@array", 2));
   }
   
   public AbstractMemory(Hashtable<String, Hashtable<String, Reference>> refMap, 
