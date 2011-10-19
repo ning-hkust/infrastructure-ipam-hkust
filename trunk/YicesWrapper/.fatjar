@@ -1,5 +1,5 @@
 #Fat Jar Configuration File
-#Sat Jul 17 18:05:25 CST 2010
+#Wed Oct 19 22:45:59 CST 2011
 onejar.license.required=true
 manifest.classpath=
 manifest.removesigners=true
@@ -10,5 +10,5 @@ manifest.mainclass=
 manifest.file=<createnew>
 jarname.isextern=false
 onejar.expand=
-excludes=
+excludes=<cl|D\:\\Projects\\Infrastructure\\YicesWrapper\\yices>
 includes=

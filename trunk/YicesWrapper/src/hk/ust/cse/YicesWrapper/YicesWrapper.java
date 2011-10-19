@@ -23,21 +23,57 @@ public class YicesWrapper {
     // use an absolute path
     //String currDir = System.getProperty("user.dir");
     
-    // load libraries according to os type
-    if (System.getProperty("os.name").startsWith("Windows")) {
+    // load libraries according to os type and JVM architecture
+    String osName  = System.getProperty("os.name");
+    String jvmArch = System.getProperty("os.arch");
+    
+    if (osName.startsWith("Windows")) {
+      String yicesLibName     = "libyices.dll";
+      String yicesWrapperName = "hk_ust_cse_YicesWrapper_YicesWrapper.dll";
+      if (jvmArch.contains("64")) {
+        yicesLibName     = "libyices_64.dll";
+        yicesWrapperName = "hk_ust_cse_YicesWrapper_YicesWrapper_64.dll";
+      }
       // do not use loadLibrary(), since it only accepts library name
       // use load() with an absolute path to the library instead!
-      URL yicesLib     = YicesWrapper.class.getClassLoader().getResource("libyices.dll");
-      URL yicesWrapper = YicesWrapper.class.getClassLoader().getResource("hk_ust_cse_YicesWrapper_YicesWrapper.dll");
-      System.load(yicesLib.getPath());
-      System.load(yicesWrapper.getPath());
+      URL yicesLib     = YicesWrapper.class.getClassLoader().getResource(yicesLibName);
+      URL yicesWrapper = YicesWrapper.class.getClassLoader().getResource(yicesWrapperName);
+      if (yicesLib != null && yicesWrapper != null) {
+        System.load(yicesLib.getPath());
+        System.load(yicesWrapper.getPath());
+      }
+      else {
+        System.err.println("No Yices module available for platform: " + osName + " (" + jvmArch + ")");
+      }
+    }
+    else if (osName.startsWith("Mac")) {
+      String yicesWrapperName = "libhk_ust_cse_YicesWrapper_YicesWrapper.jnilib";
+      if (jvmArch.contains("64")) {
+        yicesWrapperName = "libhk_ust_cse_YicesWrapper_YicesWrapper_64.jnilib";
+      }
+      URL yicesWrapper = YicesWrapper.class.getClassLoader().getResource(yicesWrapperName);
+      if (yicesWrapper != null) {
+        System.load(yicesWrapper.getPath());
+      }
+      else {
+        System.err.println("No Yices module available for platform: " + osName + " (" + jvmArch + ")");
+      }
     }
     else {
       // we are using a hk_ust_cse_YicesWrapper_YicesWrapper.so that is 
       // statically linked against libyices.a. That's because linux might 
       // not have the right libgmp.so v4.1.2. Thus, we use a static libyices.a
-      URL yicesWrapper = YicesWrapper.class.getClassLoader().getResource("hk_ust_cse_YicesWrapper_YicesWrapper.so");
-      System.load(yicesWrapper.getPath());
+      String yicesWrapperName = "hk_ust_cse_YicesWrapper_YicesWrapper.so";
+      if (jvmArch.contains("64")) {
+        yicesWrapperName = "hk_ust_cse_YicesWrapper_YicesWrapper_64.so";
+      }
+      URL yicesWrapper = YicesWrapper.class.getClassLoader().getResource(yicesWrapperName);
+      if (yicesWrapper != null) {
+        System.load(yicesWrapper.getPath());
+      }
+      else {
+        System.err.println("No Yices module available for current platform: " + osName + " (" + jvmArch + ")");
+      }
     }
     
     // create temporary output file
