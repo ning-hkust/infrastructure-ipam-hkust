@@ -72,7 +72,7 @@ public class YicesWrapper {
         System.load(yicesWrapper.getPath());
       }
       else {
-        System.err.println("No Yices module available for current platform: " + osName + " (" + jvmArch + ")");
+        System.err.println("No Yices module available for platform: " + osName + " (" + jvmArch + ")");
       }
     }
     
