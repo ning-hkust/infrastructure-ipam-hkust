@@ -1,6 +1,7 @@
 package hk.ust.cse.util;
 
 import java.io.File;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -8,10 +9,12 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
+import java.util.Random;
 
 public class Utils {
   
@@ -52,6 +55,11 @@ public class Utils {
     classTypeStr = classTypeStr.delete(0, nDimension + nL);
     classTypeStr = classTypeStr.delete(classTypeStr.length() - nSim, classTypeStr.length());
 
+    // if the new string is primitive encoding
+    if (classTypeStr.length() == 1) { // for cass, [C, [B, etc
+      classTypeStr = new StringBuilder(toPrimitiveType(classTypeStr.toString()));
+    }
+    
     // place [] at the back
     for (int i = 0; i < nDimension; i++) {
       classTypeStr.append("[]");
@@ -101,7 +109,67 @@ public class Utils {
     return allPublicMethods;
   }
   
+  public static Constructor<?>[] getPublicCtors(Class<?> cls) {
+    Constructor<?>[] allPublicCtors = cls.getConstructors();
+    // sort, because getConstructors() does not guarantee order
+    Arrays.sort(allPublicCtors, new Comparator<Constructor<?>>() {
+      public int compare(Constructor<?> o1, Constructor<?> o2) {
+        return o1.toString().compareTo(o2.toString());
+      }
+    });
+    return allPublicCtors;
+  }
+
+  public static Method[] getNonPrivateMethods(Class<?> cls) {
+    return getNonPrivateMethods(cls, true);
+  }
+  
+  public static Method[] getNonPrivateMethods(Class<?> cls, boolean discardOverrided) {
+    List<Method> allMethods = getInheritedMethods(cls, discardOverrided);
+    
+    // remove private methods
+    for (int i = 0; i < allMethods.size(); i++) {
+      if (Modifier.isPrivate(allMethods.get(i).getModifiers())) {
+        allMethods.remove(i--);
+      }
+    }
+
+    // sort, because getMethods() does not guarantee order
+    Collections.sort(allMethods, new Comparator<Method>() {
+      public int compare(Method o1, Method o2) {
+        return o1.getName().compareTo(o2.getName());
+      }
+    });
+    return allMethods.toArray(new Method[allMethods.size()]);
+  }
+  
+  public static Constructor<?>[] getNonPrivateCtors(Class<?> cls) {
+    Constructor<?>[] allCtors = cls.getDeclaredConstructors();
+    
+    // remove private construction
+    List<Constructor<?>> allCtorList = new ArrayList<Constructor<?>>(Arrays.asList(allCtors));
+    for (int i = 0; i < allCtorList.size(); i++) {
+      if (Modifier.isPrivate(allCtorList.get(i).getModifiers())) {
+        allCtorList.remove(i--);
+      }
+    }
+    
+    // sort, because getConstructors() does not guarantee order
+    Collections.sort(allCtorList, new Comparator<Constructor<?>>() {
+      public int compare(Constructor<?> o1, Constructor<?> o2) {
+        return o1.toString().compareTo(o2.toString());
+      }
+    });
+    return allCtorList.toArray(new Constructor<?>[allCtorList.size()]);
+  }
+  
   public static List<Field> getInheritedFields(Class<?> cls) {
+    return getInheritedFields(cls, true);
+  }
+
+  public static List<Field> getInheritedFields(Class<?> cls, boolean discardOverrided) {
+    HashSet<String> fieldNames = new HashSet<String>();
+    
     List<Field> fields = new ArrayList<Field>();
     for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
       Field[] declFields = c.getDeclaredFields();
@@ -111,12 +179,30 @@ public class Utils {
           return o1.getName().compareTo(o2.getName());
         }
       });
-      fields.addAll(Arrays.asList(declFields));
+      
+      for (Field field : declFields) {
+        if (discardOverrided) {
+          String fieldName = field.getName();
+          if (!fieldNames.contains(fieldName)) {
+            fields.add(field);
+            fieldNames.add(fieldName);
+          }
+        }
+        else {
+          fields.add(field);
+        }
+      }
     }
     return fields;
   }
   
   public static List<Method> getInheritedMethods(Class<?> cls) {
+    return getInheritedMethods(cls, true);
+  }
+  
+  public static List<Method> getInheritedMethods(Class<?> cls, boolean discardOverrided) {
+    HashSet<String> methodSelectors = new HashSet<String>();
+    
     List<Method> methods = new ArrayList<Method>();
     for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
       Method[] declMethods = c.getDeclaredMethods();
@@ -126,7 +212,20 @@ public class Utils {
           return o1.getName().compareTo(o2.getName());
         }
       });
-      methods.addAll(Arrays.asList(declMethods));
+      
+      for (Method method : declMethods) {
+        if (discardOverrided) {
+          String genericStr = method.toGenericString();
+          String selector = method.getName() + genericStr.substring(genericStr.lastIndexOf('('));
+          if (!methodSelectors.contains(selector)) {
+            methods.add(method);
+            methodSelectors.add(selector);
+          }
+        }
+        else {
+          methods.add(method);
+        }
+      }
     }
     return methods;
   }
@@ -163,6 +262,35 @@ public class Utils {
     return method;
   }
   
+  public static Class<?> getClosestFieldDeclClass(String startingClassName, String fieldName) {
+    Class<?> declClass = null;
+    
+    Class<?> startingClass = Utils.findClass(startingClassName);
+    if (startingClass != null) {
+      declClass = getClosestFieldDeclClass(startingClass, fieldName);
+    }
+    return declClass;
+  }
+  
+  public static Class<?> getClosestFieldDeclClass(Class<?> startingClass, String fieldName) {
+    Class<?> declClass = null;
+    
+    for (Field declField : startingClass.getDeclaredFields()) {
+      if (declField.getName().equals(fieldName)) {
+        declClass = startingClass;
+        break;
+      }
+    }
+    
+    if (declClass == null) {
+      Class<?> superClass = startingClass.getSuperclass();
+      if (superClass != null) {
+        declClass = getClosestFieldDeclClass(superClass, fieldName);
+      }
+    }
+    return declClass;
+  }
+  
   public static Class<?> getClosestPublicSuperClass(Class<?> cls) {
     Class<?> superClass = null;
     for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
@@ -186,8 +314,71 @@ public class Utils {
     return publicInterfaces.toArray(new Class<?>[0]);
   }
   
+  public static String getTypeDefaultValue(String typeName) {
+    if (typeName.equals("I") || typeName.equals("J") || typeName.equals("S")) {
+      return "0";
+    }
+    else if (typeName.equals("D") || typeName.equals("F")) {
+      return "0.0";
+    }
+    else if (typeName.equals("C") || typeName.equals("B")) {
+      return "'a'";
+    }
+    else if (typeName.equals("Z")) {
+      return "true";
+    }
+    else {
+      return "null";
+    }
+  }
+  
+  public static String getTypeRandomValue(String typeName) {
+    Random random = new Random();
+    if (typeName.equals("I")) {
+      return String.valueOf(random.nextInt());
+    }
+    else if (typeName.equals("J")) {
+      return String.valueOf(random.nextLong());
+    }
+    else if (typeName.equals("S")) {
+      return String.valueOf(Short.MIN_VALUE + (int) (Math.random() * ((Short.MAX_VALUE - Short.MIN_VALUE) + 1)));
+    }
+    else if (typeName.equals("D")) {
+      return String.valueOf(random.nextDouble());
+    }
+    else if (typeName.equals("F")) {
+      return String.valueOf(random.nextFloat());
+    }
+    else if (typeName.equals("C")) {
+      return String.valueOf((char) ('a' + random.nextInt(26)));
+    }
+    else if (typeName.equals("B")) {
+      return String.valueOf(((int) Byte.MIN_VALUE) + (int) (Math.random() * ((((int) Byte.MAX_VALUE) - ((int) Byte.MIN_VALUE)) + 1)));
+    }
+    else if (typeName.equals("Z")) {
+      return String.valueOf(random.nextBoolean());
+    }
+    else {
+      return "null";
+    }
+  }
+  
+  public static boolean setField(Class<?> cls, String fieldName, Object obj, Object setAs) {
+    boolean succeed = false;
+    try {
+      Field field = cls.getDeclaredField(fieldName);
+      boolean accessible = field.isAccessible();
+      field.setAccessible(true);
+      field.set(obj, setAs);
+      field.setAccessible(accessible);
+      succeed = true;
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+    return succeed;
+  }
+  
   public static Class<?> findClass(String clsName) {
-    clsName = Utils.getClassTypeForNameStr(clsName);
     Class<?> cls = null;
     try {
       if (clsName.length() == 1) {
@@ -223,12 +414,108 @@ public class Utils {
         }
       }
       else {
-        cls = Class.forName(clsName);
+        String javaClsName = Utils.getClassTypeForNameStr(clsName);
+        cls = Class.forName(javaClsName);
       }
     } catch (Throwable e1) {
-      System.err.println("Cannot find class: " + clsName);
+      //System.err.println("Cannot find class: " + clsName);
     }
     return cls;
+  }
+  
+  public static Field findClassField(String clsName, String fieldName) {
+    Field field = null;
+    
+    Class<?> cls = findClass(clsName);
+    if (cls != null) {
+      field = findClassField(cls, fieldName);
+    }
+    return field;
+  }
+  
+  public static Field findClassField(Class<?> cls, String fieldName) {
+    Field field = null;
+    
+    try {
+      field = cls.getDeclaredField(fieldName);
+    } catch (Exception e) {}
+    
+    if (field == null) {
+      // try super class
+      Class<?> superClass = cls.getSuperclass();
+      if (superClass != null) {
+        field = findClassField(superClass, fieldName);
+      }
+    }
+    
+    return field;
+  }
+  
+  public static Class<?> findClassFieldType(String clsName, String fieldName) {
+    Class<?> fieldType = null;
+    
+    Field field = findClassField(clsName, fieldName);
+    if (field != null) {
+      fieldType = field.getType();
+    }
+    else if (fieldName.equals("length")) {
+      Class<?> cls = findClass(clsName);
+      if (cls != null && cls.isArray()) {
+        fieldType = int.class;
+      }
+    }
+    return fieldType;
+  }
+  
+  public static String findClassJarLocation(Class<?> cls) {
+    return cls.getProtectionDomain().getCodeSource().getLocation().toString();  
+  }
+  
+  // by define, a class is a sub-class of itself
+  public static boolean isSubClass(String superClass, String subClass) {
+    Class<?> cls1 = findClass(superClass);
+    Class<?> cls2 = findClass(subClass);
+    return isSubClass(cls1, cls2);
+  }
+  
+  // by define, a class is a sub-class of itself
+  public static boolean isSubClass(Class<?> superClass, Class<?> subClass) {
+    boolean isSubClass = false;
+    
+    Class<?> cls1 = superClass;
+    Class<?> cls2 = subClass;
+    if (cls1 != null && cls2 != null) {
+      // check super classes
+      for (Class<?> currentClass = cls2; currentClass != null && !isSubClass; currentClass = currentClass.getSuperclass()) {
+        isSubClass = cls1 == currentClass;
+        
+        // check interfaces
+        if (!isSubClass) {
+          Class<?>[] interfaces = currentClass.getInterfaces();
+          for (int i = 0; i < interfaces.length && !isSubClass; i++) {
+            isSubClass = interfaces[i].equals(cls1);
+          }
+        }
+      }
+    }
+    
+    return isSubClass;
+  }
+  
+  // cls.isAnonymousClass() does not work, don't know why
+  // org.apache.commons.collections.buffer.BoundedFifoBuffer$1
+  public static boolean isAnonymousClass(Class<?> cls) {
+    boolean isAnonymousClass = false;
+    
+    String clsName = cls.getName();
+    int index = clsName.lastIndexOf('$');
+    if (index >= 0) {
+      try {
+        Integer.parseInt(clsName.substring(index + 1));
+        isAnonymousClass = true;
+      } catch (NumberFormatException e) {}
+    }
+    return isAnonymousClass;
   }
   
   public static String replaceInitByCtor(String methodName) {
@@ -334,6 +621,9 @@ public class Utils {
         break;
       case 'C':
         ret2 = "char";
+        break;
+      case 'V':
+        ret2 = "void";
         break;
       default:
         ret2 = String.valueOf(typeChar);
@@ -551,6 +841,20 @@ public class Utils {
     }
     return str.toString();
   }
+  
+  public static void deleteFile(File file){ 
+    if (file.exists()) {
+      if (file.isFile()) {
+        file.delete();
+      }
+      else if (file.isDirectory()) {
+        for (File subFile : file.listFiles()) {
+          deleteFile(subFile);
+        }
+        file.delete();
+      }
+    }
+  } 
   
   public static boolean loadJarFile(String jarFilePath) {
     boolean succeeded = false;
