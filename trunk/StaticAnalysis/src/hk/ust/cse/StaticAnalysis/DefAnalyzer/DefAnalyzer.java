@@ -33,9 +33,13 @@ import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 
 public class DefAnalyzer {
-  
+
   public DefAnalyzer(String appJar) throws Exception {
     m_walaAnalyzer   = new WalaAnalyzer(appJar);
+  }
+  
+  public DefAnalyzer(WalaAnalyzer walaAnalyzer) {
+    m_walaAnalyzer = walaAnalyzer;
   }
   
   // find defs at once for all methods within the including name

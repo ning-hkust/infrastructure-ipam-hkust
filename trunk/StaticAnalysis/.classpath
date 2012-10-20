@@ -15,5 +15,6 @@
 	<classpathentry kind="lib" path="/WalaUtils/bin" sourcepath="/WalaUtils"/>
 	<classpathentry kind="lib" path="test_programs/test_program.jar"/>
 	<classpathentry kind="lib" path="test_programs/commons-math-2.1.jar"/>
+	<classpathentry kind="lib" path="/Prevision_PseudoImpl/bin" sourcepath="/Prevision_PseudoImpl"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
