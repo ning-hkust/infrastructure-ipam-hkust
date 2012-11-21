@@ -24,6 +24,7 @@ public class Properties {
     // load properties file
     if (in != null) {
       m_properties.load(in);
+      in.close();
     }
     else {
       throw new FileNotFoundException("properties file: " + propFile + " not found!");
