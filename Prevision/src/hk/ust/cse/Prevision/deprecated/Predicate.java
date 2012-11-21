@@ -7,7 +7,7 @@ import hk.ust.cse.Prevision.Solver.SMTStatementList;
 import hk.ust.cse.Prevision.Solver.SMTTerm;
 import hk.ust.cse.Prevision.Solver.SMTVariable;
 import hk.ust.cse.Prevision.Solver.SMTVariableMap;
-import hk.ust.cse.Prevision.Solver.Yices.YicesLoader;
+import hk.ust.cse.Prevision.Solver.Yices.YicesLoaderLib;
 
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -56,7 +56,7 @@ public class Predicate {
     // initialize ISolverLoader
     if (s_solverLoader == null) {
       //s_solverLoader = new YicesLoader2(1);
-      s_solverLoader = new YicesLoader();
+      s_solverLoader = new YicesLoaderLib();
     }
     
     // create SMTObjects and save into member variables

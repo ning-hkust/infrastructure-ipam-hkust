@@ -85,6 +85,6 @@ public class ExecutionResult {
   
   private boolean         m_overLimit;
   private boolean         m_reachMaximum;
-  private List<Formula> m_satisfiables;
-  private List<Formula> m_notSatisfiables;
+  private List<Formula>   m_satisfiables;
+  private List<Formula>   m_notSatisfiables;
 }

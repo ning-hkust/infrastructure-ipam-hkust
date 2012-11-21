@@ -1,4 +1,4 @@
-package hk.ust.cse.Prevision;
+package hk.ust.cse.Prevision.Misc;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -72,6 +72,12 @@ public class CallStack implements Cloneable {
     }
   }
   
+  public CallStack getInnerMostCallStack() {
+    CallStack innerMostCallStack = new CallStack(m_callStack.size() == 1 ? m_isOutMostCall : false);
+    innerMostCallStack.addStackTrace(m_callStack.get(m_callStack.size() - 1));
+    return innerMostCallStack;
+  }
+  
   public String getCurMethodNameOrSign() {
     if (m_callStack.size() > 0) {
       return m_callStack.get(0).getMethodNameOrSign();
@@ -102,6 +108,24 @@ public class CallStack implements Cloneable {
   public String getNextMethodNameOrSign() {
     if (m_callStack.size() > 1) {
       return m_callStack.get(1).getMethodNameOrSign();
+    }
+    else {
+      return null;
+    }
+  }
+  
+  public int getNextLineNo() {
+    if (m_callStack.size() > 1) {
+      return m_callStack.get(1).getLineNo();
+    }
+    else {
+      return -1;
+    }
+  }
+  
+  public String getNextMethodNameAndLineNo() {
+    if (m_callStack.size() > 1) {
+      return m_callStack.get(1).getMethodNameOrSign() + ":" + m_callStack.get(1).getLineNo();
     }
     else {
       return null;

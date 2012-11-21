@@ -6,12 +6,61 @@ import java.util.Hashtable;
 
 public class BinaryConditionTerm extends ConditionTerm {
   public enum Comparator {
-    OP_EQUAL, 
-    OP_INEQUAL, 
-    OP_GREATER, 
-    OP_GREATER_EQUAL, 
-    OP_SMALLER, 
-    OP_SMALLER_EQUAL}
+    OP_EQUAL(0), 
+    OP_INEQUAL(1), 
+    OP_GREATER(2), 
+    OP_GREATER_EQUAL(3), 
+    OP_SMALLER(4), 
+    OP_SMALLER_EQUAL(5);
+  
+    Comparator(int index) {
+      m_index = index;
+    }
+    
+    public int toIndex() {
+      return m_index;
+    }
+    
+    public static Comparator fromIndex(int index) {
+      switch (index) {
+      case 0:
+        return OP_EQUAL;
+      case 1:
+        return OP_INEQUAL;
+      case 2:
+        return OP_GREATER;
+      case 3:
+        return OP_GREATER_EQUAL;
+      case 4:
+        return OP_SMALLER;
+      case 5:
+        return OP_SMALLER_EQUAL;
+      default:
+        return null;
+      }
+    }
+    
+    public static Comparator fromString(String str) {
+      switch (str) {
+      case "==":
+        return OP_EQUAL;
+      case "!=":
+        return OP_INEQUAL;
+      case ">":
+        return OP_GREATER;
+      case ">=":
+        return OP_GREATER_EQUAL;
+      case "<":
+        return OP_SMALLER;
+      case "<=":
+        return OP_SMALLER_EQUAL;
+      default:
+        return null;
+      }
+    }
+    
+    private final int m_index;
+  }
   
   public BinaryConditionTerm(Instance instance1, Comparator op, Instance instance2) {
     m_instance1 = instance1;

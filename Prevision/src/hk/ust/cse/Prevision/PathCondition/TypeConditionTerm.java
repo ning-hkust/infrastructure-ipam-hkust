@@ -6,12 +6,36 @@ import java.util.Hashtable;
 
 public class TypeConditionTerm extends ConditionTerm {
   public enum Comparator {
-    OP_SUBTYPEOF, 
-    OP_NOT_SUBTYPEOF,
-    OP_INSTANCEOF, 
-    OP_NOT_INSTANCEOF, 
-    OP_INSTANCEOF_OR_SUBTYPEOF, 
-    OP_NOT_INSTANCEOF_AND_NOT_SUBTYPEOF}
+    OP_SUBTYPEOF(0), 
+    OP_NOT_SUBTYPEOF(1),
+    OP_INSTANCEOF(2), 
+    OP_NOT_INSTANCEOF(3); 
+    
+    Comparator(int index) {
+      m_index = index;
+    }
+    
+    public int toIndex() {
+      return m_index;
+    }
+    
+    public static Comparator fromIndex(int index) {
+      switch (index) {
+      case 0:
+        return OP_SUBTYPEOF;
+      case 1:
+        return OP_NOT_SUBTYPEOF;
+      case 2:
+        return OP_INSTANCEOF;
+      case 3:
+        return OP_NOT_INSTANCEOF;
+      default:
+        return null;
+      }
+    }
+    
+    private final int m_index;
+  }
   
   public TypeConditionTerm(Instance instance1, Comparator op, String typeString) {
     m_instance1  = instance1;
@@ -52,12 +76,6 @@ public class TypeConditionTerm extends ConditionTerm {
     case OP_NOT_INSTANCEOF:
       str.append(" notinstanceof ");
       break;
-    case OP_INSTANCEOF_OR_SUBTYPEOF:
-      str.append(" instanceof_or_subtypeof ");
-      break;
-    case OP_NOT_INSTANCEOF_AND_NOT_SUBTYPEOF:
-        str.append(" not_instanceof_and_not_subtypeof ");
-        break;
     default:
       str.append(" ? ");
       break;
