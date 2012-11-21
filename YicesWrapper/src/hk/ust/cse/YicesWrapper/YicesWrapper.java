@@ -86,6 +86,16 @@ public class YicesWrapper {
     // create a context
     int ctx = yicesl_mk_context();
     
+    boolean result = checkInContext(ctx, input);
+    
+    // clean context
+    yicesl_del_context(ctx);
+    
+    return result;
+  }
+
+  public static boolean checkInContext(int ctx, String input) {
+    
     // redirect output to a file
     yicesl_set_output_file(s_tempOutput.getAbsolutePath());
     
@@ -108,17 +118,17 @@ public class YicesWrapper {
       s_lastError = "";
       
       // read output from temporary output file
-      int nRead = 0;
+      int byteRead = 0;
       char[] buff = new char[51200];
       try {
         BufferedReader reader = new BufferedReader(new FileReader(s_tempOutput));
-        nRead = reader.read(buff, 0, buff.length);
+        byteRead = reader.read(buff, 0, buff.length);
         reader.close();
       } catch (IOException e) { /* should not throw exception */ }
-      s_lastOutput = String.valueOf(buff, 0, nRead);
+      s_lastOutput = String.valueOf(buff, 0, byteRead < 0 ? 0 : byteRead);
       
       // type error message is passed through the normal output
-      if (s_lastOutput.startsWith("type error: ")) {
+      if (s_lastOutput.contains("type error: ")) {
         result = false;
         s_lastError  = s_lastOutput; // move error message to error output
         s_lastOutput = "";
@@ -130,10 +140,23 @@ public class YicesWrapper {
       s_lastError  = yicesl_get_last_error_message();
     }
     
-    // clean context
-    yicesl_del_context(ctx);
-    
     return result;
+  }
+  
+  public static int createContext() {
+    return yicesl_mk_context();
+  }
+  
+  public static void deleteContext(int ctx) {
+    yicesl_del_context(ctx);
+  }
+  
+  public static void pushContext(int ctx) {
+    checkInContext(ctx, "(push)\n");
+  }
+  
+  public static void popContext(int ctx) {
+    checkInContext(ctx, "(pop)\n");
   }
   
   public static String getLastInput() {
