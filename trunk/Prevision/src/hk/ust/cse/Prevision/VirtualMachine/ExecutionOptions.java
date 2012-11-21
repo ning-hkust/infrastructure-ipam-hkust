@@ -1,7 +1,6 @@
 package hk.ust.cse.Prevision.VirtualMachine;
 
-import hk.ust.cse.Prevision.CallStack;
-import hk.ust.cse.Prevision.Summary;
+import hk.ust.cse.Prevision.Misc.CallStack;
 import hk.ust.cse.Wala.CallGraph.CallGraphBuilder;
 
 import java.lang.reflect.Method;
@@ -11,12 +10,9 @@ import java.util.List;
 public class ExecutionOptions {
   public enum EXCEPTION_TYPE {CUSTOM, NPE, AIOBE};
   
-  public ExecutionOptions(CallStack fullCallStack, boolean useSummary) {      
+  public ExecutionOptions(CallStack fullCallStack) {      
     // set call stack
     this.fullCallStack = fullCallStack;
-    
-    // initialize summary
-    this.summary = useSummary ? new Summary() : null;
 
     // states
     this.m_enteringCallStack = true; // at the beginning, we are entering call stack
@@ -63,10 +59,12 @@ public class ExecutionOptions {
   public boolean   inclStartingInst        = false;
   public boolean   saveNotSatResults       = false;
   public boolean   checkOnTheFly           = true;
-  public boolean   skipUselessBranches     = true;
-  public boolean   skipUselessMethods      = true;
-  public boolean   heuristicBacktrack      = true;
+  public boolean   skipUselessBranches     = true; // backward only
+  public boolean   skipUselessMethods      = true; // backward only
+  public boolean   heuristicBacktrack      = true; // backward only
   public boolean   clearSatNonSolverData   = true;
+  public boolean   addIRAsEntryPoint       = true;
+  public long      maxTimeAllow            = Long.MAX_VALUE;
   public int       maxDispatchTargets      = Integer.MAX_VALUE;
   public int       maxRetrieve             = 1;
   public int       maxSmtCheck             = 1000;
@@ -74,11 +72,10 @@ public class ExecutionOptions {
   public int       maxLoop                 = 1;
   public int       startingInst            = -1;   // -1 if don't want to specify the starting instruction index
   public int[]     startingInstBranchesTo  = null; // null if don't want to specify the instructions that the starting instruction is branching to
-  public EXCEPTION_TYPE exceptionType      = EXCEPTION_TYPE.CUSTOM;
+  public EXCEPTION_TYPE exceptionType      = EXCEPTION_TYPE.CUSTOM; // backward only
   public CallGraphBuilder callGraphBuilder = CallGraphBuilder.ZeroOneCFA;
   
   public final CallStack fullCallStack;
-  public final Summary   summary;
 
   // global states
   private boolean m_enteringCallStack;

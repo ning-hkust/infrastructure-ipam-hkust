@@ -90,7 +90,7 @@ public class SMTVariable implements Cloneable {
             // when extraVar is a #BinaryOp itself, then it's in the
             // form of (op var1 var2), no need to filter it
             if (!extraVar.getVarType().equals("#BinaryOp")) {
-              varName = Utils.filterChars(varName);
+              varName = YicesUtils.filterChars(varName);
             }
             varNames[i] = varName;
           }
@@ -118,7 +118,7 @@ public class SMTVariable implements Cloneable {
       m_yicesExprStr = str.toString();
     }
     else {
-      m_yicesExprStr = Utils.filterChars(fillExtraVars2YicesExpr(currDepth));
+      m_yicesExprStr = YicesUtils.filterChars(fillExtraVars2YicesExpr(currDepth));
     }
     return m_yicesExprStr;
   }
@@ -296,7 +296,7 @@ public class SMTVariable implements Cloneable {
     // m_varName in the form of #somestr
     String binaryStr = strToBinaryStr(m_varName.substring(1));
     yicesStr.append("(define ");
-    yicesStr.append(Utils.filterChars(m_varName));
+    yicesStr.append(YicesUtils.filterChars(m_varName));
     yicesStr.append("::(bitvector ");
     yicesStr.append(binaryStr.length());
     yicesStr.append(")");
@@ -356,7 +356,7 @@ public class SMTVariable implements Cloneable {
     // fill in extra vars in recursion
     StringBuilder realVarName = new StringBuilder(m_varName);
     for (int i = 0; m_extraVars != null && i < m_extraVars.size(); i++) {
-      realVarName = Utils.replace(realVarName, "$extraVar" + (i + 1),
+      realVarName = YicesUtils.replace(realVarName, "$extraVar" + (i + 1),
           m_extraVars.get(i).toYicesExprString(currDepth + 1));
     }
     return realVarName.toString();
@@ -370,7 +370,7 @@ public class SMTVariable implements Cloneable {
     // fill in extra vars in recursion
     StringBuilder realVarName = new StringBuilder(mappedName);
     for (int i = 0; m_extraVars != null && i < m_extraVars.size(); i++) {
-      realVarName = Utils.replace(realVarName, "$extraVar" + (i + 1),
+      realVarName = YicesUtils.replace(realVarName, "$extraVar" + (i + 1),
           m_extraVars.get(i).toJavaExprString(paramNameMap, currDepth + 1));
     }
     return realVarName.toString();

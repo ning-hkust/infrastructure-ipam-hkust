@@ -12,9 +12,10 @@ import com.ibm.wala.ssa.ISSABasicBlock;
  * functions (read, update) from the array theory
  */
 public class Relation {
-  public Relation(String name, int domainDimension) {
+  public Relation(String name, int domainDimension, boolean forward) {
     m_name            = name;
     m_domainDimension = domainDimension; // should be one for field (parent) and two for array (base and index)
+    m_forward         = forward; // direction of the symbolic execution
     
     // to save relational updates
     m_domainValues  = new ArrayList<Instance[]>();
@@ -27,9 +28,10 @@ public class Relation {
       throw new IllegalArgumentException("The number of domain values is not correct.");
     }
     
-    m_domainValues.add(domainValues);
-    m_rangeValues.add(rangeValue);
-    m_functionTimes.add(System.nanoTime());
+    // if it is backward execution, put the latest operation at front
+    m_domainValues.add(m_forward ? m_domainValues.size() : 0, domainValues);
+    m_rangeValues.add(m_forward ? m_rangeValues.size() : 0, rangeValue);
+    m_functionTimes.add(m_forward ? m_functionTimes.size() : 0, System.nanoTime());
   }
   
   public Reference read(Instance[] domainValues, String type, ISSABasicBlock createBlock) {
@@ -39,12 +41,14 @@ public class Relation {
     
     // record the read relation
     long currentTime = System.nanoTime();
-    m_domainValues.add(domainValues);
-    m_rangeValues.add(null);
-    m_functionTimes.add(currentTime);
+
+    // if it is backward execution, put the latest operation at front
+    m_domainValues.add(m_forward ? m_domainValues.size() : 0, domainValues);
+    m_rangeValues.add(m_forward ? m_rangeValues.size() : 0, null);
+    m_functionTimes.add(m_forward ? m_functionTimes.size() : 0, currentTime);
     
     // return an unique reference representing the read function
-    return new Reference("read_" + m_name + "_" + currentTime, type, "", new Instance("", createBlock), null);
+    return new Reference("read_" + m_name + "_" + currentTime, type, "", new Instance("", createBlock), null, true);
   }
   
   public boolean isArrayRelation() {
@@ -57,7 +61,7 @@ public class Relation {
   
   public int getLastUpdateIndex(int currentIndex) {
     int index = -1;
-    for (int i = currentIndex + 1, size = m_rangeValues.size(); i < size; i++) {
+    for (int i = currentIndex - 1; i >= 0; i--) {
       if (m_rangeValues.get(i) != null) {
         index = i;
         break;
@@ -70,8 +74,16 @@ public class Relation {
     return m_functionTimes.indexOf(time);
   }
   
-  public long getReadStringTime(String readStr) {
+  public int getIndex(String time) {
+    return getIndex(Long.parseLong(time));
+  }
+  
+  public static long getReadStringTime(String readStr) {
     return Long.parseLong(readStr.substring(readStr.lastIndexOf("_") + 1));
+  }
+  
+  public static String getReadStringRelName(String readStr) {
+    return readStr.substring(5, readStr.lastIndexOf('_'));
   }
   
   public List<Instance[]> getDomainValues() {
@@ -102,8 +114,12 @@ public class Relation {
     return 1;
   }
   
+  public boolean getDirection() {
+    return m_forward;
+  }
+  
   public Relation deepClone(Hashtable<Object, Object> cloneMap) {
-    Relation cloneRelation = new Relation(m_name, m_domainDimension);
+    Relation cloneRelation = new Relation(m_name, m_domainDimension, m_forward);
   
     for (Instance[] domainValues : m_domainValues) {
       Instance[] cloneDomainValues = new Instance[domainValues.length];
@@ -125,7 +141,8 @@ public class Relation {
   
   private final String           m_name;
   private final int              m_domainDimension;
-
+  private final boolean          m_forward;
+  
   private final List<Instance[]> m_domainValues;
   private final List<Instance>   m_rangeValues;
   private final List<Long>       m_functionTimes;

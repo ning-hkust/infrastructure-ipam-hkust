@@ -7,13 +7,13 @@ import java.util.Hashtable;
 public class AbstractMemory {
   
   // an empty memory
-  public AbstractMemory () {
+  public AbstractMemory(boolean forward) {
     m_refMap      = new Hashtable<String, Hashtable<String, Reference>>();
     m_defMap      = new Hashtable<String, Hashtable<String, Integer>>();
     m_relationMap = new Hashtable<String, Relation>();
     
     // always have a special relation for array
-    m_relationMap.put("@@array", new Relation("@@array", 2));
+    addRelation("@@array", 2, forward);
   }
   
   public AbstractMemory(Hashtable<String, Hashtable<String, Reference>> refMap, 
@@ -38,6 +38,17 @@ public class AbstractMemory {
   
   public Relation getRelation(String relationName) {
     return m_relationMap.get(relationName);
+  }
+  
+  public Relation addRelation(String relationName, int domainDimension, boolean forward) {
+    if (!m_relationMap.containsKey(relationName)) {
+      m_relationMap.put(relationName, new Relation(relationName, domainDimension, forward));
+    }
+    return getRelation(relationName);
+  }
+  
+  public Relation addFieldRelation(String relationName, boolean forward) {
+    return addRelation(relationName, 1, forward);
   }
   
   public AbstractMemory deepClone(Hashtable<Object, Object> cloneMap) {

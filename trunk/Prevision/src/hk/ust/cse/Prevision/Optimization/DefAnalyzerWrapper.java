@@ -6,6 +6,7 @@ import hk.ust.cse.Prevision.VirtualMachine.Reference;
 import hk.ust.cse.StaticAnalysis.DefAnalyzer.DefAnalysisResult;
 import hk.ust.cse.StaticAnalysis.DefAnalyzer.DefAnalysisResult.ConditionalBranchDefs;
 import hk.ust.cse.StaticAnalysis.DefAnalyzer.DefAnalyzer;
+import hk.ust.cse.Wala.WalaAnalyzer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,6 +24,11 @@ public class DefAnalyzerWrapper {
   
   public DefAnalyzerWrapper(String appJar, int maxLoopDepth) throws Exception {
     m_defAnalyzer  = new DefAnalyzer(appJar);
+    m_maxLoopDepth = maxLoopDepth;
+  }
+  
+  public DefAnalyzerWrapper(WalaAnalyzer walaAnalyzer, int maxLoopDepth) throws Exception {
+    m_defAnalyzer  = new DefAnalyzer(walaAnalyzer);
     m_maxLoopDepth = maxLoopDepth;
   }
 

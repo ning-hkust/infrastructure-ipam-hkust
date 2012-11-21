@@ -3,8 +3,9 @@ package hk.ust.cse.Prevision.Optimization;
 import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.Formula;
+import hk.ust.cse.Prevision.PathCondition.TypeConditionTerm;
 import hk.ust.cse.Prevision.Solver.SMTChecker;
-import hk.ust.cse.Prevision.VirtualMachine.Executor.BBorInstInfo;
+import hk.ust.cse.Prevision.VirtualMachine.Executor.AbstractExecutor.BBorInstInfo;
 
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -50,7 +51,7 @@ public class HeuristicBacktrack {
       long eariestSet = findUnsatCoreEarliestSet();
       while (!workList.empty() && !backTrackFinished) {
         BBorInstInfo next = workList.peek();
-        if (eariestSet < next.postCond.getTimeStamp()) {
+        if (eariestSet < next.formula.getTimeStamp()) {
           backTrackFinished = false;
         }
         else {
@@ -70,10 +71,24 @@ public class HeuristicBacktrack {
               } 
               for (int i = 0, size = prevUnsatCores.size(); i < size && !affectable; i++) {
                 Condition unsatCoreCond = prevUnsatCores.get(i);
-                BinaryConditionTerm binaryTerm = (BinaryConditionTerm) unsatCoreCond.getConditionTerms().get(0); // only binary can be unsat core
-                long instance1Time = binaryTerm.getInstance1().getSetValueTime();
-                long instance2Time = binaryTerm.getInstance2().getSetValueTime();
-                if ((instance1Time > next.postCond.getTimeStamp() || instance2Time > next.postCond.getTimeStamp()) && 
+                
+                // get times
+                long instance1Time = Long.MAX_VALUE;
+                long instance2Time = Long.MAX_VALUE;
+                if (unsatCoreCond.getConditionTerms().get(0) instanceof BinaryConditionTerm) {
+                  BinaryConditionTerm binaryTerm = (BinaryConditionTerm) unsatCoreCond.getConditionTerms().get(0);
+                  instance1Time = binaryTerm.getInstance1().getSetValueTime();
+                  instance2Time = binaryTerm.getInstance2().getSetValueTime();
+                }
+                else {
+//                  TypeConditionTerm typeTerm = (TypeConditionTerm) unsatCoreCond.getConditionTerms().get(0);
+//                  instance1Time = typeTerm.getInstance1().getSetValueTime();
+//                  instance2Time = instance1Time;
+                  instance1Time = Long.MAX_VALUE;
+                  instance2Time = Long.MAX_VALUE;
+                }
+                
+                if ((instance1Time > next.formula.getTimeStamp() || instance2Time > next.formula.getTimeStamp()) && 
                     prevCondsOnOrBeforeTimes.contains(unsatCoreCond.getTimeStamp())) {
                   affectable       = true;
                   continueInMethod = true;
@@ -172,12 +187,21 @@ public class HeuristicBacktrack {
       List<Condition> unsatCoreConditions = mapping.get(unsatCoreCmd);
       if (unsatCoreConditions != null && unsatCoreConditions.size() > 0) {
         for (Condition unsatCoreCondition : unsatCoreConditions) {
-          BinaryConditionTerm binaryTerm = (BinaryConditionTerm) unsatCoreCondition.getConditionTerms().get(0); // only binary can be unsat core
-          long time1 = binaryTerm.getInstance1().getLatestSetValueTime();
-          long time2 = binaryTerm.getInstance2().getLatestSetValueTime();
-          long condTime = time1 > time2 ? time1 : time2;
-          if (condTime < earliest) {
-            earliest = condTime;
+          if (unsatCoreCondition.getConditionTerms().get(0) instanceof BinaryConditionTerm) {
+            BinaryConditionTerm binaryTerm = (BinaryConditionTerm) unsatCoreCondition.getConditionTerms().get(0);
+            long time1 = binaryTerm.getInstance1().getLatestSetValueTime();
+            long time2 = binaryTerm.getInstance2().getLatestSetValueTime();
+            long condTime = time1 > time2 ? time1 : time2;
+            if (condTime < earliest) {
+              earliest = condTime;
+            }
+          }
+          else {
+            TypeConditionTerm typeTerm = (TypeConditionTerm) unsatCoreCondition.getConditionTerms().get(0);
+            long time1 = typeTerm.getInstance1().getLatestSetValueTime();
+            if (time1 < earliest) {
+              earliest = time1;
+            }
           }
         }
       }

@@ -1,11 +1,12 @@
 package hk.ust.cse.Prevision.PathCondition;
 
-import hk.ust.cse.Prevision.Solver.ISolverResult;
+import hk.ust.cse.Prevision.Solver.AbstractSolverResult;
 import hk.ust.cse.Prevision.Solver.SMTChecker;
 import hk.ust.cse.Prevision.VirtualMachine.AbstractMemory;
-import hk.ust.cse.Prevision.VirtualMachine.Executor.BBorInstInfo;
+import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
 import hk.ust.cse.Prevision.VirtualMachine.Relation;
+import hk.ust.cse.Prevision.VirtualMachine.Executor.AbstractExecutor.BBorInstInfo;
 import hk.ust.cse.Wala.MethodMetaData;
 
 import java.util.ArrayList;
@@ -23,11 +24,12 @@ public class Formula {
   public static final int EXCEPTIONAL_SUCCESSOR = 1;
   
   // a TRUE predicate
-  public Formula() {
+  public Formula(boolean forward) {
     m_conditionList    = new ArrayList<Condition>();
-    m_abstractMemory   = new AbstractMemory();
+    m_abstractMemory   = new AbstractMemory(forward);
     m_fieldAssignTimes = new Hashtable<String, List<Long>>();
     m_traversedPath    = new ArrayList<Object[]>();
+    m_visitedRecord    = new Hashtable<ISSABasicBlock, Integer>();
     m_timeStamp        = System.nanoTime(); // time stamp for this formula
   }
   
@@ -38,10 +40,11 @@ public class Formula {
     m_abstractMemory   = new AbstractMemory(formula.getRefMap(), formula.getDefMap(), formula.getRelationMap());
     m_fieldAssignTimes = formula.getFieldAssignTimes();
     m_traversedPath    = formula.getTraversedPath();
+    m_visitedRecord    = formula.getVisitedRecord();
     m_timeStamp        = System.nanoTime(); // time stamp for this formula
   }
   
-  private Formula(List<Condition> conditions, AbstractMemory absMemory) {
+  public Formula(List<Condition> conditions, AbstractMemory absMemory) {
     // remember, each Formula instance should own a unique
     // instance of conditions and refMap!
     m_conditionList  = conditions;
@@ -98,7 +101,7 @@ public class Formula {
     return m_lastSolverInput;
   }
   
-  public ISolverResult getLastSolverResult() {
+  public AbstractSolverResult getLastSolverResult() {
     return m_lastSolverResult;
   }
   
@@ -130,6 +133,11 @@ public class Formula {
     return m_timeStamp;
   }
   
+  // currently should only be used in PrepInitFormula
+  public void setTimeStamp(long timeStamp) {
+    m_timeStamp = timeStamp;
+  }
+  
   public Hashtable<String, Hashtable<String, Reference>> getRefMap() {
     return m_abstractMemory.getRefMap();
   }
@@ -148,13 +156,28 @@ public class Formula {
     }
     return m_abstractMemory.getRelation(relationName);
   }
+  
+  public Instance[] getReadRelationDomainValues(Instance readInstance) {
+    String readStr = readInstance.toString();
+    String relName = Relation.getReadStringRelName(readStr);
+    long readTime  = Relation.getReadStringTime(readStr);
+    
+    Relation relation = getRelation(relName);
+    int index = relation.getIndex(readTime);
+    
+    return relation.getDomainValues().get(index);
+  }
+  
+  public Relation addFieldRelation(String relationName, boolean forward) {
+    return m_abstractMemory.addFieldRelation(relationName, forward);
+  }
 
   public Hashtable<ISSABasicBlock, Integer> getVisitedRecord() {
     return m_visitedRecord;
   }
 
   @SuppressWarnings("unchecked")
-  public void setVisitedRecord(Hashtable<ISSABasicBlock, Integer> lastRecord, BBorInstInfo newlyVisited) {
+  public void setVisitedRecord(Hashtable<ISSABasicBlock, Integer> lastRecord, BBorInstInfo newlyVisited, boolean forward) {
     m_visitedRecord = (lastRecord != null) ? (Hashtable<ISSABasicBlock, Integer>) lastRecord.clone() : 
                                              new Hashtable<ISSABasicBlock, Integer>();
     if (newlyVisited != null) {
@@ -163,8 +186,9 @@ public class Formula {
       count = (count == null) ? 0 : count;
       
       // add loop
-      if (newlyVisited.sucessorBB != null && 
-          newlyVisited.sucessorBB.getNumber() < newlyVisited.currentBB.getNumber()) {
+      if (newlyVisited.previousBB != null && 
+          ((forward && newlyVisited.previousBB.getNumber() > newlyVisited.currentBB.getNumber()) || 
+          (!forward && newlyVisited.previousBB.getNumber() < newlyVisited.currentBB.getNumber()))) {
         count++;
       }
       m_visitedRecord.put(newlyVisited.currentBB, count);
@@ -177,6 +201,7 @@ public class Formula {
     return clone(cloneMap);
   }
   
+  @SuppressWarnings("unchecked")
   public Formula clone(Hashtable<Object, Object> cloneMap) {
     AbstractMemory cloneAbsMemory = m_abstractMemory.deepClone(cloneMap);
     List<Condition> cloneCondList = new ArrayList<Condition>();
@@ -187,6 +212,7 @@ public class Formula {
     
     cloneFormula.m_traversedPath    = new ArrayList<Object[]>(m_traversedPath);
     cloneFormula.m_fieldAssignTimes = new Hashtable<String, List<Long>>();
+    cloneFormula.m_visitedRecord    = (Hashtable<ISSABasicBlock, Integer>) m_visitedRecord.clone();
     Enumeration<String> keys = m_fieldAssignTimes.keys();
     while (keys.hasMoreElements()) {
       String fieldName = (String) keys.nextElement();
@@ -206,6 +232,6 @@ public class Formula {
   private Hashtable<ISSABasicBlock, Integer> m_visitedRecord;
   private String                             m_lastSolverInput;
   private String                             m_lastSolverOutput;
-  private ISolverResult                      m_lastSolverResult;
+  private AbstractSolverResult               m_lastSolverResult;
   private SMT_RESULT                        m_lastSMTCheckResult;
 }

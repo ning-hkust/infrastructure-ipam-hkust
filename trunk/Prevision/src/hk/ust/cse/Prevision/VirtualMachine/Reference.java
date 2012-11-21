@@ -1,6 +1,7 @@
 package hk.ust.cse.Prevision.VirtualMachine;
 
 import hk.ust.cse.Prevision.PathCondition.Formula;
+import hk.ust.cse.util.Utils;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -13,7 +14,8 @@ import java.util.List;
  * SSA variable of an ir or a field of an instance */
 public class Reference {
   
-  public Reference(String name, String type, String callSites, Instance instance, Instance declInstance) {
+  public Reference(String name, String type, String callSites, 
+                   Instance instance, Instance declInstance, boolean setLastRef) {
     m_name         = name;
     m_type         = type;
     m_callSites    = callSites;
@@ -21,21 +23,24 @@ public class Reference {
     m_oldInstances = new HashSet<Instance>(1);
     m_lifeTimes    = new Hashtable<Instance, Long[]>(1);
     m_declInstance = declInstance;
-    
+
     if (name.equals("null") || name.startsWith("#") || name.equals("true") || name.equals("false")) { // is constant
-      // ignore original instance
-      instance = new Instance(name, null, instance.getCreateBlock());
+      // ignore original instance    
+      if (instance != null) {
+        instance = new Instance(name, null, instance.getCreateBlock());
+      }
     }
     if (instance != null) {
       m_instances.add(instance);
       startInstanceLiftTime(instance);
-      if (!instance.isBounded()) {
+      if (!instance.isBounded() && setLastRef) {
         instance.setLastReference(this);
       }
     }
   }
   
-  public Reference(String name, String type, String callSites, Collection<Instance> instances, Instance declInstance) {
+  public Reference(String name, String type, String callSites, Collection<Instance> instances, 
+                   Instance declInstance, boolean setLastRef) {
     m_name         = name;
     m_type         = type;
     m_callSites    = callSites;
@@ -61,18 +66,18 @@ public class Reference {
       m_instances.addAll(instances);
       startInstanceLiftTime(instances);
       for (Instance instance : instances) {
-        if (!instance.isBounded()) {
+        if (!instance.isBounded() && setLastRef) {
           instance.setLastReference(this);
         }
       }
     }
   }
   
-  public void assignInstance(Instance instance) throws Exception {
+  public void assignInstance(Instance instance, boolean setLastRef) throws Exception {
     if (!isConstantReference()) {
       m_instances.add(instance);
       startInstanceLiftTime(instance);
-      if (!instance.isBounded()) {
+      if (!instance.isBounded() && setLastRef) {
         instance.setLastReference(this);
       }
     }
@@ -81,12 +86,12 @@ public class Reference {
     }
   }
   
-  public void assignInstance(Collection<Instance> instances) throws Exception {
+  public void assignInstance(Collection<Instance> instances, boolean setLastRef) throws Exception {
     if (!isConstantReference()) {
       m_instances.addAll(instances);
       startInstanceLiftTime(instances);
       for (Instance instance : instances) {
-        if (!instance.isBounded()) {
+        if (!instance.isBounded() && setLastRef) {
           instance.setLastReference(this);
         }
       }
@@ -150,6 +155,11 @@ public class Reference {
     for (Instance instance : m_instances) {
       updateFieldInstancesValue("", new ArrayList<Instance>(), instance, m_name, settedInstances, formula);
     }
+  }
+
+  // assign new life time values to instance
+  public void resetInstanceLiftTime(Instance instance, long startTime, long endTime) {
+    m_lifeTimes.put(instance, new Long[] {startTime, endTime});
   }
 
   private void findSetInstances(String lastPath, List<Instance> preInstances, 
@@ -228,7 +238,7 @@ public class Reference {
   
   public boolean canReferenceSetValue() {
     // fieldReferences always have concrete type name
-    return m_type.equals("Unknown-Type");
+    return m_type.equals("Unknown-Type") || m_declInstance == null;
   }
   
   public void setType(String type) {
@@ -239,13 +249,31 @@ public class Reference {
     return m_name;
   }
   
+  public String getNameWithCallSite() {
+    return (m_callSites.length() > 0) ? "<" + m_callSites + ">" + m_name : m_name;
+  }
+  
   public String getLongName() {
+    return getLongName(new HashSet<List<Object>>());
+  }
+  
+  private String getLongName(HashSet<List<Object>> prevInstances) {
     String longName = m_name;
     if (m_declInstance != null) {
       if (!m_declInstance.isBounded() && m_declInstance.getLastReference() != null) {
-        longName = m_declInstance.getLastReference().getLongName() + "." + m_name;
+        List<Object> current = new ArrayList<Object>();
+        current.add(m_declInstance);
+        current.add(this);
+        
+        if (prevInstances.contains(current)) {
+          longName = m_declInstance.getLastRefName() + "." + m_name;
+        }
+        else {
+          prevInstances.add(current);
+          longName = m_declInstance.getLastReference().getLongName(prevInstances) + "." + m_name;
+        }
       }
-      else if (m_declInstance.isConstant()){
+      else if (m_declInstance.isConstant()) {
         longName = m_declInstance.getValue() + "." + m_name;
       }
       else if (m_declInstance.isBounded()) {
@@ -254,13 +282,26 @@ public class Reference {
     }
     return longName;
   }
-  
 
   public String getLongNameWithCallSites() {
+    return getLongNameWithCallSites(new HashSet<List<Object>>());
+  }
+  
+  private String getLongNameWithCallSites(HashSet<List<Object>> prevInstances) {
     String longName = m_name;
     if (m_declInstance != null) {
       if (!m_declInstance.isBounded() && m_declInstance.getLastReference() != null) {
-        longName = m_declInstance.getLastReference().getLongNameWithCallSites() + "." + m_name;
+        List<Object> current = new ArrayList<Object>();
+        current.add(m_declInstance);
+        current.add(this);
+        
+        if (prevInstances.contains(current)) {
+          longName = m_declInstance.getLastReference().getNameWithCallSite() + "." + m_name;
+        }
+        else {
+          prevInstances.add(current);
+          longName = m_declInstance.getLastReference().getLongNameWithCallSites(prevInstances) + "." + m_name;
+        }
       }
       else if (m_declInstance.isConstant()){
         longName = m_declInstance.getValue() + "." + m_name;
@@ -368,26 +409,25 @@ public class Reference {
     Reference cloneRef = (Reference) cloneMap.get(this);
     if (cloneRef == null) {
       // create the clone reference with no instance initially
-      cloneRef = new Reference(m_name, m_type, m_callSites, (Instance)null, declInstance);
+      cloneRef = new Reference(m_name, m_type, m_callSites, (Instance) null, declInstance, true);
       
       // clone instances
       for (Instance instance : m_instances) {
         Instance cloneInstance = instance.deepClone(cloneMap);
-  
-        try {
-          Reference oriLastRef = cloneInstance.getLastReference();
-          cloneRef.assignInstance(cloneInstance); // the lastRef of cloneInstance is now set to cloneRef
-          if (instance.getLastReference() != this) {
-            // should not reset by new Reference()
-            cloneInstance.setLastReference(oriLastRef); // wait for the true lastRef
-          }
-        } catch (Exception e) {e.printStackTrace();}
+        cloneRef.m_instances.add(cloneInstance);
+        if (!cloneInstance.isBounded() && instance.getLastReference() == this) {
+          cloneInstance.setLastReference(cloneRef);
+        }
       }
       
       // clone old instances
       for (Instance instance : m_oldInstances) {
         Instance cloneInstance = instance.deepClone(cloneMap);
         cloneRef.m_oldInstances.add(cloneInstance);
+        if (!cloneInstance.isBounded() && instance.getLastReference() == this) {
+          // this should only happen in forward execution
+          cloneInstance.setLastReference(cloneRef);
+        }
       }
       
       // clone instance life time
@@ -403,6 +443,71 @@ public class Reference {
       cloneMap.put(this, cloneRef);
     }
     return cloneRef;
+  }
+
+  // create reference from persistence string
+  public static Reference createReference(int num, String type, String name, List<Integer> instances, 
+      List<Integer> oldInstances, Hashtable<Integer, Long[]> lifeTimes, int numDeclInstance, 
+      Hashtable<Integer, Instance> instanceNumMap, Hashtable<Integer, Reference> referenceNumMap) {
+    
+    Reference reference = referenceNumMap.get(num);
+    if (reference == null) {
+      reference = new Reference(name, type, "", (Instance) null, null, false);
+      referenceNumMap.put(num, reference);
+    }
+    
+    // use reflection to assign fields    
+    // m_type, m_value
+    Utils.setField(Reference.class, "m_type", reference, type);
+    Utils.setField(Reference.class, "m_name", reference, name);
+
+    // lifetimes
+    Hashtable<Instance, Long[]> lifeTimesTable = new Hashtable<Instance, Long[]>();
+    Utils.setField(Reference.class, "m_lifeTimes", reference, lifeTimesTable);
+    
+    // m_instances
+    HashSet<Instance> instanceSet = new HashSet<Instance>();
+    for (Integer numInstance : instances) {
+      Instance instance = numInstance < 0 ? null : instanceNumMap.get(numInstance);
+      if (numInstance >= 0 && instance == null) {
+        instance = new Instance("", "", null);
+        instanceNumMap.put(numInstance, instance);
+      }
+      instanceSet.add(instance);
+      
+      Long[] lifeTime = lifeTimes.get(numInstance);
+      if (lifeTime != null) {
+        lifeTimesTable.put(instance, lifeTime);
+      }
+    }
+    Utils.setField(Reference.class, "m_instances", reference, instanceSet);
+    
+    // m_oldInstances
+    HashSet<Instance> oldInstanceSet = new HashSet<Instance>();
+    for (Integer numInstance : oldInstances) {
+      Instance instance = numInstance < 0 ? null : instanceNumMap.get(numInstance);
+      if (numInstance >= 0 && instance == null) {
+        instance = new Instance("", "", null);
+        instanceNumMap.put(numInstance, instance);
+      }
+      oldInstanceSet.add(instance);
+      
+      Long[] lifeTime = lifeTimes.get(numInstance);
+      if (lifeTime != null) {
+        lifeTimesTable.put(instance, lifeTime);
+      }
+    }
+    Utils.setField(Reference.class, "m_oldInstances", reference, oldInstanceSet);
+    
+    // m_declInstance
+    Instance instance = numDeclInstance < 0 ? null : instanceNumMap.get(numDeclInstance);
+    if (numDeclInstance >= 0 && instance == null) {
+      instance = new Instance("", "", null);
+      instanceNumMap.put(numDeclInstance, instance);
+    }
+    Utils.setField(Reference.class, "m_declInstance", reference, instance);
+    
+    return reference;
   }
   
   private void startInstanceLiftTime(Instance instance) {

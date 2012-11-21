@@ -1,4 +1,4 @@
-package hk.ust.cse.Prevision;
+package hk.ust.cse.Prevision.Misc;
 
 public class InvalidStackTraceException extends Exception {
   /**

@@ -3,7 +3,6 @@ package hk.ust.cse.Prevision.Solver;
 import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
-import hk.ust.cse.Wala.MethodMetaData;
 
 import java.util.ArrayList;
 import java.util.Hashtable;
@@ -15,14 +14,20 @@ public interface ICommand {
       assertCmds            = new ArrayList<String>();
       assertCmdCondsMapping = new Hashtable<String, List<Condition>>();
       nameInstanceMapping   = new Hashtable<String, Instance>();
+      constInstanceMapping  = new Hashtable<String, Instance>();
+      instanceNameMapping   = new Hashtable<Instance, String>();
     }
     
     public String                             command;
     public List<String>                       assertCmds;
     public Hashtable<String, List<Condition>> assertCmdCondsMapping;
     public Hashtable<String, Instance>        nameInstanceMapping;
+    public Hashtable<String, List<long[]>>    typeRanges;
+    public Hashtable<String, Instance>        constInstanceMapping;
+    public Hashtable<Instance, String>        instanceNameMapping;
   }
-  
-  public abstract TranslatedCommand translateToCommand(Formula formula, 
-      MethodMetaData methData, boolean keepUnboundedField, boolean retrieveUnsatCore);
+
+  public abstract String            getCheckCommand();
+  public abstract String            translateToCommand(Condition condition, boolean keepUnboundedField, boolean retrieveUnsatCore);
+  public abstract TranslatedCommand translateToCommand(Formula formula, boolean keepUnboundedField, boolean retrieveUnsatCore);
 }
