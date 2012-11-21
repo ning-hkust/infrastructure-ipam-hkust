@@ -1,7 +1,7 @@
 package hk.ust.cse.Wala;
 
 import java.io.IOException;
-import java.lang.reflect.Method;
+import java.lang.reflect.Member;
 
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.impl.Everywhere;
@@ -23,10 +23,10 @@ public class Jar2IR {
     return getIRFromMethodReference(walaAnalyzer, mr);
   }
   
-  public static IR getIR(WalaAnalyzer walaAnalyzer, Method method) {
+  public static IR getIR(WalaAnalyzer walaAnalyzer, Member methodOrCtor) {
     // Create a name representing the method whose IR we will visualize
     MethodReference mr = Jar2IRUtils.getMethodReference(
-        walaAnalyzer.getClassHierarchy(), method);
+        walaAnalyzer.getClassHierarchy(), methodOrCtor);
     
     return getIRFromMethodReference(walaAnalyzer, mr);
   }
