@@ -9,8 +9,10 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
@@ -831,6 +833,16 @@ public class Utils {
     return splits.toArray(new String[0]);
   }
   
+  public static <E> Collection<E> intersect(Collection<E> collection1, Collection<E> collection2) {
+    HashSet<E> common = new HashSet<E>();
+    for (E element : collection1) {
+      if (collection2.contains(element)) {
+        common.add(element);
+      }
+    }
+    return common;
+  }
+  
   public static String concatStrings(List<String> strings, String concatBy, boolean appendLast) {
     StringBuilder str = new StringBuilder();
     for (int i = 0, size = strings.size(); i < size; i++) {
@@ -855,6 +867,25 @@ public class Utils {
       }
     }
   } 
+  
+  // there should not be any null values in both the keys and the values
+  public static <E, T> Hashtable<T, E> reverseHashtable(Hashtable<E, T> map) {
+    Hashtable<T, E> reverseMap = new Hashtable<T, E>();
+    
+    Enumeration<E> keys = map.keys();
+    while (keys.hasMoreElements()) {
+      E key = (E) keys.nextElement();
+      T val = (T) map.get(key);
+      if (key != null && val != null) {
+        reverseMap.put(val, key);
+      }
+    }
+    return reverseMap;
+  }
+  
+  public static String trim(String str, String trimStart, String trimEnd) {
+    return str.replaceAll("^" + trimStart, "").replaceAll(trimEnd + "$", "");
+  }
   
   public static boolean loadJarFile(String jarFilePath) {
     boolean succeeded = false;
