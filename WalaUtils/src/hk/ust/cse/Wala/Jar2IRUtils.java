@@ -3,6 +3,8 @@ package hk.ust.cse.Wala;
 import hk.ust.cse.util.Utils;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Hashtable;
@@ -102,13 +104,14 @@ class Jar2IRUtils {
   }
   
   /**
-   * find method reference according to method name and line number
+   * find method reference according to method
    */
-  static MethodReference getMethodReference(ClassHierarchy cha, Method method) {
+  static MethodReference getMethodReference(ClassHierarchy cha, Member methodOrCtor) {
     MethodReference mr = null;
-    
+
     // get method name
-    String methodName = method.getDeclaringClass().getName() + "." + method.getName();
+    String methodName = methodOrCtor.getDeclaringClass().getName() + "." + 
+      ((methodOrCtor instanceof Method) ? methodOrCtor.getName() : "<init>");
     
     // get class name
     String clsName = methodName.replace('.', '/');
@@ -133,7 +136,7 @@ class Jar2IRUtils {
       
       // class name matches?
       String declaringClass = aClass.getName().toString();
-      declaringClass = Utils.getClassTypeJavaStr(declaringClass);
+      declaringClass = Utils.getClassTypeJavaStr(declaringClass, false);
       if (!methodName.startsWith(declaringClass)) {
         continue;
       }
@@ -143,7 +146,7 @@ class Jar2IRUtils {
         // method name matches?
         String methName = declaringClass + "." + aMethod.getName().toString();
         if (methName.equals(methodName)) {
-          if (isParametersSame(aMethod, method)) {
+          if (isParametersSame(aMethod, methodOrCtor)) {
             mr = aMethod.getReference();
             break;
           }
@@ -168,12 +171,13 @@ class Jar2IRUtils {
     }
   }
   
-  private static boolean isParametersSame(IMethod method1, Method method2) {
+  private static boolean isParametersSame(IMethod method1, Member methodOrCtor) {
     boolean isSame = false;
     
-    Class<?>[] paramTypes = method2.getParameterTypes();
-    int baseIndex = method1.isStatic() ? 0 : 1;
+    Class<?>[] paramTypes = (methodOrCtor instanceof Method) ? ((Method) methodOrCtor).getParameterTypes() : 
+                                                               ((Constructor<?>) methodOrCtor).getParameterTypes();
     
+    int baseIndex = method1.isStatic() ? 0 : 1;
     if ((method1.getNumberOfParameters() - baseIndex) == paramTypes.length) {
       isSame = true;
       for (int i = 0; i < paramTypes.length; i++) {

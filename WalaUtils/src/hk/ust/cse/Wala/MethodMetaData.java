@@ -202,6 +202,16 @@ public class MethodMetaData {
     }
     return basicBlock;
   }
+  
+  public ISSABasicBlock getLastBasicBlockForLine(int lineNo) {
+    ISSABasicBlock basicBlock = null;
+    
+    SSAInstruction inst = getLastInstructionForLine(lineNo);
+    if (inst != null) {
+      basicBlock = m_ir.getBasicBlockForInstruction(inst);
+    }
+    return basicBlock;
+  }
 
   public String getMethodSignature() {
     return m_ir.getMethod().getSignature();

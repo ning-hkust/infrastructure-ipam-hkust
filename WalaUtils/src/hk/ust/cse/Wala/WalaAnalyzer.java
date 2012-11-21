@@ -2,8 +2,10 @@ package hk.ust.cse.Wala;
 
 import hk.ust.cse.Wala.CallGraph.CallGraphBuilder;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.jar.JarFile;
 
 import com.ibm.wala.classLoader.IMethod;
@@ -16,6 +18,7 @@ import com.ibm.wala.ipa.callgraph.impl.DefaultEntrypoint;
 import com.ibm.wala.ipa.callgraph.impl.Util;
 import com.ibm.wala.ipa.cha.ClassHierarchy;
 import com.ibm.wala.ssa.SSAOptions;
+import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.config.AnalysisScopeReader;
 import com.ibm.wala.util.io.FileProvider;
@@ -24,27 +27,42 @@ public class WalaAnalyzer {
   
   //by default, do not compute call graph at first
   public WalaAnalyzer(String appJar) throws Exception {
-    m_jarFile = new JarFile(appJar);
-    
     // Create an object which caches IRs and related information, 
     // reconstructing them lazily on demand.
     m_irCache = new AnalysisCache();
     
     // Build an AnalysisScope which represents the set of classes to analyze. In particular,
     // we will analyze the contents of the appJar jar file and the Java standard libraries.
-    m_scope = AnalysisScopeReader.makeJavaBinaryAnalysisScope(m_jarFile.getName(), 
+    m_scope = AnalysisScopeReader.makePrimordialScope(
         FileProvider.getFile(CallGraphTestUtil.REGRESSION_EXCLUSIONS));
+
+    // add jar file to analysis scope
+    addJarFile(appJar);
+  }
+  
+  public void addJarFile(String appJar) throws Exception {
+    JarFile jarFile = new JarFile(appJar);
+    addJarFile(jarFile);
+  }
+  
+  public void addJarFile(JarFile jarFile) throws Exception {
+    m_scope.addToScope(ClassLoaderReference.Application, jarFile);
+    
+    if (m_jarFiles == null) {
+      m_jarFiles = new ArrayList<JarFile>();
+    }
+    m_jarFiles.add(jarFile);
     
     // Build a class hierarchy representing all classes to analyze.
     // This step will read the class files and organize them into a tree.
-    m_cha = Jar2IRUtils.getClassHierarchy(m_jarFile.getName(), m_scope);
+    m_cha = Jar2IRUtils.getClassHierarchy(jarFile.getName(), m_scope);
   
     // Set up options which govern analysis choices.  
     // In particular, we will use all Pi nodes when building the IR.
     m_options = new AnalysisOptions(m_scope, new HashSet<Entrypoint>());
     m_options.getSSAOptions().setPiNodePolicy(SSAOptions.getAllBuiltInPiNodes());
   }
-  
+ 
   public void recomputeCallGraph(Iterable<IMethod> additionalEntryPoints, CallGraphBuilder builder) {
     // retrieve all the Main classes (classes with a 'main') as 'entry points'
     // entry points are useful to construct the call graph
@@ -76,8 +94,8 @@ public class WalaAnalyzer {
     } catch (CancelException e) {e.printStackTrace(); /* should not throw */}
   }
   
-  public JarFile getJarFile() {
-    return m_jarFile;
+  public List<JarFile> getJarFiles() {
+    return m_jarFiles;
   }
   
   public AnalysisCache getAnalysisCache() {
@@ -100,10 +118,10 @@ public class WalaAnalyzer {
     return m_callGraph;
   }
   
-  private final JarFile         m_jarFile;
-  private final AnalysisCache   m_irCache;
-  private final ClassHierarchy  m_cha;
-  private final AnalysisScope   m_scope;
-  private final AnalysisOptions m_options;
-  private CallGraph             m_callGraph;
+  private List<JarFile>   m_jarFiles;
+  private AnalysisCache   m_irCache;
+  private ClassHierarchy  m_cha;
+  private AnalysisScope   m_scope;
+  private AnalysisOptions m_options;
+  private CallGraph       m_callGraph;
 }
