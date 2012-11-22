@@ -186,11 +186,32 @@ public class Formula {
       count = (count == null) ? 0 : count;
       
       // add loop
-      if (newlyVisited.previousBB != null && 
-          ((forward && newlyVisited.previousBB.getNumber() > newlyVisited.currentBB.getNumber()) || 
-          (!forward && newlyVisited.previousBB.getNumber() < newlyVisited.currentBB.getNumber()))) {
-        count++;
+      if (newlyVisited.previousBB != null) {
+        int previousLine = newlyVisited.methData.getLineNumber(newlyVisited.previousBB);
+        int currentLine  = newlyVisited.methData.getLineNumber(newlyVisited.currentBB);
+        
+        if (forward) {
+          if (previousLine > 0 && currentLine > 0 && previousLine > currentLine) {
+            count++;
+          }
+          else if (previousLine <= 0 || currentLine <= 0 || previousLine == currentLine) {
+            if (newlyVisited.previousBB.getNumber() > newlyVisited.currentBB.getNumber()) {
+              count++;
+            }
+          }
+        }
+        else {
+          if (previousLine > 0 && currentLine > 0 && previousLine < currentLine) {
+            count++;
+          }
+          else if (previousLine <= 0 || currentLine <= 0 || previousLine == currentLine) {
+            if (newlyVisited.previousBB.getNumber() < newlyVisited.currentBB.getNumber()) {
+              count++;
+            }
+          }
+        }
       }
+      
       m_visitedRecord.put(newlyVisited.currentBB, count);
     }
   }

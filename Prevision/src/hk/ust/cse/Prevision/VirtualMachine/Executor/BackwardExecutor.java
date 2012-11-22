@@ -200,10 +200,9 @@ public class BackwardExecutor extends AbstractExecutor {
         inclLine = execOptions.inclInnerMostLine;
       }
       starting[0] = starting[0] || (infoItem.startingBB && startLine > 0);
-      
-      int instIndex = infoItem.currentBB.getLastInstructionIndex();
-      String lineNo = (instIndex >= 0) ? " @ line " + methData.getLineNumber(instIndex) : "";
-      System.out.println("Computing BB" + infoItem.currentBB.getNumber() + lineNo);
+
+      int lineNo = methData.getLineNumber(infoItem.currentBB);
+      System.out.println("Computing BB" + infoItem.currentBB.getNumber() + (lineNo >= 0 ? (" @ line " + lineNo) : ""));
       
       // compute for this BB
       int origWorklistSize = workList.size();
@@ -407,7 +406,7 @@ public class BackwardExecutor extends AbstractExecutor {
         
         // use SMT Solver to check precond and obtain a model
         SMT_RESULT smtResult = m_smtChecker.smtCheck(
-            precond, false, true, true, true, execOptions.heuristicBacktrack, true);
+            precond, false, true, false, true, execOptions.heuristicBacktrack, true);
         precond.setSolverResult(m_smtChecker);
         
         // trigger callbacks
@@ -831,12 +830,12 @@ public class BackwardExecutor extends AbstractExecutor {
     try {
       AbstractHandler instHandler = new CompleteBackwardHandler();
       SMTChecker smtChecker = new SMTChecker(SMTChecker.SOLVERS.YICES);
-      BackwardExecutor executor = new BackwardExecutor(args[0]/*jar file path*/, null, instHandler, smtChecker);
+      BackwardExecutor executor = new BackwardExecutor(args[0]/*jar file path*/, args[1], instHandler, smtChecker);
       Utils.loadJarFile(args[0]);
       
       // read stack frames
       CallStack callStack = new CallStack(true);
-      for (int i = 1; i < args.length; i++) {
+      for (int i = 2; i < args.length; i++) {
         String methName = args[i] /*method name*/;
         int lineNo      = Integer.parseInt(args[++i]) /*line number*/;
         
