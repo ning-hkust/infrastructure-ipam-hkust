@@ -122,6 +122,16 @@ public class MethodMetaData {
     }
     return lineNo;
   }
+  
+  public int getLineNumber(ISSABasicBlock bb) {
+    int instIndex = bb.getLastInstructionIndex();
+    
+    int lineNo = -1;
+    if (instIndex >= 0) {
+      lineNo = getLineNumber(instIndex);
+    }
+    return lineNo;
+  }
 
   public int getFirstInstructionIndexForLine(int lineNo) {
     int index = -1;

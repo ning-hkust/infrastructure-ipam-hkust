@@ -310,9 +310,10 @@ public abstract class AbstractExecutor {
     List<Object[]> visitedList    = new ArrayList<Object[]>();
     List<Object[]> notvisitedList = new ArrayList<Object[]>();
     for (Object[] childrenBlock : childrenBlocks) {
+      ISSABasicBlock bb = (ISSABasicBlock) childrenBlock[0];
       // make sure we are not pushing the current node again. Sometimes, a 
       // monitorexit node can be a child of itself, making the search endless.
-      if (((ISSABasicBlock) childrenBlock[0]).getNumber() == currentInfo.currentBB.getNumber()) {
+      if (bb.getNumber() == currentInfo.currentBB.getNumber()) {
         continue;
       }
       
@@ -323,6 +324,11 @@ public abstract class AbstractExecutor {
       }
       else if (count == null || count == 0) {
         notvisitedList.add(childrenBlock);
+      }
+      else if (count >= maxLoop) {
+        int lineNo = methData.getLineNumber(bb);
+        System.out.println("BB" + bb.getNumber() + (lineNo >= 0 ? (" @ line " + lineNo) : "") + 
+            " is discarded due to reaching max loop unrollment!");
       }
     }
 
