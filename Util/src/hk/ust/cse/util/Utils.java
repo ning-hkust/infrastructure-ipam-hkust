@@ -495,7 +495,7 @@ public class Utils {
         if (!isSubClass) {
           Class<?>[] interfaces = currentClass.getInterfaces();
           for (int i = 0; i < interfaces.length && !isSubClass; i++) {
-            isSubClass = interfaces[i].equals(cls1);
+            isSubClass = interfaces[i].equals(cls1) || isSubClass(cls1, interfaces[i]);
           }
         }
       }
