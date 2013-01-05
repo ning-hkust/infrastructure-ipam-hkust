@@ -14,6 +14,7 @@ import hk.ust.cse.Prevision.VirtualMachine.Instance.INSTANCE_OP;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
 import hk.ust.cse.Prevision.VirtualMachine.Relation;
 import hk.ust.cse.Prevision.VirtualMachine.Executor.AbstractExecutor.BBorInstInfo;
+import hk.ust.cse.Prevision_PseudoImpl.PseudoImplMap;
 import hk.ust.cse.Wala.MethodMetaData;
 
 import java.util.ArrayList;
@@ -1229,13 +1230,17 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       if (preCond != null) {
         afterInvocation(invokeInst, callSites, currentBB, ref, refType, def, params, preCond.getRefMap(), preCond.getDefMap());
         refRef = findOrCreateReference(ref, refType, callSites, currentBB, preCond.getRefMap());
-        
-        // add type condition
+
+        // add type condition: v1 instanceof the concrete method class
         if (instInfo.target != null && instInfo.target[0].equals(invokeInst) && instInfo.target[1] != null) {
-          String declClass = ((IR) (instInfo.target[1])).getMethod().getDeclaringClass().getName().toString();
-          TypeConditionTerm typeTerm = new TypeConditionTerm(
-              refRef.getInstance(), TypeConditionTerm.Comparator.OP_INSTANCEOF, declClass);
-          conditionList.add(new Condition(typeTerm));
+          String methodSig = ((IR) (instInfo.target[1])).getMethod().getSignature();
+          boolean usedPseudo = instInfo.executor.usePseudo() && PseudoImplMap.findPseudoImpl(methodSig) != null;
+          if (!usedPseudo) {
+            String declClass = ((IR) (instInfo.target[1])).getMethod().getDeclaringClass().getName().toString();
+            TypeConditionTerm typeTerm = new TypeConditionTerm(
+                refRef.getInstance(), TypeConditionTerm.Comparator.OP_INSTANCEOF, declClass);
+            conditionList.add(new Condition(typeTerm));
+          }
         }
         
         // new condition: ref != null

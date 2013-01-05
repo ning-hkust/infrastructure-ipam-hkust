@@ -847,8 +847,8 @@ public class BackwardExecutor extends AbstractExecutor {
       execOptions.maxDispatchTargets  = 2;
       execOptions.maxRetrieve         = 10;
       execOptions.maxSmtCheck         = 5000;
-      execOptions.maxInvokeDepth      = 1;
-      execOptions.maxLoop             = 7;
+      execOptions.maxInvokeDepth      = 10;
+      execOptions.maxLoop             = 2;
       execOptions.skipUselessBranches = false;
       execOptions.skipUselessMethods  = false;
       

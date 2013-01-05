@@ -299,16 +299,18 @@ public class YicesCommand implements ICommand {
       }
       
       // sort such that super class is at front
-      Collections.sort(allClasses, new java.util.Comparator<String>() {
-        @Override
-        public int compare(String class1, String class2) {
-          return subClassMap.get(class1).contains(class2) ? -1 : 1;
+      List<String> sorted = new ArrayList<String>();
+      for (String clazz : allClasses) {
+        int insertAt = sorted.size();
+        for (int i = 0, size = sorted.size(); i < size && insertAt == size; i++) {
+          insertAt = subClassMap.get(clazz).contains(sorted.get(i)) ? i : insertAt;
         }
-      });
+        sorted.add(insertAt, clazz);
+      }
       
       long current = min;
       long splitSize = (max - min) / (long) def_types.size();
-      for (String className : allClasses) {
+      for (String className : sorted) {
         List<long[]> subRanges = new ArrayList<long[]>();
         subRanges.add(new long[] {current, (current += splitSize) - 1});
         ranges.put(className, subRanges);
