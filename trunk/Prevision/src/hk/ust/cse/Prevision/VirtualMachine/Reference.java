@@ -1,7 +1,6 @@
 package hk.ust.cse.Prevision.VirtualMachine;
 
 import hk.ust.cse.Prevision.PathCondition.Formula;
-import hk.ust.cse.util.Utils;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -456,14 +455,14 @@ public class Reference {
       referenceNumMap.put(num, reference);
     }
     
-    // use reflection to assign fields    
+    // assign fields    
     // m_type, m_value
-    Utils.setField(Reference.class, "m_type", reference, type);
-    Utils.setField(Reference.class, "m_name", reference, name);
+    reference.m_type = type;
+    reference.m_name = name;
 
     // lifetimes
     Hashtable<Instance, Long[]> lifeTimesTable = new Hashtable<Instance, Long[]>();
-    Utils.setField(Reference.class, "m_lifeTimes", reference, lifeTimesTable);
+    reference.m_lifeTimes = lifeTimesTable;
     
     // m_instances
     HashSet<Instance> instanceSet = new HashSet<Instance>();
@@ -480,7 +479,7 @@ public class Reference {
         lifeTimesTable.put(instance, lifeTime);
       }
     }
-    Utils.setField(Reference.class, "m_instances", reference, instanceSet);
+    reference.m_instances = instanceSet;
     
     // m_oldInstances
     HashSet<Instance> oldInstanceSet = new HashSet<Instance>();
@@ -497,7 +496,7 @@ public class Reference {
         lifeTimesTable.put(instance, lifeTime);
       }
     }
-    Utils.setField(Reference.class, "m_oldInstances", reference, oldInstanceSet);
+    reference.m_oldInstances = oldInstanceSet;
     
     // m_declInstance
     Instance instance = numDeclInstance < 0 ? null : instanceNumMap.get(numDeclInstance);
@@ -505,7 +504,7 @@ public class Reference {
       instance = new Instance("", "", null);
       instanceNumMap.put(numDeclInstance, instance);
     }
-    Utils.setField(Reference.class, "m_declInstance", reference, instance);
+    reference.m_declInstance = instance;
     
     return reference;
   }
@@ -535,11 +534,11 @@ public class Reference {
     }
   }
 
-  private String                            m_type;
-  private final String                      m_name;
-  private final String                      m_callSites;
-  private final HashSet<Instance>           m_instances;    // instance should never be null, even if it is a null reference, use a 'null' instance
-  private final HashSet<Instance>           m_oldInstances;
-  private final Instance                    m_declInstance; // instance that holds this reference, should be null if it is not a field reference
-  private final Hashtable<Instance, Long[]> m_lifeTimes;
+  private String                      m_type;
+  private String                      m_name;
+  private String                      m_callSites;
+  private HashSet<Instance>           m_instances;    // instance should never be null, even if it is a null reference, use a 'null' instance
+  private HashSet<Instance>           m_oldInstances;
+  private Instance                    m_declInstance; // instance that holds this reference, should be null if it is not a field reference
+  private Hashtable<Instance, Long[]> m_lifeTimes;
 }

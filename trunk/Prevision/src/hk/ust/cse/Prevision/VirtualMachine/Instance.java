@@ -1,7 +1,6 @@
 package hk.ust.cse.Prevision.VirtualMachine;
 
 import hk.ust.cse.Prevision.PathCondition.Formula;
-import hk.ust.cse.util.Utils;
 
 import java.util.Collection;
 import java.util.Enumeration;
@@ -543,14 +542,14 @@ public class Instance {
       instanceNumMap.put(num, instance);
     }
     
-    // use reflection to assign fields
+    // assign fields
     // m_left
     Instance left = numLeft < 0 ? null : instanceNumMap.get(numLeft);
     if (numLeft >= 0 && left == null) {
       left = new Instance("", "", null);
       instanceNumMap.put(numLeft, left);
     }
-    Utils.setField(Instance.class, "m_left", instance, left);
+    instance.m_left = left;
 
     // m_right
     Instance right = numRight < 0 ? null : instanceNumMap.get(numRight);
@@ -558,15 +557,15 @@ public class Instance {
       right = new Instance("", "", null);
       instanceNumMap.put(numRight, right);
     }
-    Utils.setField(Instance.class, "m_right", instance, right);
+    instance.m_right = right;
     
     // m_op
     Instance.INSTANCE_OP op = numOp < 0 ? null : Instance.INSTANCE_OP.fromIndex(numOp);
-    Utils.setField(Instance.class, "m_op", instance, op);
+    instance.m_op = op;
     
     // m_value, m_type
-    Utils.setField(Instance.class, "m_value", instance, value);
-    Utils.setField(Instance.class, "m_type", instance, type);
+    instance.m_value = value;
+    instance.m_type  = type;
     
     // m_lastRef
     Reference lastRef = numLastRef < 0 ? null : referenceNumMap.get(numLastRef);
@@ -574,7 +573,7 @@ public class Instance {
       lastRef = new Reference("", "", "", (Instance) null, null, false);
       referenceNumMap.put(numLastRef, lastRef);
     }
-    Utils.setField(Instance.class, "m_lastRef", instance, lastRef);
+    instance.m_lastRef = lastRef;
     
     // m_fields
     Hashtable<String, Reference> fields = new Hashtable<String, Reference>();
@@ -589,23 +588,23 @@ public class Instance {
       }
       fields.put(key, fieldRef);
     }
-    Utils.setField(Instance.class, "m_fields", instance, fields);
+    instance.m_fields = fields;
 
     return instance;
   }
 
-  private Instance                           m_left;
-  private Instance                           m_right;
-  private INSTANCE_OP                       m_op;
-  private String                             m_value;
-  private String                             m_type;
-  private Reference                          m_lastRef;     // the lastRef is only useful when the instance not bounded
-  private long                               m_createTime;
-  private long                               m_setValueTime;
-  private ISSABasicBlock                     m_createBlock;
-  private ISSABasicBlock                     m_setValueBlock;
-  private Instance                           m_setValueBy;
-  private HashSet<Instance>                  m_boundValues; // the boundValues is only useful when the instance not bounded
-  private final String                       m_initCallSites;
-  private final Hashtable<String, Reference> m_fields;
+  private Instance                     m_left;
+  private Instance                     m_right;
+  private INSTANCE_OP                 m_op;
+  private String                       m_value;
+  private String                       m_type;
+  private Reference                    m_lastRef;     // the lastRef is only useful when the instance not bounded
+  private long                         m_createTime;
+  private long                         m_setValueTime;
+  private ISSABasicBlock               m_createBlock;
+  private ISSABasicBlock               m_setValueBlock;
+  private Instance                     m_setValueBy;
+  private HashSet<Instance>            m_boundValues; // the boundValues is only useful when the instance not bounded
+  private String                       m_initCallSites;
+  private Hashtable<String, Reference> m_fields;
 }
