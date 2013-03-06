@@ -20,7 +20,6 @@ public class SubClassHack {
       s_frequentList.put("java.util.Map", list1);
       List<String> list2 = new ArrayList<String>();
       list2.add("Ljava/util/HashSet");
-      list2.add("Ljava/util/TreeSet");
       s_frequentList.put("java.util.Set", list2);
       List<String> list3 = new ArrayList<String>();
       list3.add("Ljava/util/AbstractList$Itr");
@@ -47,6 +46,9 @@ public class SubClassHack {
       List<String> list9 = new ArrayList<String>();
       list9.add("Ljava/io/ByteArrayOutputStream");
       s_frequentList.put("java.io.OutputStream", list9);
+      List<String> list10 = new ArrayList<String>();
+      list10.add("Ljava/io/ByteArrayInputStream");
+      s_frequentList.put("java.io.InputStream", list10);
     }
     
     superClass = Utils.getClassTypeJavaStr(superClass);
