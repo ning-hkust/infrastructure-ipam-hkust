@@ -29,6 +29,11 @@ public class LRUCache {
     }
   }
   
+  public Object remove(Object key) {
+    m_usedSequence.remove(key);
+    return m_cache.remove(key);
+  }
+  
   public Object find(Object key) {
     Object cached = m_cache.get(key);
     if (cached != null) {

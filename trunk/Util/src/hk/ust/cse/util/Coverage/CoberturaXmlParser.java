@@ -11,6 +11,7 @@ import org.dom4j.DocumentException;
 import org.dom4j.Element;
 import org.dom4j.Node;
 import org.dom4j.io.SAXReader;
+import org.xml.sax.SAXException;
 
 public class CoberturaXmlParser {
   public CoberturaXmlParser(String coberturaXmlFile) throws FileNotFoundException {
@@ -43,14 +44,16 @@ public class CoberturaXmlParser {
       treeWalk(m_coberturaXmlDocument, m_allPackages, m_htPackagesMap);
 
       return true;
-    } catch (DocumentException e) {
+    } catch (Exception e) {
       System.err.println("Xml file is corrupted!");
     }
     return false;
   }
 
-  private Document toDocument(File xmlFile) throws DocumentException {
+  private Document toDocument(File xmlFile) throws DocumentException, SAXException {
     SAXReader reader = new SAXReader();
+    reader.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+    
     Document document = reader.read(m_coberturaXmlFile);
     return document;
   }
@@ -63,7 +66,7 @@ public class CoberturaXmlParser {
   private void treeWalk(Element element, List<Package> pkgList,
       Hashtable<String, Package> pkgsMap, Package curPkg, Class curClass,
       Method curMethod, Line curLine) {
-
+    
     for (int i = 0, size = element.nodeCount(); i < size; i++) {
       Node node = element.node(i);
       if (node instanceof Element) {
