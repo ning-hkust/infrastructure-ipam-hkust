@@ -15,6 +15,7 @@ import hk.ust.cse.Prevision.VirtualMachine.Relation;
 import hk.ust.cse.util.Utils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashSet;
@@ -59,7 +60,8 @@ public class YicesCommand implements ICommand {
     StringBuilder command = new StringBuilder();
     command.append(defineTypes(references));
     command.append(defineInstances());
-    String defineRelations   = defineRelations();
+    String defineRelations = defineRelations();
+    addCommonContracts();
     String translatedCondStr = translateConditions();
     command.append(defineHelperVariables());
     command.append(defineRelations);
@@ -262,6 +264,14 @@ public class YicesCommand implements ICommand {
               defineType(declInstance, basic_types, def_types);
             }
           }
+          if (isConstStringField(instance) >= 0) {
+            if (!def_types.containsKey("Ljava/lang/String")) {
+              def_types.put("Ljava/lang/String", "");
+            }
+            if (!def_types.containsKey("[C")) {
+              def_types.put("[C", "");
+            }
+          }
         }
       }
     }
@@ -292,7 +302,7 @@ public class YicesCommand implements ICommand {
         Enumeration<String> keys2 = def_types.keys();
         while (keys2.hasMoreElements()) {
           String key2 = (String) keys2.nextElement();
-          if (key != key2 && Utils.isSubClass(key, key2)) {
+          if (key != key2 && Utils.canCastTo(key, key2)) {
             subClasses.add(key2);
           }
         }
@@ -380,19 +390,29 @@ public class YicesCommand implements ICommand {
     StringBuilder command = new StringBuilder();
 
     // define instances appear in conditions
-    HashSet<String> defined = new HashSet<String>();
+    HashSet<String> definedNames = new HashSet<String>();
     for (Condition condition : m_formula.getConditionList()) {
       List<ConditionTerm> terms = condition.getConditionTerms();
       for (ConditionTerm term : terms) {
-        Instance[] instances = term.getInstances();
+        List<Instance> instances = new ArrayList<Instance>(Arrays.asList(term.getInstances()));
+        
+        // make sure constant strings get define
+        for (int i = 0; i < instances.size(); i++) {
+          Instance instance = instances.get(i);
+          if (isConstStringField(instance) >= 0) {
+            instances.add(0, instance.getToppestInstance());
+            i++;
+          }
+        }
+        
         for (Instance instance : instances) {
           List<String> defines = translateToDefString(instance);
           for (String define : defines) {
             if (define.length() > 0) {
               String defineName = define.substring(0, define.indexOf("::"));
-              if (!defined.contains(defineName)) {
+              if (!definedNames.contains(defineName)) {
                 command.append(define);
-                defined.add(defineName);
+                definedNames.add(defineName);
               }
             }
           }
@@ -415,14 +435,23 @@ public class YicesCommand implements ICommand {
         if (rangeValue != null) {
           instances.add(rangeValue);
         }
+        // make sure constant strings get define
+        for (int j = 0; j < instances.size(); j++) {
+          Instance instance = instances.get(j);
+          if (isConstStringField(instance) >= 0) {
+            instances.add(0, instance.getToppestInstance());
+            j++;
+          }
+        }
+        
         for (Instance instance : instances) {
           List<String> defines = translateToDefString(instance);
           for (String define : defines) {
             if (define.length() > 0) {
               String defineName = define.substring(0, define.indexOf("::"));
-              if (!defined.contains(defineName)) {
+              if (!definedNames.contains(defineName)) {
                 command.append(define);
-                defined.add(defineName);
+                definedNames.add(defineName);
               }
             }
           }
@@ -500,6 +529,22 @@ public class YicesCommand implements ICommand {
   private void defineRelationUpdates(Relation relation, List<String> defineUpdateCmds, Hashtable<String, HashSet<String>> dependBy) {
     // updates and reads
     String relationName = YicesUtils.filterChars(relation.getName());
+    
+    // adjust order such that, constant string values are always update first
+    if (relationName.equals("@@array")) {
+      for (int i = 0; i < relation.getFunctionCount(); i++) {
+        if (relation.isUpdate(i)) {
+          Instance domain = relation.getDomainValues().get(i)[0];
+          if (domain.getLastReference() != null && domain.getLastRefName().equals("value") && 
+              domain.getLastReference().getDeclaringInstance() != null && 
+              domain.getLastReference().getDeclaringInstance().isConstant()) {
+            relation.move(i, 0);
+            relation.getFunctionTimes().set(0, Long.MIN_VALUE);
+          }
+        }
+      }
+    }
+    
     int maxUpdates = Math.min(relation.getFunctionCount(), 256); // avoid JVM crash
     for (int i = 0; i < maxUpdates; i++) {
       Instance[] domainValues = relation.getDomainValues().get(i);
@@ -519,7 +564,15 @@ public class YicesCommand implements ICommand {
         updateCmd.append(lastUpdate >= 0 ? ("@" + (lastUpdate + 1)) : "");
         updateCmd.append(" (");
         for (int j = 0; j < domainValues.length; j++) {
-          updateCmd.append(translateInstance(domainValues[j]).m_value);
+          if (relation.isArrayRelation() && j == 1) {
+            TranslatedInstance indexInstance = translateInstance(domainValues[j]);
+            indexInstance = makeHelperWhenNecessary(indexInstance, "number"); // the index should always be number
+            updateCmd.append(indexInstance.m_value);
+          }
+          else {
+            updateCmd.append(translateInstance(domainValues[j]).m_value);
+          }
+          
           if (j != domainValues.length - 1) {
             updateCmd.append(" ");
           }
@@ -844,6 +897,37 @@ public class YicesCommand implements ICommand {
     return assertCmd.toString();
   }
   
+  private void addCommonContracts() {
+    List<Condition> newContracts = new ArrayList<Condition>();
+
+    Instance zero = new Instance("#!0", "I", null);
+    HashSet<Instance> added = new HashSet<Instance>();
+    for (Condition condition : m_formula.getConditionList()) {
+      HashSet<Instance> instances = condition.getRelatedInstances(m_formula, false, true);
+      for (Instance instance : instances) {
+        String fieldName = null;
+        if (instance.isRelationRead()) {
+          fieldName = Relation.getReadStringRelName(instance.toString()).toLowerCase();
+        }
+        else if (instance.getLastReference() != null && instance.getLastRefType().equals("I")) {
+          fieldName = instance.getLastRefName().toLowerCase();
+        }
+        
+        if (fieldName != null && 
+           (fieldName.endsWith("size") || fieldName.endsWith("count") || 
+            fieldName.endsWith("length") || fieldName.endsWith("cursor"))) {
+          if (!added.contains(instance)) {
+            newContracts.add(new Condition(
+                new BinaryConditionTerm(instance, Comparator.OP_GREATER_EQUAL, zero)));
+            added.add(instance);
+          }
+        }
+      }
+    }
+    
+    m_formula.getConditionList().addAll(newContracts);
+  }
+  
   private String translateConditions() {
     StringBuilder command = new StringBuilder();
     
@@ -1121,6 +1205,13 @@ public class YicesCommand implements ICommand {
         case SHL:
         case SHR:
         case USHR:
+          if (Utils.isInteger(rightInstance.m_value)) {
+            transInstance = translateShiftConstantInstance(leftInstance, instance.getOp(), rightInstance);
+          }
+          else {
+            transInstance = translateBitVectorInstance(leftInstance, instance.getOp(), rightInstance);
+          }
+          break;
         case AND:
         case OR:
         case XOR:
@@ -1220,6 +1311,40 @@ public class YicesCommand implements ICommand {
     ret.append(")");
     
     return new TranslatedInstance(ret.toString(), "bitvector32");
+  }
+  
+  // there are two notes here: 1) SHR will have the new leftmost bit same as the 
+  // original leftmost bit, thus in case of leftmost bit is 1, it does not equal to / 2^k. 
+  // 2) the good news is: although division in Java for negative odd numbers will be one 
+  // bigger than right-shift, for example: -15 / 4 = -3, -15 >> 2 = -4, 'div' operation in 
+  // yices have the same result as right-shift, meaning that -15 div 4 = -4. So replacing 
+  // >>/>>> with 'div' in yices is precise in this situation.
+  private TranslatedInstance translateShiftConstantInstance(TranslatedInstance leftInstance, 
+      INSTANCE_OP op, TranslatedInstance rightInstance) {
+    
+    StringBuilder ret = new StringBuilder();
+    ret.append("(");
+    switch (op) {
+      case SHL: // << in java
+        ret.append("* ");
+        break;
+      case SHR: // >> in java
+        ret.append("div ");
+        break;
+      case USHR: // >>> in java
+        ret.append("div ");
+        break;
+      default: 
+        ret.append("? "); /* not supported operations by yices */
+        break;
+    }
+    ret.append(leftInstance.m_value);
+    ret.append(" ");
+    int rightConstant = Integer.parseInt(rightInstance.m_value);
+    ret.append(String.valueOf(((int) Math.pow(2.0, rightConstant))));
+    ret.append(")");
+    
+    return new TranslatedInstance(ret.toString(), "number");
   }
   
   private TranslatedInstance translateNumberInstance(Instance left, TranslatedInstance leftInstance, 

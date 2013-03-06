@@ -51,12 +51,28 @@ public class Relation {
     return new Reference("read_" + m_name + "_" + currentTime, type, "", new Instance("", createBlock), null, true);
   }
   
+  public void remove(int index) {
+    m_domainValues.remove(index);
+    m_rangeValues.remove(index);
+    m_functionTimes.remove(index);
+  }
+  
+  public void move(int fromIndex, int toIndex) {
+    m_domainValues.add(toIndex, m_domainValues.remove(fromIndex));
+    m_rangeValues.add(toIndex, m_rangeValues.remove(fromIndex));
+    m_functionTimes.add(toIndex, m_functionTimes.remove(fromIndex));
+  }
+  
   public boolean isArrayRelation() {
     return m_name.equals("@@array");
   }
   
   public boolean isFieldRelation() {
     return !isArrayRelation();
+  }
+  
+  public boolean isUpdate(int index) {
+    return index >= 0 && index < m_rangeValues.size() && m_rangeValues.get(index) != null;
   }
   
   public int getLastUpdateIndex(int currentIndex) {

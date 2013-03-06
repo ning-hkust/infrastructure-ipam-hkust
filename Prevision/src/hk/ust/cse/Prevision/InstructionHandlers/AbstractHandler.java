@@ -7,6 +7,7 @@ import hk.ust.cse.Prevision.VirtualMachine.ExecutionOptions;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionResult;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
+import hk.ust.cse.Prevision.VirtualMachine.Relation;
 import hk.ust.cse.Prevision.VirtualMachine.Executor.AbstractExecutor.BBorInstInfo;
 import hk.ust.cse.Prevision_PseudoImpl.PseudoImplMap;
 import hk.ust.cse.Wala.MethodMetaData;
@@ -411,7 +412,7 @@ public abstract class AbstractHandler {
       String pseudoImpl = PseudoImplMap.findPseudoImpl(methodSig);
       methodSig = pseudoImpl != null ? pseudoImpl : methodSig;
     }
-
+    
     // create workList if necessary
     instInfo.workList = (instInfo.workList == null) ? new Stack<BBorInstInfo>() : instInfo.workList;
     
@@ -461,13 +462,15 @@ public abstract class AbstractHandler {
     }
   }
   
-  protected final Reference findOrCreateReference(String refName, String refType, String callSites, 
-      ISSABasicBlock createBlock, Hashtable<String, Hashtable<String, Reference>> refMap) {
-    return findOrCreateReference(refName, refType, callSites, createBlock, null, refMap);
+  protected final Reference findOrCreateReference(String refName, String refType, 
+      String callSites, ISSABasicBlock createBlock, Formula postCond) {
+    return findOrCreateReference(refName, refType, callSites, createBlock, null, postCond);
   }
   
-  protected final Reference findOrCreateReference(String refName, String refType, String callSites, 
-      ISSABasicBlock createBlock, Instance declInstance, Hashtable<String, Hashtable<String, Reference>> refMap) {
+  protected final Reference findOrCreateReference(String refName, String refType, 
+      String callSites, ISSABasicBlock createBlock, Instance declInstance, Formula postCond) {
+    
+    Hashtable<String, Hashtable<String, Reference>> refMap = postCond.getRefMap();
     
     Reference ref = findReference(refName, callSites, refMap);
     // cannot find, create a new one
@@ -477,12 +480,30 @@ public abstract class AbstractHandler {
       
       // define constant fields
       if (refName.startsWith("##")) {
+        String str = refName.substring(2);
         ref.getInstance().setField("count", "I", callSites, new Instance("#!" + (refName.length() - 2), "I", createBlock), true, true);
         ref.getInstance().setField("offset", "I", callSites, new Instance("#!0", "I", createBlock), true, true);
         
         Instance valueInstance = new Instance(callSites, createBlock);
         ref.getInstance().setField("value", "[C", callSites, valueInstance, true, true);
         valueInstance.setField("length", "I", callSites, new Instance("#!" + (refName.length() - 2), "I", createBlock), true, true);
+
+        // add only once
+        Relation arrayRel = postCond.getRelation("@@array");
+        boolean newConstStr = true;
+        for (int i = 0, size = arrayRel.getFunctionCount(); i < size && newConstStr; i++) {
+          if (arrayRel.isUpdate(i)) {
+            newConstStr = !valueInstance.toString().equals(arrayRel.getDomainValues().get(i)[0].toString());
+          }
+        }
+        if (newConstStr) {
+          // add chars to array
+          for (int i = 0, size = str.length(); i < size; i++) {
+            char c = str.charAt(i);
+            Instance[] domains = new Instance[] {valueInstance, new Instance("#!" + i, "I", null)};
+            arrayRel.update(domains, new Instance("#!" + ((int) c), "C", null));
+          }
+        }
       }
     }
     return ref;

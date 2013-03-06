@@ -234,9 +234,13 @@ public abstract class AbstractExecutor {
       }
       
       // try to select frequent sub-class irs
-      String superClass = mr.getDeclaringClass().getName().toString();
-      targetIRs = useSubClassHack ? SubClassHack.tryUseFreqSubclassIRs(
-            walaAnalyzer, superClass, mr.getSignature(), targetIRs) : targetIRs;
+      if (useSubClassHack) {
+        String superClass = mr.getDeclaringClass().getName().toString();
+        IR[] freqIRs = SubClassHack.findFreqSubclassIRs(walaAnalyzer, superClass, mr.getSignature());
+        if (freqIRs != null) {
+          targetIRs = freqIRs;
+        }
+      }
       targetIRs = targetIRs.length > maxToGet ? Arrays.copyOf(targetIRs, maxToGet) : targetIRs;
       
       // re-create targetNodes

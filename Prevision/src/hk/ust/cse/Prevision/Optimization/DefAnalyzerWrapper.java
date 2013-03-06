@@ -18,7 +18,9 @@ import java.util.List;
 
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
+import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
+import com.ibm.wala.ssa.SSAThrowInstruction;
 
 public class DefAnalyzerWrapper {
   
@@ -120,6 +122,13 @@ public class DefAnalyzerWrapper {
         }
       }
     }
+    
+    // do not skip methods with explicit throw statements
+    SSAInstruction[] instructions = ir.getInstructions();
+    for (int i = 0; i < instructions.length && skipTo != null; i++) {
+      skipTo = instructions[i] instanceof SSAThrowInstruction ? null : skipTo;
+    }
+    
     return skipTo;
   }
 
@@ -158,7 +167,7 @@ public class DefAnalyzerWrapper {
     
     // find skippable
     Hashtable<String, Reference> methodRefs = formula.getRefMap().get(callSites);
-    List<ConditionalBranchDefs> skippables = findSkippableBranches(mergingBB, formula, callSites);
+    List<ConditionalBranchDefs> skippables = findSkippableBranches(ir, mergingBB, formula, callSites);
     for (ISSABasicBlock normPred : normPreds) {
       if (mergingBB.isExitBlock() && normPred.getLastInstructionIndex() >= 0 && 
           normPred.getLastInstruction() instanceof SSAReturnInstruction && 
@@ -185,7 +194,7 @@ public class DefAnalyzerWrapper {
     return new List[] {skipToPreds, notSkipPreds};
   }
   
-  private List<ConditionalBranchDefs> findSkippableBranches(ISSABasicBlock mergingBB, Formula formula, String callSites) {
+  private List<ConditionalBranchDefs> findSkippableBranches(IR ir, ISSABasicBlock mergingBB, Formula formula, String callSites) {
     List<ConditionalBranchDefs> skippableList = new ArrayList<ConditionalBranchDefs>();
     
     if (m_lastResult != null) {
@@ -197,7 +206,8 @@ public class DefAnalyzerWrapper {
 
         Hashtable<String, Reference> methodRefs = formula.getRefMap().get(callSites);
         for (ConditionalBranchDefs condDefs : condDefsList) {
-          if (isCondBranchSkippable(condDefs, methodRefs, allFieldNames)) {
+          if (!isCondBranchThrowsException(ir, condDefs) && 
+              isCondBranchSkippable(condDefs, methodRefs, allFieldNames)) {
             addSkippableCondBranch(skippableList, condDefs);
           }
         }
@@ -209,6 +219,23 @@ public class DefAnalyzerWrapper {
   private boolean isBBInCondBranch(ConditionalBranchDefs condDefs, ISSABasicBlock basicBlock) {
     return condDefs.startingBlock.getNumber() <= basicBlock.getNumber() && 
            condDefs.endingBlock.getNumber() > basicBlock.getNumber();
+  }
+  
+  private boolean isCondBranchThrowsException(IR ir, ConditionalBranchDefs condBranchDefs) {
+    boolean throwing = false;
+    int startingBB = condBranchDefs.startingBlock.getNumber();
+    int mergingBB  = condBranchDefs.mergingBlock.getNumber();
+    for (int i = startingBB; i < mergingBB && !throwing; i++) {
+      ISSABasicBlock bb = ir.getControlFlowGraph().getBasicBlock(i);
+      if (bb != null) {
+        Iterator<SSAInstruction> iter = bb.iterator();
+        while (iter.hasNext() && !throwing) {
+          SSAInstruction instruction = (SSAInstruction) iter.next();
+          throwing = instruction != null && instruction instanceof SSAThrowInstruction;
+        }
+      }
+    }
+    return throwing;
   }
   
   private boolean isCondBranchSkippable(ConditionalBranchDefs condBranchDefs, 

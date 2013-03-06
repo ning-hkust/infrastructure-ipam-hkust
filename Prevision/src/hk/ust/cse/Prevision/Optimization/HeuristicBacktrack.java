@@ -164,8 +164,8 @@ public class HeuristicBacktrack {
         if (unsatCoreConditions != null && unsatCoreConditions.size() > 0) {
           Condition unsatCore = null;
           for (Condition unsatCoreCondition : unsatCoreConditions) {
-            if (unsatCore == null || unsatCoreCondition.getTimeStamp() > unsatCore.getTimeStamp()) {
-              unsatCore = unsatCoreCondition; // get the latest one
+            if (unsatCore == null || unsatCoreCondition.getTimeStamp() < unsatCore.getTimeStamp()) {
+              unsatCore = unsatCoreCondition; // get the earliest one
             }
           }
           unsatCores.add(unsatCore);

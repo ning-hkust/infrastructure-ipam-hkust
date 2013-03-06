@@ -122,6 +122,9 @@ public class YicesLoaderExe implements ISolverLoader {
         return SOLVER_COMP_PROCESS.ERROR;
       }
       else {       // SMT Check timeout
+        // destroy process
+        m_yicesProc.destroy();
+        
         System.out.println("SMT Check timeout!");
         return SOLVER_COMP_PROCESS.TIMEOUT;
       }
