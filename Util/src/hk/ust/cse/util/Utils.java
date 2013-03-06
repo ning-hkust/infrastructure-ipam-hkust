@@ -1,6 +1,11 @@
 package hk.ust.cse.util;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -17,6 +22,8 @@ import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Random;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 public class Utils {
   
@@ -503,6 +510,20 @@ public class Utils {
     
     return isSubClass;
   }
+   
+  public static boolean canCastTo(String superClass, String childClass) {
+    if (Utils.isSubClass(superClass, childClass)) {
+      return true;
+    }
+    else if (superClass.startsWith("[") && childClass.startsWith("[")) {
+      return canCastTo(superClass.substring(1), childClass.substring(1));
+    }
+    else if (superClass.equals("Ljava/lang/Object")) {
+      // this only happens when childClass is an interface
+      return true;
+    }
+    return false;
+  }
   
   // cls.isAnonymousClass() does not work, don't know why
   // org.apache.commons.collections.buffer.BoundedFifoBuffer$1
@@ -518,6 +539,19 @@ public class Utils {
       } catch (NumberFormatException e) {}
     }
     return isAnonymousClass;
+  }
+  
+  public static boolean isInnerClass(Class<?> cls) {
+    return cls.getName().lastIndexOf('$') >= 0;
+  }
+  
+  public static boolean isInteger(String str) {
+    boolean isInteger = false;
+    try {
+      Integer.parseInt(str);
+      isInteger = true;
+    } catch (Exception e) {}
+    return isInteger;
   }
   
   public static String replaceInitByCtor(String methodName) {
@@ -843,6 +877,14 @@ public class Utils {
     return common;
   }
   
+  public static <E> List<E> enumerateToList(Enumeration<E> enumerate) {
+    List<E> list = new ArrayList<E>();
+    while (enumerate.hasMoreElements()) {
+      list.add(enumerate.nextElement());
+    }
+    return list;
+  }
+  
   public static String concatStrings(List<String> strings, String concatBy, boolean appendLast) {
     StringBuilder str = new StringBuilder();
     for (int i = 0, size = strings.size(); i < size; i++) {
@@ -901,6 +943,73 @@ public class Utils {
       succeeded = true;
     } catch (Exception e) {e.printStackTrace();}
     return succeeded;
+  }
+
+  // read a list of string from file
+  public static List<String> readStringListFromFile(String file) {
+    List<String> stringList = new ArrayList<String>();
+    try {
+      BufferedReader reader = new BufferedReader(new FileReader(file));
+      String line = null;
+      while ((line = reader.readLine()) != null) {
+        stringList.add(line);
+      }
+      reader.close();
+    } catch (IOException e) {}
+    return stringList;
+  }
+
+  // read a list of string from file and save to a Set
+  public static HashSet<String> readStringSetFromFile(String file) {
+    HashSet<String> stringSet = new HashSet<String>();
+    try {
+      BufferedReader reader = new BufferedReader(new FileReader(file));
+      String line = null;
+      while ((line = reader.readLine()) != null) {
+        stringSet.add(line);
+      }
+      reader.close();
+    } catch (IOException e) {}
+    return stringSet;
+  }
+  
+  public static void unzipIntoDir(ZipFile zipFile, File dir) {
+    FileOutputStream fileOutStream = null;
+    Enumeration<? extends ZipEntry> files = zipFile.entries();
+    while (files.hasMoreElements()) {
+      try {
+        ZipEntry entry = (ZipEntry) files.nextElement();
+        InputStream entryInStream = zipFile.getInputStream(entry);
+  
+        File file = new File(dir.getAbsolutePath() + File.separator + entry.getName());
+        if (entry.isDirectory()) {
+          file.mkdirs();
+          continue;
+        }
+        else {
+          file.getParentFile().mkdirs();
+          file.createNewFile();
+        }
+        fileOutStream = new FileOutputStream(file);
+
+        int bytesRead = 0;
+        byte[] buffer = new byte[1024];
+        while ((bytesRead = entryInStream.read(buffer)) != -1) {
+          fileOutStream.write(buffer, 0, bytesRead);
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+        continue;
+      } finally {
+        if (fileOutStream != null) {
+          try {
+            fileOutStream.close();
+          } catch (IOException e) {
+            // ignore
+          }
+        }
+      }
+    }
   }
   
   private static Hashtable<Class<?>, Class<?>> s_boxClassMap;
