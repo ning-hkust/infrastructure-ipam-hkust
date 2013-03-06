@@ -76,8 +76,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     switch (instInfo.controlType) {
     case Formula.NORMAL_SUCCESSOR:
       // new condition: arrayRef != null
-      Reference arrayRefRef = findOrCreateReference(arrayRef, "Unknown-Type", callSites, currentBB, newRefMap);
-      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference arrayRefRef = findOrCreateReference(arrayRef, "Unknown-Type", callSites, currentBB, preCond);
+      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(arrayRefRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -92,7 +92,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
       Reference defRef = new Reference(def, "I", callSites, fieldRefs.get(0).getInstance(), null, false);
       
       Reference arrayLenRef = fieldRefs.get(0); // simply use the first one
-      Reference zeroRef     = findOrCreateReference("#!0", "I", "", currentBB, newRefMap);
+      Reference zeroRef     = findOrCreateReference("#!0", "I", "", currentBB, preCond);
 
       // additional condition to make sure: array.length >= 0
       conditionTerms = new ArrayList<ConditionTerm>();
@@ -107,8 +107,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     case Formula.EXCEPTIONAL_SUCCESSOR:
       /* can only be NPE */
       // new condition: arrayRef == null
-      arrayRefRef = findOrCreateReference(arrayRef, "Unknown-Type", callSites, currentBB, newRefMap);
-      nullRef     = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      arrayRefRef = findOrCreateReference(arrayRef, "Unknown-Type", callSites, currentBB, preCond);
+      nullRef     = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(arrayRefRef.getInstance(), Comparator.OP_EQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -144,15 +144,15 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     switch (instInfo.controlType) {
     case Formula.NORMAL_SUCCESSOR:
       // new condition: arrayRef != null
-      Reference arrayRefRef = findOrCreateReference(arrayRef, "[" + elemType, callSites, currentBB, newRefMap);
-      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference arrayRefRef = findOrCreateReference(arrayRef, "[" + elemType, callSites, currentBB, preCond);
+      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(arrayRefRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
       
       // new conditions: arrayIndex >= 0 && arrayIndex < arryLength
-      Reference arrayIndexRef = findOrCreateReference(arrayIndex, "I", callSites, currentBB, newRefMap);
-      Reference zeroRef       = findOrCreateReference("#!0", "I", "", currentBB, newRefMap);
+      Reference arrayIndexRef = findOrCreateReference(arrayIndex, "I", callSites, currentBB, preCond);
+      Reference zeroRef       = findOrCreateReference("#!0", "I", "", currentBB, preCond);
 
       // get the array length field
       List<Reference> lenRefs = arrayRefRef.getFieldReferences("length");
@@ -236,12 +236,11 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
   }
   
   public Formula handle_arraystore(Formula preCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    preCond                                                   = preCond == instInfo.formula4BB ? preCond.clone() : preCond;
-    String callSites                                          = instInfo.callSites;
-    ISSABasicBlock currentBB                                  = instInfo.currentBB;
-    MethodMetaData methData                                   = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap = preCond.getRefMap();
-    SSAArrayStoreInstruction arrayStoreInst                   = (SSAArrayStoreInstruction) inst;
+    preCond                                 = preCond == instInfo.formula4BB ? preCond.clone() : preCond;
+    String callSites                        = instInfo.callSites;
+    ISSABasicBlock currentBB                = instInfo.currentBB;
+    MethodMetaData methData                 = instInfo.methData;
+    SSAArrayStoreInstruction arrayStoreInst = (SSAArrayStoreInstruction) inst;
 
     String arrayRef   = getSymbol(arrayStoreInst.getArrayRef(), methData, callSites, preCond.getDefMap(), false);
     String arrayIndex = getSymbol(arrayStoreInst.getIndex(), methData, callSites, preCond.getDefMap(), false);
@@ -253,15 +252,15 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     switch (instInfo.controlType) {
     case Formula.NORMAL_SUCCESSOR:
       // new condition: arrayRef != null
-      Reference arrayRefRef = findOrCreateReference(arrayRef, "[" + elemType, callSites, currentBB, newRefMap);
-      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference arrayRefRef = findOrCreateReference(arrayRef, "[" + elemType, callSites, currentBB, preCond);
+      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(arrayRefRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
       
       // new conditions: arrayIndex >= 0 && arrayIndex < arryLength
-      Reference arrayIndexRef = findOrCreateReference(arrayIndex, "I", callSites, currentBB, newRefMap);
-      Reference zeroRef       = findOrCreateReference("#!0", "I", "", currentBB, newRefMap);
+      Reference arrayIndexRef = findOrCreateReference(arrayIndex, "I", callSites, currentBB, preCond);
+      Reference zeroRef       = findOrCreateReference("#!0", "I", "", currentBB, preCond);
       
       // get the array length field
       List<Reference> lenRefs = arrayRefRef.getFieldReferences("length");
@@ -280,7 +279,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
       conditionTerms.add(new BinaryConditionTerm(arrayIndexRef.getInstance(), Comparator.OP_SMALLER, arrayLenRef.getInstance()));
       conditionList.add(new Condition(conditionTerms));
 
-      Reference storeValRef = findOrCreateReference(storeValue, elemType, callSites, currentBB, newRefMap);
+      Reference storeValRef = findOrCreateReference(storeValue, elemType, callSites, currentBB, preCond);
 
       Relation relation = preCond.getRelation("@@array");
       relation.update(new Instance[] {arrayRefRef.getInstance(), arrayIndexRef.getInstance()}, storeValRef.getInstance());
@@ -351,8 +350,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     String var1 = getSymbol(binaryOpInst.getUse(0), methData, callSites, newDefMap, false);
     String var2 = getSymbol(binaryOpInst.getUse(1), methData, callSites, newDefMap, false);
     
-    Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, currentBB, newRefMap);
-    Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, currentBB, newRefMap);
+    Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, currentBB, preCond);
+    Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, currentBB, preCond);
     
     Instance binaryOp = null;
     IBinaryOpInstruction.IOperator operator = binaryOpInst.getOperator();
@@ -465,8 +464,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     switch (instInfo.controlType) {
     case Formula.NORMAL_SUCCESSOR:
       // new condition: subTypeStr == true || val == null
-      Reference valRef  = findOrCreateReference(val, "Unknown-Type", callSites, currentBB, newRefMap);
-      Reference nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference valRef  = findOrCreateReference(val, "Unknown-Type", callSites, currentBB, preCond);
+      Reference nullRef = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new TypeConditionTerm(
           valRef.getInstance(), TypeConditionTerm.Comparator.OP_INSTANCEOF, declaredResultType)); 
@@ -483,8 +482,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     case Formula.EXCEPTIONAL_SUCCESSOR:
       /* can only be CCE */
       // new condition: val != null && subTypeStr == false
-      valRef     = findOrCreateReference(val, "Unknown-Type", callSites, currentBB, newRefMap);
-      nullRef    = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      valRef     = findOrCreateReference(val, "Unknown-Type", callSites, currentBB, preCond);
+      nullRef    = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(valRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance()));
       conditionList.add(new Condition(conditionTerms));
@@ -518,8 +517,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     String var1 = getSymbol(compareInst.getUse(0), methData, callSites, newDefMap, false);
     String var2 = getSymbol(compareInst.getUse(1), methData, callSites, newDefMap, false);
     
-    Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, currentBB, newRefMap);
-    Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, currentBB, newRefMap);
+    Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, currentBB, preCond);
+    Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, currentBB, preCond);
     
     Instance compareOp = null;
     switch ((IComparisonInstruction.Operator) compareInst.getOperator()) {
@@ -558,7 +557,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     List<ConditionTerm> conditionTerms = null;
     List<Condition> conditionList = new ArrayList<Condition>();
     
-    Reference fromValRef = findOrCreateReference(fromVal, fromType, callSites, currentBB, newRefMap);
+    Reference fromValRef = findOrCreateReference(fromVal, fromType, callSites, currentBB, preCond);
     Reference toValRef   = null;
     
     if (fromType.equals("I") || fromType.equals("J") || fromType.equals("S")) { // from integer to float or integer
@@ -572,13 +571,13 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
         if (fromVal.startsWith("#!")) { // it is a constant number
           int index = fromVal.lastIndexOf('.');
           String convVal = (index >= 0) ? fromVal.substring(0, index) : fromVal;
-          convValRef = findOrCreateReference(convVal, "I", callSites, currentBB, newRefMap);
+          convValRef = findOrCreateReference(convVal, "I", callSites, currentBB, preCond);
         }
         else {
           // create a converted val
           String convVal = fromVal + "$1" /* first kind of conversion */;
           
-          convValRef = findOrCreateReference(convVal, "I", callSites, currentBB, newRefMap);
+          convValRef = findOrCreateReference(convVal, "I", callSites, currentBB, preCond);
           // the converted integer should be: fromVal - 1 < convVal <= fromVal
           conditionTerms = new ArrayList<ConditionTerm>();
           conditionTerms.add(new BinaryConditionTerm(convValRef.getInstance(), 
@@ -618,12 +617,11 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
   }
   
   public Formula handle_conditional_branch(Formula preCond, SSAInstruction inst, BBorInstInfo instInfo, ISSABasicBlock successor) {
-    preCond                                                   = preCond == instInfo.formula4BB ? preCond.clone() : preCond;
-    String callSites                                          = instInfo.callSites;
-    ISSABasicBlock currentBB                                  = instInfo.currentBB;
-    MethodMetaData methData                                   = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap = preCond.getRefMap();
-    SSAConditionalBranchInstruction condBranchInst            = (SSAConditionalBranchInstruction) inst;
+    preCond                                        = preCond == instInfo.formula4BB ? preCond.clone() : preCond;
+    String callSites                               = instInfo.callSites;
+    ISSABasicBlock currentBB                       = instInfo.currentBB;
+    MethodMetaData methData                        = instInfo.methData;
+    SSAConditionalBranchInstruction condBranchInst = (SSAConditionalBranchInstruction) inst;
 
     // check whether or not the conditional branch has been taken
     // the branch instruction will always be the last instruction
@@ -639,8 +637,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     String var1 = getSymbol(condBranchInst.getUse(0), methData, callSites, preCond.getDefMap(), false);
     String var2 = getSymbol(condBranchInst.getUse(1), methData, callSites, preCond.getDefMap(), false);
     
-    Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, currentBB, newRefMap);
-    Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, currentBB, newRefMap);
+    Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, currentBB, preCond);
+    Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, currentBB, preCond);
 
     List<ConditionTerm> conditionTerms = null;
     List<Condition> conditionList = new ArrayList<Condition>();
@@ -728,8 +726,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     case Formula.NORMAL_SUCCESSOR:  
       // new condition: ref != null
       String refTypeName = getfieldInst.getDeclaredField().getDeclaringClass().getName().toString();
-      Reference refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, newRefMap);
-      Reference nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, preCond);
+      Reference nullRef = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -756,8 +754,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
       /* can only be NPE */
       // new condition: ref == null
       refTypeName = getfieldInst.getDeclaredField().getDeclaringClass().getName().toString();
-      refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, newRefMap);
-      nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, preCond);
+      nullRef = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_EQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -790,7 +788,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     cinitClass(declClassType, preCond, instInfo);
 
     String refTypeName = getstaticInst.getDeclaredField().getDeclaringClass().getName().toString();
-    Reference refRef  = findOrCreateReference(refTypeName, refTypeName, "", currentBB, newRefMap); // static field also goes to "" callSites
+    Reference refRef  = findOrCreateReference(refTypeName, refTypeName, "", currentBB, preCond); // static field also goes to "" callSites
     
     String fieldType = getstaticInst.getDeclaredFieldType().getName().toString();
     String fieldName = getstaticInst.getDeclaredField().getName().toString();
@@ -830,7 +828,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     String def = getSymbol(instanceofInst.getDef(), methData, callSites, newDefMap, true);
     String ref = getSymbol(instanceofInst.getRef(), methData, callSites, newDefMap, false);
 
-    Reference refRef  = findOrCreateReference(ref, "Unknown-Type", callSites, currentBB, newRefMap);
+    Reference refRef  = findOrCreateReference(ref, "Unknown-Type", callSites, currentBB, preCond);
     String fieldName = "__instanceof__" + instanceofInst.getCheckedType().getName();
 
     List<Reference> fieldRefs = refRef.getFieldReferences(fieldName);
@@ -895,8 +893,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     switch (instInfo.controlType) {
     case Formula.NORMAL_SUCCESSOR:
       // new condition: ref != null
-      Reference refRef  = findOrCreateReference(ref, refType, callSites, currentBB, newRefMap);
-      Reference nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference refRef  = findOrCreateReference(ref, refType, callSites, currentBB, preCond);
+      Reference nullRef = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -913,7 +911,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
       Instance instance = new Instance(callSites, currentBB);
       for (int i = 0; i < params.size(); i++) {
         // should already exist
-        Reference paramRef = findOrCreateReference(params.get(i), "Unknown-Type", callSites, currentBB, newRefMap);
+        Reference paramRef = findOrCreateReference(params.get(i), "Unknown-Type", callSites, currentBB, preCond);
         
         // if parameter is primitive (or null), no need make _undecidable_
         boolean primitiveParam = Utils.isPrimitiveType(paramRef.getType()) || paramRef.getInstance().isConstant() || 
@@ -943,7 +941,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
       // set the invocation as a field of the receiver reference
       Reference fieldRef = new Reference(invocation.toString(), invocationType, 
           callSites, instance, refRef.getInstance(), true);
-      refRef = findOrCreateReference(ref, refType, callSites, currentBB, newRefMap);
+      refRef = findOrCreateReference(ref, refType, callSites, currentBB, preCond);
       refRef.getInstance().setField(invocation.toString(), invocationType, callSites, fieldRef.getInstances(), true, true);
       
       if (!invocationType.equals("V")) { // not void return
@@ -959,8 +957,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     case Formula.EXCEPTIONAL_SUCCESSOR:
       /* can only be NPE */
       // new condition: arrayRef == null
-      refRef  = findOrCreateReference(ref, refType, callSites, currentBB, newRefMap);
-      nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      refRef  = findOrCreateReference(ref, refType, callSites, currentBB, preCond);
+      nullRef = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_EQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -1005,7 +1003,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     Instance instance = new Instance(callSites, currentBB);
     for (int i = 0; i < params.size(); i++) {
       // should already exist
-      Reference paramRef = findOrCreateReference(params.get(i), "Unknown-Type", callSites, currentBB, newRefMap);
+      Reference paramRef = findOrCreateReference(params.get(i), "Unknown-Type", callSites, currentBB, preCond);
       
       // if parameter is primitive (or null), no need make _undecidable_
       boolean primitiveParam = Utils.isPrimitiveType(paramRef.getType()) || paramRef.getInstance().isConstant() || 
@@ -1094,7 +1092,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     
     if (token instanceof TypeReference && metaDataType.equals("Ljava/lang/Class")) { // a loadClass operation
       String loadClass = ((TypeReference) token).getName().toString() + ".class";
-      Reference loadClassRef = findOrCreateReference(loadClass, metaDataType, callSites, currentBB, newRefMap);
+      Reference loadClassRef = findOrCreateReference(loadClass, metaDataType, callSites, currentBB, preCond);
 
       Reference defRef = new Reference(def, metaDataType, callSites, loadClassRef.getInstance(), null, false);
 
@@ -1131,7 +1129,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     String def = getSymbol(unaryInst.getDef(), methData, callSites, newDefMap, true);
     String var = getSymbol(unaryInst.getUse(0), methData, callSites, newDefMap, false);
     
-    Reference varRef = findOrCreateReference(var, "I", callSites, currentBB, newRefMap);
+    Reference varRef = findOrCreateReference(var, "I", callSites, currentBB, preCond);
     
     Instance unaryOp = null;
     switch ((IUnaryOpInstruction.Operator) unaryInst.getOpcode()) {
@@ -1176,20 +1174,28 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     addDefToDefMap(newDefMap, defRef);
     
     // for array types, we also need to substitute ".length" field
+    List<ConditionTerm> conditionTerms = null;
+    List<Condition> conditionList = new ArrayList<Condition>();
     if (newInst.getConcreteType().isArrayType()) {
       String valSize = getSymbol(newInst.getUse(0), methData, callSites, newDefMap, false);
-      Reference valSizeRef = findOrCreateReference(valSize, "I", callSites, currentBB, newRefMap);
+      Reference valSizeRef = findOrCreateReference(valSize, "I", callSites, currentBB, preCond);
+      Reference zeroRef    = findOrCreateReference("#!0", "I", "", currentBB, preCond);
       defRef.getInstance().setField("length", "I", callSites, valSizeRef.getInstances(), false, true);
+      
+      // additional condition to make sure: size >= 0
+      conditionTerms = new ArrayList<ConditionTerm>();
+      conditionTerms.add(new BinaryConditionTerm(valSizeRef.getInstance(), Comparator.OP_GREATER_EQUAL, zeroRef.getInstance()));
+      conditionList.add(new Condition(conditionTerms));
       
       // assign initial values to array elements, XXX currently only works for constant size array
       if (valSize.startsWith("#!")) {
         TypeReference elemType = newInst.getConcreteType().getArrayElementType();
         String val = elemType.isPrimitiveType() ? "#!0" /* number or boolean(false) */ : "null";
-        Reference valRef = findOrCreateReference(val, elemType.getName().toString(), "", currentBB, newRefMap);
+        Reference valRef = findOrCreateReference(val, elemType.getName().toString(), "", currentBB, preCond);
         
         int size = Integer.parseInt(valSize.substring(2));
         for (int i = 0; i < size; i++) {
-          Reference indexRef = findOrCreateReference("#!" + i, "I", "", currentBB, newRefMap);
+          Reference indexRef = findOrCreateReference("#!" + i, "I", "", currentBB, preCond);
           Relation relation = preCond.getRelation("@@array");
           relation.update(new Instance[] {defRef.getInstance(), indexRef.getInstance()}, valRef.getInstance());
         }
@@ -1213,6 +1219,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
 //      }
 //    }
 
+    preCond.getConditionList().addAll(conditionList);
     return new Formula(preCond);
   }
 
@@ -1231,7 +1238,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     String def = getSymbol(phiInst.getDef(), methData, callSites, newDefMap, true);
     String var = getSymbol(phiInst.getUse(index), methData, callSites, newDefMap, false);
 
-    Reference phiRef = findOrCreateReference(var, "Unknown-Type", callSites, currentBB, newRefMap);
+    Reference phiRef = findOrCreateReference(var, "Unknown-Type", callSites, currentBB, preCond);
     Reference defRef = new Reference(def, "Unknown-Type", callSites, phiRef.getInstance(), null, false);
     
     // add new references to refMap
@@ -1260,7 +1267,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     String val = getSymbol(piInst.getVal(), methData, callSites, newDefMap, false);
     
     // add new references to refMap
-    Reference valRef = findOrCreateReference(val, "Unknown-Type", callSites, currentBB, newRefMap);
+    Reference valRef = findOrCreateReference(val, "Unknown-Type", callSites, currentBB, preCond);
     Reference defRef = new Reference(def, "Unknown-Type", callSites, valRef.getInstance(), null, false);
 
     // add new references to refMap
@@ -1273,12 +1280,11 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
   
   // handler for putfield instruction
   public Formula handle_putfield(Formula preCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    preCond                                                   = preCond == instInfo.formula4BB ? preCond.clone() : preCond;
-    String callSites                                          = instInfo.callSites;
-    ISSABasicBlock currentBB                                  = instInfo.currentBB;
-    MethodMetaData methData                                   = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap = preCond.getRefMap();
-    SSAPutInstruction putfieldInst                            = (SSAPutInstruction) inst;
+    preCond                        = preCond == instInfo.formula4BB ? preCond.clone() : preCond;
+    String callSites               = instInfo.callSites;
+    ISSABasicBlock currentBB       = instInfo.currentBB;
+    MethodMetaData methData        = instInfo.methData;
+    SSAPutInstruction putfieldInst = (SSAPutInstruction) inst;
 
     // the variable(result) define by the putfield instruction
     String ref = getSymbol(putfieldInst.getUse(0), methData, callSites, preCond.getDefMap(), false);
@@ -1290,15 +1296,15 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     case Formula.NORMAL_SUCCESSOR:
       // new condition: ref != null
       String refTypeName = putfieldInst.getDeclaredField().getDeclaringClass().getName().toString();
-      Reference refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, newRefMap);
-      Reference nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, preCond);
+      Reference nullRef = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
 
       String fieldType = putfieldInst.getDeclaredFieldType().getName().toString();
       String fieldName = putfieldInst.getDeclaredField().getName().toString();
-      Reference valRef = findOrCreateReference(val, fieldType, callSites, currentBB, newRefMap);
+      Reference valRef = findOrCreateReference(val, fieldType, callSites, currentBB, preCond);
       
       // we maintain all previous instances that were at this field
       Reference fieldRef = refRef.getInstance().getField(fieldName);
@@ -1311,8 +1317,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
       /* can only be NPE */
       // new condition: ref == null
       refTypeName = putfieldInst.getDeclaredField().getDeclaringClass().getName().toString();
-      refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, newRefMap);
-      nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, preCond);
+      nullRef = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_EQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -1340,10 +1346,10 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     String val = getSymbol(putstaticInst.getUse(0), methData, callSites, preCond.getDefMap(), false);
 
     String refTypeName = putstaticInst.getDeclaredField().getDeclaringClass().getName().toString();
-    Reference refRef  = findOrCreateReference(refTypeName, refTypeName, "", currentBB, newRefMap); // static field also goes to "" callSites
+    Reference refRef  = findOrCreateReference(refTypeName, refTypeName, "", currentBB, preCond); // static field also goes to "" callSites
     String fieldType = putstaticInst.getDeclaredFieldType().getName().toString();
     String fieldName = putstaticInst.getDeclaredField().getName().toString();
-    Reference valRef = findOrCreateReference(val, fieldType, callSites, currentBB, newRefMap);
+    Reference valRef = findOrCreateReference(val, fieldType, callSites, currentBB, preCond);
     
     // we maintain all previous instances that were at this field
     Reference fieldRef = refRef.getInstance().getField(fieldName);
@@ -1373,7 +1379,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
       String returnType = methData.getIR().getMethod().getReturnType().getName().toString();
       
       // add "RET"
-      Reference returnRef = findOrCreateReference(ret, "Unknown-Type", callSites, currentBB, newRefMap);
+      Reference returnRef = findOrCreateReference(ret, "Unknown-Type", callSites, currentBB, preCond);
       Reference retRef    = new Reference("RET", returnType, callSites, returnRef.getInstance(), null, false);
   
       // add new references to refMap
@@ -1387,17 +1393,16 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
   }
   
   public Formula handle_switch(Formula preCond, SSAInstruction inst, BBorInstInfo instInfo, ISSABasicBlock successor) {
-    preCond                                                   = preCond == instInfo.formula4BB ? preCond.clone() : preCond;
-    String callSites                                          = instInfo.callSites;
-    ISSABasicBlock currentBB                                  = instInfo.currentBB;
-    MethodMetaData methData                                   = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap = preCond.getRefMap();
-    SSASwitchInstruction switchInst                           = (SSASwitchInstruction) inst;
+    preCond                         = preCond == instInfo.formula4BB ? preCond.clone() : preCond;
+    String callSites                = instInfo.callSites;
+    ISSABasicBlock currentBB        = instInfo.currentBB;
+    MethodMetaData methData         = instInfo.methData;
+    SSASwitchInstruction switchInst = (SSASwitchInstruction) inst;
 
     // get the variables of the switch statement,
     // the variables might be constant numbers!
     String var1 = getSymbol(switchInst.getUse(0), methData, callSites, preCond.getDefMap(), false);
-    Reference var1Ref = findOrCreateReference(var1, "I", callSites, currentBB, newRefMap);
+    Reference var1Ref = findOrCreateReference(var1, "I", callSites, currentBB, preCond);
 
     List<ConditionTerm> conditionTerms = null;
     List<Condition> conditionList = new ArrayList<Condition>();
@@ -1441,12 +1446,11 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
   
   // handler for throw instruction
   public Formula handle_throw(Formula preCond, SSAInstruction inst, BBorInstInfo instInfo) {
-    preCond                                                   = preCond == instInfo.formula4BB ? preCond.clone() : preCond;
-    String callSites                                          = instInfo.callSites;
-    ISSABasicBlock currentBB                                  = instInfo.currentBB;
-    MethodMetaData methData                                   = instInfo.methData;
-    Hashtable<String, Hashtable<String, Reference>> newRefMap = preCond.getRefMap();
-    SSAThrowInstruction throwInst                             = (SSAThrowInstruction) inst;
+    preCond                       = preCond == instInfo.formula4BB ? preCond.clone() : preCond;
+    String callSites              = instInfo.callSites;
+    ISSABasicBlock currentBB      = instInfo.currentBB;
+    MethodMetaData methData       = instInfo.methData;
+    SSAThrowInstruction throwInst = (SSAThrowInstruction) inst;
 
     // the variable(result) thrown by throw instruction
     String exception = getSymbol(throwInst.getUse(0), methData, callSites, preCond.getDefMap(), false);
@@ -1455,8 +1459,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     List<Condition> conditionList = new ArrayList<Condition>();
     
     // new condition: excepRef != null
-    Reference excepRef = findOrCreateReference(exception, "Unknown-Type", callSites, currentBB, newRefMap);
-    Reference nullRef  = findOrCreateReference("null", "", "", currentBB, newRefMap);
+    Reference excepRef = findOrCreateReference(exception, "Unknown-Type", callSites, currentBB, preCond);
+    Reference nullRef  = findOrCreateReference("null", "", "", currentBB, preCond);
     conditionTerms = new ArrayList<ConditionTerm>();
     conditionTerms.add(new BinaryConditionTerm(excepRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
     conditionList.add(new Condition(conditionTerms));
@@ -1484,7 +1488,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     for (int i = 0, count = methData.getIR().getNumberOfParameters(); i < count; i++) {
       String paramName = getSymbol(methData.getIR().getParameter(i), methData, callSites, preCond.getDefMap(), false);
       String paramType = methData.getIR().getParameterType(i).getName().toString();
-      Reference paramRef = findOrCreateReference(paramName, paramType, callSites, currentBB, newRefMap);
+      Reference paramRef = findOrCreateReference(paramName, paramType, callSites, currentBB, preCond);
       paramRef.setType(paramType);
 
       // add new references to refMap
@@ -1507,7 +1511,7 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
         Instance valInstance = new Instance(val, fieldType, currentBB);
         Reference valRef = new Reference(val, fieldType, callSites, valInstance, null, true);
         
-        Reference thisRef = findOrCreateReference("v1", "Unknown-Type", callSites, currentBB, newRefMap);
+        Reference thisRef = findOrCreateReference("v1", "Unknown-Type", callSites, currentBB, preCond);
         thisRef.getInstance().setField(fieldName, fieldType, callSites, valRef.getInstances(), false, true);
       }
     }
@@ -1517,8 +1521,8 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
     List<Condition> conditionList = new ArrayList<Condition>();
     if (instInfo.callSites.length() == 0 && !methData.isStatic()) {
       // new condition: this != null
-      Reference thisRef = findOrCreateReference("v1", "Unknown-Type", callSites, currentBB, newRefMap);
-      Reference nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference thisRef = findOrCreateReference("v1", "Unknown-Type", callSites, currentBB, preCond);
+      Reference nullRef = findOrCreateReference("null", "", "", currentBB, preCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(thisRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));

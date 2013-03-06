@@ -12,7 +12,7 @@ public class YicesUtils {
   private static final Hashtable<String, String> s_unfilterMap;
   
   static {
-    s_filterPattern = Pattern.compile("([() :\";])");
+    s_filterPattern = Pattern.compile("([() :\";]|help)");
     s_filterMap = new Hashtable<String, String>();
     s_filterMap.put("(", "\\$<");
     s_filterMap.put(")", "\\$>");
@@ -20,8 +20,9 @@ public class YicesUtils {
     s_filterMap.put(":", "\\$#");
     s_filterMap.put("\"", "\\$@");
     s_filterMap.put(";", "\\$|");
+    s_filterMap.put("help", "he\\$p");
     
-    s_unfilterPattern = Pattern.compile("(\\$[<>_#@|])");
+    s_unfilterPattern = Pattern.compile("(\\$[<>_#@|]|he\\$p)");
     s_unfilterMap = new Hashtable<String, String>();
     s_unfilterMap.put("$<", "(");
     s_unfilterMap.put("$>", ")");
@@ -29,6 +30,7 @@ public class YicesUtils {
     s_unfilterMap.put("$#", ":");
     s_unfilterMap.put("$@", "\"");
     s_unfilterMap.put("$|", ";");
+    s_unfilterMap.put("he\\$p", "help");
   }
   
   // replace some unwanted chars

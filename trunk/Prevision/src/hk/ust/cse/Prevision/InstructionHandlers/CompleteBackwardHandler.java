@@ -78,8 +78,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     List<Condition> conditionList = new ArrayList<Condition>();
     switch (instInfo.controlType) {
     case Formula.NORMAL_SUCCESSOR:
-      Reference arrayRefRef = findOrCreateReference(arrayRef, "Unknown-Type", callSites, currentBB, newRefMap);
-      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference arrayRefRef = findOrCreateReference(arrayRef, "Unknown-Type", callSites, currentBB, postCond);
+      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, postCond);
       
       // get the array length field
       List<Reference> lenRefs = arrayRefRef.getFieldReferences("length");
@@ -90,7 +90,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
         lenRefs = arrayRefRef.getFieldReferences("length");
       }
       Reference arrayLenRef = lenRefs.get(0); // simply use the first one
-      Reference zeroRef     = findOrCreateReference("#!0", "I", "", currentBB, newRefMap);
+      Reference zeroRef     = findOrCreateReference("#!0", "I", "", currentBB, postCond);
 
       // additional condition to make sure: array.length >= 0
       conditionTerms = new ArrayList<ConditionTerm>();
@@ -107,7 +107,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       
       if (containsRef(def, callSites, newRefMap)) {
         // add new references to refMap
-        Reference defRef = findOrCreateReference(def, "I", callSites, currentBB, newRefMap);
+        Reference defRef = findOrCreateReference(def, "I", callSites, currentBB, postCond);
         
         Collection<Instance> defInstances = defRef.getInstances();
         List<Reference> fieldRefs = arrayRefRef.getFieldReferences("length");
@@ -141,8 +141,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     case Formula.EXCEPTIONAL_SUCCESSOR:
       /* can only be NPE */
       // new condition: arrayRef == null
-      arrayRefRef = findOrCreateReference(arrayRef, "Unknown-Type", callSites, currentBB, newRefMap);
-      nullRef     = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      arrayRefRef = findOrCreateReference(arrayRef, "Unknown-Type", callSites, currentBB, postCond);
+      nullRef     = findOrCreateReference("null", "", "", currentBB, postCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(arrayRefRef.getInstance(), Comparator.OP_EQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -180,12 +180,12 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     List<Condition> conditionList = new ArrayList<Condition>();
     switch (instInfo.controlType) {
     case Formula.NORMAL_SUCCESSOR:
-      Reference arrayRefRef = findOrCreateReference(arrayRef, "[" + elemType, callSites, currentBB, newRefMap);
-      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference arrayRefRef = findOrCreateReference(arrayRef, "[" + elemType, callSites, currentBB, postCond);
+      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, postCond);
 
       // new conditions: arrayIndex >= 0 && arrayIndex < arryLength
-      Reference arrayIndexRef = findOrCreateReference(arrayIndex, "I", callSites, currentBB, newRefMap);
-      Reference zeroRef       = findOrCreateReference("#!0", "I", "", currentBB, newRefMap);
+      Reference arrayIndexRef = findOrCreateReference(arrayIndex, "I", callSites, currentBB, postCond);
+      Reference zeroRef       = findOrCreateReference("#!0", "I", "", currentBB, postCond);
 
       // get the array length field
       List<Reference> lenRefs = arrayRefRef.getFieldReferences("length");
@@ -213,14 +213,39 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       addRefToRefMap(newRefMap, arrayRefRef);
       addRefToRefMap(newRefMap, arrayIndexRef);
       
-      Reference defRef = findOrCreateReference(def, elemType, callSites, currentBB, newRefMap);
+      Reference defRef = findOrCreateReference(def, elemType, callSites, currentBB, postCond);
 
       Relation relation = postCond.getRelation("@@array");
+      
+      // merge with the same read appearing later
+      Reference laterReadRef = null;
+      for (int i = 0, size = relation.getFunctionCount(); i < size; i++) {
+        Instance[] domains = relation.getDomainValues().get(i);
+        if (relation.isUpdate(i)) { // update
+          if (domains[0].getLastReference() != null && domains[0].getLastRefName().equals("value") && 
+              domains[0].getLastReference().getDeclaringInstance() != null && 
+              domains[0].getLastReference().getDeclaringInstance().isConstant()) {
+            continue;
+          }
+          break;
+        }
+        else {
+          if (arrayRefRef.getInstances().contains(domains[0]) && 
+              arrayIndexRef.getInstances().contains(domains[1])) {
+            laterReadRef = newRefMap.get("").get("read_@@array_" + relation.getFunctionTimes().get(i));
+            break;
+          }
+        }
+      }
+      
       Reference readRef = relation.read(new Instance[] {arrayRefRef.getInstance(), 
-                                        arrayIndexRef.getInstance()}, elemType, currentBB);
+                                                        arrayIndexRef.getInstance()}, elemType, currentBB);
       addRefToRefMap(newRefMap, readRef); // necessary for deepClone
       
       // associate the two refs' instance together as the same one
+      if (laterReadRef != null) {
+        assignInstance(laterReadRef, readRef, newRefMap, newDefMap);
+      }
       assignInstance(defRef, readRef, newRefMap, newDefMap);
       break;
 //    case Formula.EXCEPTIONAL_SUCCESSOR:
@@ -300,12 +325,12 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     List<Condition> conditionList = new ArrayList<Condition>();
     switch (instInfo.controlType) {
     case Formula.NORMAL_SUCCESSOR:
-      Reference arrayRefRef = findOrCreateReference(arrayRef, "[" + elemType, callSites, currentBB, newRefMap);
-      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference arrayRefRef = findOrCreateReference(arrayRef, "[" + elemType, callSites, currentBB, postCond);
+      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, postCond);
       
       // new conditions: arrayIndex >= 0 && arrayIndex < arryLength
-      Reference arrayIndexRef = findOrCreateReference(arrayIndex, "I", callSites, currentBB, newRefMap);
-      Reference zeroRef       = findOrCreateReference("#!0", "I", "", currentBB, newRefMap);
+      Reference arrayIndexRef = findOrCreateReference(arrayIndex, "I", callSites, currentBB, postCond);
+      Reference zeroRef       = findOrCreateReference("#!0", "I", "", currentBB, postCond);
       
       // get the array length field
       List<Reference> lenRefs = arrayRefRef.getFieldReferences("length");
@@ -333,7 +358,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       addRefToRefMap(newRefMap, arrayRefRef);
       addRefToRefMap(newRefMap, arrayIndexRef);
 
-      Reference storeValRef = findOrCreateReference(storeValue, elemType, callSites, currentBB, newRefMap);
+      Reference storeValRef = findOrCreateReference(storeValue, elemType, callSites, currentBB, postCond);
 
       Relation relation = postCond.getRelation("@@array");
       relation.update(new Instance[] {arrayRefRef.getInstance(), arrayIndexRef.getInstance()}, storeValRef.getInstance());
@@ -414,9 +439,9 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     String var2 = getSymbol(binaryOpInst.getUse(1), methData, callSites, newDefMap);
     
     if (containsRef(def, callSites, newRefMap)) {
-      Reference defRef = findOrCreateReference(def, "Unknown-Type", callSites, currentBB, newRefMap); // reference must exist
-      Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, currentBB, newRefMap);
-      Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, currentBB, newRefMap);
+      Reference defRef = findOrCreateReference(def, "Unknown-Type", callSites, currentBB, postCond); // reference must exist
+      Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, currentBB, postCond);
+      Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, currentBB, postCond);
       
       Instance binaryOp = null;
       IBinaryOpInstruction.IOperator operator = binaryOpInst.getOperator();
@@ -492,7 +517,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     String excepTypeStr = excepType.getName().toString();
     
     // create new reference of def
-    Reference defRef = findOrCreateReference(def, excepTypeStr, callSites, currentBB, newRefMap);
+    Reference defRef = findOrCreateReference(def, excepTypeStr, callSites, currentBB, postCond);
 
     // create new instance of e
     long instanceID  = System.nanoTime();
@@ -529,8 +554,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     switch (instInfo.controlType) {
     case Formula.NORMAL_SUCCESSOR:
       // new condition: subTypeStr == true || val == null
-      Reference valRef  = findOrCreateReference(val, "Unknown-Type", callSites, currentBB, newRefMap);
-      Reference nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference valRef  = findOrCreateReference(val, "Unknown-Type", callSites, currentBB, postCond);
+      Reference nullRef = findOrCreateReference("null", "", "", currentBB, postCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new TypeConditionTerm(
           valRef.getInstance(), TypeConditionTerm.Comparator.OP_INSTANCEOF, declaredResultType)); 
@@ -541,7 +566,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       addRefToRefMap(newRefMap, valRef);
       
       // create new reference of def
-      Reference defRef = findOrCreateReference(def, declaredResultType, callSites, currentBB, newRefMap);
+      Reference defRef = findOrCreateReference(def, declaredResultType, callSites, currentBB, postCond);
 
       // associate the two refs' instance together as the same one
       assignInstance(defRef, valRef, newRefMap, newDefMap);
@@ -549,8 +574,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     case Formula.EXCEPTIONAL_SUCCESSOR:
       /* can only be CCE */
       // new condition: val != null && subTypeStr == false
-      valRef     = findOrCreateReference(val, "Unknown-Type", callSites, currentBB, newRefMap);
-      nullRef    = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      valRef     = findOrCreateReference(val, "Unknown-Type", callSites, currentBB, postCond);
+      nullRef    = findOrCreateReference("null", "", "", currentBB, postCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(valRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance()));
       conditionList.add(new Condition(conditionTerms));
@@ -588,9 +613,9 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     String var2 = getSymbol(compareInst.getUse(1), methData, callSites, newDefMap);
     
     if (containsRef(def, callSites, newRefMap)) {   
-      Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, currentBB, newRefMap);
-      Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, currentBB, newRefMap);
-      Reference defRef  = findOrCreateReference(def, "Unknown-Type", callSites, currentBB, newRefMap); // reference must exist
+      Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, currentBB, postCond);
+      Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, currentBB, postCond);
+      Reference defRef  = findOrCreateReference(def, "Unknown-Type", callSites, currentBB, postCond); // reference must exist
       
       Instance compareOp = null;
       switch ((IComparisonInstruction.Operator) compareInst.getOperator()) {
@@ -630,8 +655,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     List<ConditionTerm> conditionTerms = null;
     List<Condition> conditionList = new ArrayList<Condition>();
     if (containsRef(toVal, callSites, newRefMap)) {
-      Reference toValRef   = findOrCreateReference(toVal, toType, callSites, currentBB, newRefMap);
-      Reference fromValRef = findOrCreateReference(fromVal, fromType, callSites, currentBB, newRefMap);
+      Reference toValRef   = findOrCreateReference(toVal, toType, callSites, currentBB, postCond);
+      Reference fromValRef = findOrCreateReference(fromVal, fromType, callSites, currentBB, postCond);
       
       if (fromType.equals("I") || fromType.equals("J") || fromType.equals("S")) { // from integer to float or integer
         // associate the two refs' instance together as the same one
@@ -644,13 +669,13 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
           if (fromVal.startsWith("#!")) { // it is a constant number
             int index = fromVal.lastIndexOf('.');
             String convVal = (index >= 0) ? fromVal.substring(0, index) : fromVal;
-            convValRef = findOrCreateReference(convVal, "I", callSites, currentBB, newRefMap);
+            convValRef = findOrCreateReference(convVal, "I", callSites, currentBB, postCond);
           }
           else {
             // create a converted val
             String convVal = fromVal + "$1" /* first kind of conversion */;
             
-            convValRef = findOrCreateReference(convVal, "I", callSites, currentBB, newRefMap);
+            convValRef = findOrCreateReference(convVal, "I", callSites, currentBB, postCond);
             if (containsRef(convVal, callSites, newRefMap)) {
               // the converted integer should be: fromVal - 1 < convVal <= fromVal
               conditionTerms = new ArrayList<ConditionTerm>();
@@ -714,8 +739,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     String var1 = getSymbol(condBranchInst.getUse(0), methData, callSites, postCond.getDefMap());
     String var2 = getSymbol(condBranchInst.getUse(1), methData, callSites, postCond.getDefMap());
     
-    Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, currentBB, newRefMap);
-    Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, currentBB, newRefMap);
+    Reference var1Ref = findOrCreateReference(var1, "Unknown-Type", callSites, currentBB, postCond);
+    Reference var2Ref = findOrCreateReference(var2, "Unknown-Type", callSites, currentBB, postCond);
 
     List<ConditionTerm> conditionTerms = null;
     List<Condition> conditionList = new ArrayList<Condition>();
@@ -812,8 +837,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     case Formula.NORMAL_SUCCESSOR:  
       // new condition: ref != null
       String refTypeName = getfieldInst.getDeclaredField().getDeclaringClass().getName().toString();
-      Reference refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, newRefMap);
-      Reference nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, postCond);
+      Reference nullRef = findOrCreateReference("null", "", "", currentBB, postCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -825,7 +850,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
         // add new references to refMap
         String fieldType = getfieldInst.getDeclaredFieldType().getName().toString();
         String fieldName = getfieldInst.getDeclaredField().getName().toString();
-        Reference defRef = findOrCreateReference(def, fieldType, callSites, currentBB, newRefMap);
+        Reference defRef = findOrCreateReference(def, fieldType, callSites, currentBB, postCond);
 
         // since there is a new def, add to defMap
         addDefToDefMap(newDefMap, defRef);
@@ -861,8 +886,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       /* can only be NPE */
       // new condition: ref == null
       refTypeName = getfieldInst.getDeclaredField().getDeclaringClass().getName().toString();
-      refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, newRefMap);
-      nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, postCond);
+      nullRef = findOrCreateReference("null", "", "", currentBB, postCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_EQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -901,8 +926,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       declaredField += "." + getstaticInst.getDeclaredField().getName();
   
       // add new references to refMap
-      Reference defRef   = findOrCreateReference(def, fieldType, callSites, currentBB, newRefMap);
-      Reference fieldRef = findOrCreateReference(declaredField, fieldType, "", currentBB, newRefMap); // static field also goes to "" callSites
+      Reference defRef   = findOrCreateReference(def, fieldType, callSites, currentBB, postCond);
+      Reference fieldRef = findOrCreateReference(declaredField, fieldType, "", currentBB, postCond); // static field also goes to "" callSites
       
       // associate the two refs' instance together as the same one
       assignInstance(defRef, fieldRef, newRefMap, newDefMap);
@@ -930,10 +955,10 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
 
     // the variable define by the instanceofInst instruction
     if (containsRef(def, callSites, newRefMap)) {
-      Reference refRef  = findOrCreateReference(ref, "Unknown-Type", callSites, currentBB, newRefMap);
+      Reference refRef  = findOrCreateReference(ref, "Unknown-Type", callSites, currentBB, postCond);
       // add new references to refMap
       String fieldName = "__instanceof__" + instanceofInst.getCheckedType().getName();
-      Reference defRef = findOrCreateReference(def, "Z", callSites, currentBB, newRefMap);
+      Reference defRef = findOrCreateReference(def, "Z", callSites, currentBB, postCond);
 
       // add new references to refMap
       addRefToRefMap(newRefMap, refRef);
@@ -1008,8 +1033,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     switch (instInfo.controlType) {
     case Formula.NORMAL_SUCCESSOR:
       // new condition: ref != null
-      Reference refRef  = findOrCreateReference(ref, refType, callSites, currentBB, newRefMap);
-      Reference nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference refRef  = findOrCreateReference(ref, refType, callSites, currentBB, postCond);
+      Reference nullRef = findOrCreateReference("null", "", "", currentBB, postCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -1034,7 +1059,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
         }
         invocation.append(")");
         
-        Reference defRef = findOrCreateReference(def, invocationType, callSites, currentBB, newRefMap);
+        Reference defRef = findOrCreateReference(def, invocationType, callSites, currentBB, postCond);
 
         // since there is a new def, add to defMap
         addDefToDefMap(newDefMap, defRef);
@@ -1064,8 +1089,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     case Formula.EXCEPTIONAL_SUCCESSOR:
       /* can only be NPE */
       // new condition: arrayRef == null
-      refRef  = findOrCreateReference(ref, refType, callSites, currentBB, newRefMap);
-      nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      refRef  = findOrCreateReference(ref, refType, callSites, currentBB, postCond);
+      nullRef = findOrCreateReference("null", "", "", currentBB, postCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_EQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -1122,8 +1147,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       invocation.append(")");
       
       // create new reference of def
-      Reference invocationRef = findOrCreateReference(invocation.toString(), invocationType, callSites, currentBB, newRefMap);
-      Reference defRef        = findOrCreateReference(def, invocationType, callSites, currentBB, newRefMap);
+      Reference invocationRef = findOrCreateReference(invocation.toString(), invocationType, callSites, currentBB, postCond);
+      Reference defRef        = findOrCreateReference(def, invocationType, callSites, currentBB, postCond);
 
       // associate the two refs' instance together as the same one
       assignInstance(defRef, invocationRef, newRefMap, newDefMap);
@@ -1182,11 +1207,11 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
         return handle_invokenonstatic(postCond, inst, instInfo); // use not step in version
       }
       
-      Reference refRef  = findOrCreateReference(ref, refType, callSites, currentBB, newRefMap);
+      Reference refRef  = findOrCreateReference(ref, refType, callSites, currentBB, newPostCond);
       Reference nullRef = null;
 
       String invocationType = invokeInst.getDeclaredResultType().getName().toString();
-      Reference defRef = findOrCreateReference(def, invocationType, callSites, currentBB, newRefMap);
+      Reference defRef = findOrCreateReference(def, invocationType, callSites, currentBB, newPostCond);
 
       // since there is a new def, add to defMap
       addDefToDefMap(newDefMap, defRef);
@@ -1195,7 +1220,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       List<Reference> paramRefs = new ArrayList<Reference>();
       for (int i = 0, size = params.size(); i < size; i++) {
         String paramType = invokeInst.getDeclaredTarget().getParameterType(i).getName().toString();
-        Reference paramRef = findOrCreateReference(params.get(i), paramType, callSites, currentBB, newRefMap);
+        Reference paramRef = findOrCreateReference(params.get(i), paramType, callSites, currentBB, newPostCond);
         paramRefs.add(paramRef);
       }
       beforeInvocation(invokeInst, refRef, defRef, paramRefs, newRefMap);
@@ -1229,7 +1254,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       // if succeed
       if (preCond != null) {
         afterInvocation(invokeInst, callSites, currentBB, ref, refType, def, params, preCond.getRefMap(), preCond.getDefMap());
-        refRef = findOrCreateReference(ref, refType, callSites, currentBB, preCond.getRefMap());
+        refRef = findOrCreateReference(ref, refType, callSites, currentBB, preCond);
 
         // add type condition: v1 instanceof the concrete method class
         if (instInfo.target != null && instInfo.target[0].equals(invokeInst) && instInfo.target[1] != null) {
@@ -1244,7 +1269,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
         }
         
         // new condition: ref != null
-        nullRef = findOrCreateReference("null", "", "", currentBB, preCond.getRefMap());
+        nullRef = findOrCreateReference("null", "", "", currentBB, preCond);
         BinaryConditionTerm notNull = new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance());
         conditionList.add(new Condition(notNull));
 
@@ -1260,8 +1285,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     case Formula.EXCEPTIONAL_SUCCESSOR:
       /* can only be NPE */
       // new condition: ref == null
-      refRef  = findOrCreateReference(ref, refType, callSites, currentBB, newRefMap);
-      nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      refRef  = findOrCreateReference(ref, refType, callSites, currentBB, newPostCond);
+      nullRef = findOrCreateReference("null", "", "", currentBB, newPostCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_EQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -1296,7 +1321,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     
     // check if method name is in the filter list, if so, not step in
     if (isMethodSigFiltered(invokestaticInst.getDeclaredTarget().getSignature())) {
-      return handle_invokenonstatic(postCond, inst, instInfo); // use not step in version
+      return handle_invokestatic(postCond, inst, instInfo); // use not step in version
     }
     
     // the variable(result) define by the invokestatic instruction
@@ -1308,7 +1333,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     }
 
     String invocationType = invokestaticInst.getDeclaredResultType().getName().toString();
-    Reference defRef = findOrCreateReference(def, invocationType, callSites, currentBB, newRefMap);
+    Reference defRef = findOrCreateReference(def, invocationType, callSites, currentBB, newPostCond);
 
     // since there is a new def, add to defMap
     addDefToDefMap(newDefMap, defRef);
@@ -1317,7 +1342,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     List<Reference> paramRefs = new ArrayList<Reference>();
     for (int i = 0, size = params.size(); i < size; i++) {
       String paramType = invokestaticInst.getDeclaredTarget().getParameterType(i).getName().toString();
-      Reference paramRef = findOrCreateReference(params.get(i), paramType, callSites, currentBB, newRefMap);
+      Reference paramRef = findOrCreateReference(params.get(i), paramType, callSites, currentBB, newPostCond);
       paramRefs.add(paramRef);
     }
     beforeInvocation(invokestaticInst, null, defRef, paramRefs, newRefMap);
@@ -1378,8 +1403,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       if (containsRef(def, callSites, newRefMap)) {
         String loadClass = ((TypeReference) token).getName().toString() + ".class";
         
-        Reference loadClassRef = findOrCreateReference(loadClass, metaDataType, callSites, currentBB, newRefMap);
-        Reference defRef = findOrCreateReference(def, metaDataType, callSites, currentBB, newRefMap);
+        Reference loadClassRef = findOrCreateReference(loadClass, metaDataType, callSites, currentBB, postCond);
+        Reference defRef = findOrCreateReference(def, metaDataType, callSites, currentBB, postCond);
 
         // add new references to refMap
         addRefToRefMap(newRefMap, loadClassRef);
@@ -1417,8 +1442,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     String var = getSymbol(unaryInst.getUse(0), methData, callSites, newDefMap);
     
     if (containsRef(def, callSites, newRefMap)) {
-      Reference varRef = findOrCreateReference(var, "I", callSites, currentBB, newRefMap);
-      Reference defRef = findOrCreateReference(def, "I", callSites, currentBB, newRefMap); // reference must exist
+      Reference varRef = findOrCreateReference(var, "I", callSites, currentBB, postCond);
+      Reference defRef = findOrCreateReference(def, "I", callSites, currentBB, postCond); // reference must exist
       
       Instance unaryOp = null;
       switch ((IUnaryOpInstruction.Operator) unaryInst.getOpcode()) {
@@ -1447,14 +1472,22 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     SSANewInstruction newInst                                 = (SSANewInstruction) inst;
 
     String def = getSymbol(newInst.getDef(), methData, callSites, newDefMap);
+
+    List<ConditionTerm> conditionTerms = null;
+    List<Condition> conditionList = new ArrayList<Condition>();
     
     String newType = newInst.getConcreteType().getName().toString();
-    Reference defRef = findOrCreateReference(def, newType, callSites, currentBB, newRefMap);
+    Reference defRef = findOrCreateReference(def, newType, callSites, currentBB, postCond);
     
     // for array types, we also need to substitute ".length" field
     if (newInst.getConcreteType().isArrayType()) {
       String valSize = getSymbol(newInst.getUse(0), methData, callSites, newDefMap);
-      Reference valSizeRef = findOrCreateReference(valSize, "I", callSites, currentBB, newRefMap);
+      Reference valSizeRef = findOrCreateReference(valSize, "I", callSites, currentBB, postCond);
+      Reference zeroRef = findOrCreateReference("#!0", "I", "", currentBB, postCond);
+      
+      conditionTerms = new ArrayList<ConditionTerm>();
+      conditionTerms.add(new BinaryConditionTerm(valSizeRef.getInstance(), Comparator.OP_GREATER_EQUAL, zeroRef.getInstance()));
+      conditionList.add(new Condition(conditionTerms));
       
       List<Reference> lenRefs = defRef.getFieldReferences("length");
       if (lenRefs.size() == 0) {
@@ -1498,11 +1531,11 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       if (valSize.startsWith("#!")) {
         TypeReference elemType = newInst.getConcreteType().getArrayElementType();
         String val = elemType.isPrimitiveType() ? "#!0" /* number or boolean(false)*/ : "null";
-        Reference valRef = findOrCreateReference(val, elemType.getName().toString(), "", currentBB, newRefMap);
+        Reference valRef = findOrCreateReference(val, elemType.getName().toString(), "", currentBB, postCond);
         
         int size = Integer.parseInt(valSize.substring(2));
         for (int i = 0; i < size; i++) {
-          Reference indexRef = findOrCreateReference("#!" + i, "I", "", currentBB, newRefMap);
+          Reference indexRef = findOrCreateReference("#!" + i, "I", "", currentBB, postCond);
           Relation relation = postCond.getRelation("@@array");
           relation.update(new Instance[] {defRef.getInstance(), indexRef.getInstance()}, valRef.getInstance());
         }
@@ -1548,7 +1581,6 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     // the variable define by the new instruction
     long instanceID  = System.nanoTime();
     String freshInst = "FreshInstanceOf(" + newType + "_" + instanceID + ")";
-    //System.err.println(freshInst);
     if (containsRef(def, callSites, newRefMap)) {
       // get the declared type of the new Instruction
       Instance newInstance = new Instance(freshInst, newType, currentBB);
@@ -1557,6 +1589,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       assignInstance(defRef, newInstance, newRefMap, newDefMap);
     }
 
+    // add new conditions to condition list
+    postCond.getConditionList().addAll(conditionList);
     return new Formula(postCond);
   }
 
@@ -1576,8 +1610,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     if (phiVarID > 0) {
       String def = getSymbol(phiInst.getDef(), methData, callSites, newDefMap);
       String var = getSymbol(phiVarID, methData, callSites, newDefMap);
-      Reference defRef = findOrCreateReference(def, "Unknown-Type", callSites, currentBB, newRefMap);
-      Reference phiRef = findOrCreateReference(var, "Unknown-Type", callSites, predBB, newRefMap);
+      Reference defRef = findOrCreateReference(def, "Unknown-Type", callSites, currentBB, postCond);
+      Reference phiRef = findOrCreateReference(var, "Unknown-Type", callSites, predBB, postCond);
 
       // associate the two refs' instance together as the same one
       assignInstance(defRef, phiRef, newRefMap, newDefMap);
@@ -1601,8 +1635,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       String val = getSymbol(piInst.getVal(), methData, callSites, newDefMap);
       
       // add new references to refMap
-      Reference defRef = findOrCreateReference(def, "Unknown-Type", callSites, currentBB, newRefMap);
-      Reference valRef = findOrCreateReference(val, "Unknown-Type", callSites, currentBB, newRefMap);
+      Reference defRef = findOrCreateReference(def, "Unknown-Type", callSites, currentBB, postCond);
+      Reference valRef = findOrCreateReference(val, "Unknown-Type", callSites, currentBB, postCond);
       
       // associate the two refs' instance together as the same one
       assignInstance(defRef, valRef, newRefMap, newDefMap);
@@ -1630,8 +1664,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     case Formula.NORMAL_SUCCESSOR:
       // new condition: ref != null
       String refTypeName = putfieldInst.getDeclaredField().getDeclaringClass().getName().toString();
-      Reference refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, newRefMap);
-      Reference nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, postCond);
+      Reference nullRef = findOrCreateReference("null", "", "", currentBB, postCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -1641,7 +1675,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
    
       String fieldType = putfieldInst.getDeclaredFieldType().getName().toString();
       String fieldName = putfieldInst.getDeclaredField().getName().toString();
-      Reference valRef = findOrCreateReference(val, fieldType, callSites, currentBB, newRefMap);
+      Reference valRef = findOrCreateReference(val, fieldType, callSites, currentBB, postCond);
       
       if (containsFieldName(fieldName, postCond)) {
         // find the fieldRef
@@ -1684,8 +1718,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       /* can only be NPE */
       // new condition: ref == null
       refTypeName = putfieldInst.getDeclaredField().getDeclaringClass().getName().toString();
-      refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, newRefMap);
-      nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      refRef  = findOrCreateReference(ref, refTypeName, callSites, currentBB, postCond);
+      nullRef = findOrCreateReference("null", "", "", currentBB, postCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(refRef.getInstance(), Comparator.OP_EQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -1722,8 +1756,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     
     // add new references to refMap
     String fieldType = putstaticInst.getDeclaredFieldType().getName().toString();
-    Reference fieldRef = findOrCreateReference(declaredField, fieldType, "", currentBB, newRefMap);  // static field also goes to "" callSites
-    Reference valRef   = findOrCreateReference(val, fieldType, callSites, currentBB, newRefMap);
+    Reference fieldRef = findOrCreateReference(declaredField, fieldType, "", currentBB, postCond);  // static field also goes to "" callSites
+    Reference valRef   = findOrCreateReference(val, fieldType, callSites, currentBB, postCond);
 
     // associate the two refs' instance together as the same one
     assignInstance(fieldRef, valRef, newRefMap, postCond.getDefMap());
@@ -1743,8 +1777,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     String ret = getSymbol(returnInst.getResult(), methData, callSites, postCond.getDefMap());
 
     // substitute "RET" given by caller
-    Reference returnRef = findOrCreateReference(ret, "Unknown-Type", callSites, currentBB, newRefMap);
-    Reference retRef    = findOrCreateReference("RET", "Unknown-Type", callSites, currentBB, newRefMap);
+    Reference returnRef = findOrCreateReference(ret, "Unknown-Type", callSites, currentBB, postCond);
+    Reference retRef    = findOrCreateReference("RET", "Unknown-Type", callSites, currentBB, postCond);
 
     // associate the two refs' instance together as the same one
     assignInstance(retRef, returnRef, newRefMap, postCond.getDefMap());
@@ -1763,7 +1797,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     // get the variables of the switch statement,
     // the variables might be constant numbers!
     String var1 = getSymbol(switchInst.getUse(0), methData, callSites, postCond.getDefMap());
-    Reference var1Ref = findOrCreateReference(var1, "I", callSites, currentBB, newRefMap);
+    Reference var1Ref = findOrCreateReference(var1, "I", callSites, currentBB, postCond);
 
     List<ConditionTerm> conditionTerms = null;
     List<Condition> conditionList = new ArrayList<Condition>();
@@ -1828,8 +1862,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     List<Condition> conditionList = new ArrayList<Condition>();
     
     // new condition: excepRef != null
-    Reference excepRef = findOrCreateReference(exception, "Unknown-Type", callSites, currentBB, newRefMap);
-    Reference nullRef  = findOrCreateReference("null", "", "", currentBB, newRefMap);
+    Reference excepRef = findOrCreateReference(exception, "Unknown-Type", callSites, currentBB, postCond);
+    Reference nullRef  = findOrCreateReference("null", "", "", currentBB, postCond);
     conditionTerms = new ArrayList<ConditionTerm>();
     conditionTerms.add(new BinaryConditionTerm(excepRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
     conditionList.add(new Condition(conditionTerms));
@@ -1861,8 +1895,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     List<Condition> conditionList = new ArrayList<Condition>();
     if (instInfo.callSites.length() == 0 && !methData.isStatic()) {
       // new condition: this != null
-      Reference thisRef = findOrCreateReference("v1", "Unknown-Type", callSites, currentBB, newRefMap);
-      Reference nullRef = findOrCreateReference("null", "", "", currentBB, newRefMap);
+      Reference thisRef = findOrCreateReference("v1", "Unknown-Type", callSites, currentBB, postCond);
+      Reference nullRef = findOrCreateReference("null", "", "", currentBB, postCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(thisRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
@@ -1875,7 +1909,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     for (int i = 0, count = methData.getIR().getNumberOfParameters(); i < count; i++) {
       String paramName = getSymbol(methData.getIR().getParameter(i), methData, callSites, postCond.getDefMap());
       String paramType = methData.getIR().getParameterType(i).getName().toString();
-      Reference paramRef = findOrCreateReference(paramName, paramType, callSites, currentBB, newRefMap);
+      Reference paramRef = findOrCreateReference(paramName, paramType, callSites, currentBB, postCond);
       paramRef.setType(paramType);
 
       // since there is a new def, add to defMap
@@ -1895,7 +1929,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
         Instance valInstance = new Instance(val, fieldType, currentBB);
 
         // find the fieldRef
-        Reference thisRef = findOrCreateReference("v1", "Unknown-Type", callSites, currentBB, newRefMap);
+        Reference thisRef = findOrCreateReference("v1", "Unknown-Type", callSites, currentBB, postCond);
         List<Reference> fieldRefs = thisRef.getFieldReferences(fieldName);
         if (fieldRefs.size() == 0) {
           if (thisRef.getInstances().size() == 0) {

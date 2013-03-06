@@ -515,7 +515,7 @@ public class YicesResult extends AbstractSolverResult {
       boolean meetUpdate = false;
       for (int i = 0; i < relation.getFunctionCount() && !meetUpdate && !useful; i++) {
         Instance objInstance = relation.getDomainValues().get(i)[0];
-        if (relation.getRangeValues().get(i) != null) { // an update
+        if (relation.isUpdate(i)) { // an update
           meetUpdate = isObjInstanceSame(binaryTerm.getInstance1().getRight(), 
               constInstanceMapping, updatedAsMapping, objInstance, formula);
         }
@@ -553,7 +553,7 @@ public class YicesResult extends AbstractSolverResult {
       for (int i = 0; i < relation.getFunctionCount() && !meetUpdate && !useful; i++) {
         Instance objInstance   = relation.getDomainValues().get(i)[0];
         Instance indexInstance = relation.getDomainValues().get(i)[1];
-        if (relation.getRangeValues().get(i) != null) { // an update
+        if (relation.isUpdate(i)) { // an update
           meetUpdate = isObjInstanceSame(binaryTerm.getInstance1().getLeft(), 
               constInstanceMapping, updatedAsMapping, objInstance, formula);
           if (meetUpdate) { // check index
@@ -698,7 +698,7 @@ public class YicesResult extends AbstractSolverResult {
     String[] solverConsts1 = matchToSolverConsts(
         relation.getDomainValues().get(index), constInstanceMapping, updatedAsMapping, formula);
     for (int i = index - 1; i >= 0; i--) {
-      if (relation.getRangeValues().get(i) != null) { // an update
+      if (relation.isUpdate(i)) { // an update
         String[] solverConsts2 = matchToSolverConsts(
             relation.getDomainValues().get(i), constInstanceMapping, updatedAsMapping, formula);
         if (Arrays.equals(solverConsts1, solverConsts2)) {

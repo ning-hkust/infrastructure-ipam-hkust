@@ -8,6 +8,7 @@ import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.PathCondition.Formula.SMT_RESULT;
 import hk.ust.cse.Prevision.Solver.ICommand.TranslatedCommand;
 import hk.ust.cse.Prevision.Solver.Yices.YicesCommand;
+import hk.ust.cse.Prevision.Solver.Yices.YicesLoaderExe;
 import hk.ust.cse.Prevision.Solver.Yices.YicesLoaderLib;
 import hk.ust.cse.Prevision.Solver.Yices.YicesResult;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
@@ -21,13 +22,17 @@ import java.util.HashSet;
 import java.util.List;
 
 public class SMTChecker {
-  public enum SOLVERS {YICES, Z3}
+  public enum SOLVERS {YICES, YICES_BIN, Z3}
   
   public SMTChecker(SOLVERS solver) {
     m_solverType = solver;
     switch (solver) {
     case YICES:
       m_solverLoader = new YicesLoaderLib();
+      m_command      = new YicesCommand();
+      break;
+    case YICES_BIN:
+      m_solverLoader = new YicesLoaderExe();
       m_command      = new YicesCommand();
       break;
     case Z3:
@@ -113,6 +118,14 @@ public class SMTChecker {
     } catch (StackOverflowError e) {
       System.err.println("Stack overflowed when generating SMT statements, skip!");
       smtCheckResult = SMT_RESULT.STACK_OVERFLOW;
+    } catch (Exception e) {
+      if (e.getMessage() != null) {
+        System.err.println(e.getMessage());
+      }
+      else {
+        e.printStackTrace();
+      }
+      smtCheckResult = SMT_RESULT.ERROR;
     }
     
     // save the solver SMT check result

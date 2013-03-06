@@ -621,12 +621,14 @@ public class BackwardExecutor extends AbstractExecutor {
             
             // create the preconditions according to crash type
             List<Formula> initFormulas = prepInitFormulas(preCond, methData, execOptions, infoItem, moreInfoItems);
+            
             // use this preCond to continue computation
             preCond = initFormulas.size() > 0 ? initFormulas.get(0) : null;
           }
           
           // if it is at the inner most frame, start from the starting index
-          if (!starting[0] || startingInst < 0 || (currInstIndex - (execOptions.inclStartingInst ? 1 : 0)) < startingInst) {
+          if (preCond != null && (!starting[0] || startingInst < 0 || 
+                                  (currInstIndex - (execOptions.inclStartingInst ? 1 : 0)) < startingInst)) {
             // get precond for this instruction
             BBorInstInfo instInfo = lastInst ? infoItem : new BBorInstInfo(infoItem.currentBB, 
                 infoItem.startingBB, infoItem.skipToBB, preCond, infoItem.formula4BB, Formula.NORMAL_SUCCESSOR, 
