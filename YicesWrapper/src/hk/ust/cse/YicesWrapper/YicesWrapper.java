@@ -31,7 +31,9 @@ public class YicesWrapper {
       String yicesLibName     = "libyices.dll";
       String yicesWrapperName = "hk_ust_cse_YicesWrapper_YicesWrapper.dll";
       if (jvmArch.contains("64")) {
-        yicesLibName     = "libyices_64.dll";
+        //XXX hk_ust_cse_YicesWrapper_YicesWrapper_64.dll depends on libyices.dll, 
+        // therefore we need to manually modify libyices_64.dll into libyices.dll
+        yicesLibName     = "libyices.dll";
         yicesWrapperName = "hk_ust_cse_YicesWrapper_YicesWrapper_64.dll";
       }
       // do not use loadLibrary(), since it only accepts library name
