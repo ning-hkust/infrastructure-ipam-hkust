@@ -4,6 +4,7 @@ import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.PathCondition.TypeConditionTerm;
+import hk.ust.cse.Prevision.Solver.NeutralInput.Assertion;
 import hk.ust.cse.Prevision.Solver.SMTChecker;
 import hk.ust.cse.Prevision.VirtualMachine.Executor.AbstractExecutor.BBorInstInfo;
 
@@ -94,7 +95,9 @@ public class HeuristicBacktrack {
                   continueInMethod = true;
                 }
                 else if ((instance1Time == Long.MIN_VALUE || instance2Time == Long.MIN_VALUE) && 
-                         !prevCondsOnOrBeforeTimes.contains(unsatCoreCond.getTimeStamp())) { // may change assignment in invocation
+                         (!prevCondsOnOrBeforeTimes.contains(unsatCoreCond.getTimeStamp()) || // may avoid introducing this condition after invocation 
+                          (prevCondsOnOrBeforeTimes.contains(unsatCoreCond.getTimeStamp()) && 
+                           unsatCoreCond.getTimeStamp() > next.formula.getTimeStamp()))) { // may avoid introducing this condition in invocation
                   affectable       = true;
                   continueInMethod = true;
                 }
@@ -153,14 +156,14 @@ public class HeuristicBacktrack {
   private List<Condition> findUnsatCores() {
     List<Condition> unsatCores = new ArrayList<Condition>();
 
-    List<Integer> unsatCoreIds                 = m_smtChecker.getLastResult().getUnsatCoreIds();
-    List<String> assertCmds                    = m_smtChecker.getLastTranslatedCommand().assertCmds;
-    Hashtable<String, List<Condition>> mapping = m_smtChecker.getLastTranslatedCommand().assertCmdCondsMapping;
+    List<Integer> unsatCoreIds                    = m_smtChecker.getLastResult().getUnsatCoreIds();
+    List<Assertion> assertions                    = m_smtChecker.getLastSolverInput().getNeutralInput().getAssertions();
+    Hashtable<Assertion, List<Condition>> mapping = m_smtChecker.getLastSolverInput().getNeutralInput().getAssertionCondsMapping();
     
     if (unsatCoreIds != null && unsatCoreIds.size() > 0) {
       for (Integer integer : unsatCoreIds) {
-        String unsatCoreCmd = assertCmds.get(integer - 1);
-        List<Condition> unsatCoreConditions = mapping.get(unsatCoreCmd);
+        Assertion unsatAssertion = assertions.get(integer - 1);
+        List<Condition> unsatCoreConditions = mapping.get(unsatAssertion);
         if (unsatCoreConditions != null && unsatCoreConditions.size() > 0) {
           Condition unsatCore = null;
           for (Condition unsatCoreCondition : unsatCoreConditions) {
@@ -176,15 +179,15 @@ public class HeuristicBacktrack {
   }
   
   private long findUnsatCoreEarliestSet() {
-    List<Integer> unsatCoreIds                 = m_smtChecker.getLastResult().getUnsatCoreIds();
-    List<String> assertCmds                    = m_smtChecker.getLastTranslatedCommand().assertCmds;
-    Hashtable<String, List<Condition>> mapping = m_smtChecker.getLastTranslatedCommand().assertCmdCondsMapping;
+    List<Integer> unsatCoreIds                    = m_smtChecker.getLastResult().getUnsatCoreIds();
+    List<Assertion> assertions                    = m_smtChecker.getLastSolverInput().getNeutralInput().getAssertions();
+    Hashtable<Assertion, List<Condition>> mapping = m_smtChecker.getLastSolverInput().getNeutralInput().getAssertionCondsMapping();
     
     // we only deal with the simplest case
     long earliest = Long.MAX_VALUE;
     if (unsatCoreIds.size() == 1) {
-      String unsatCoreCmd = assertCmds.get(unsatCoreIds.get(0) - 1);
-      List<Condition> unsatCoreConditions = mapping.get(unsatCoreCmd);
+      Assertion unsatAssertion = assertions.get(unsatCoreIds.get(0) - 1);
+      List<Condition> unsatCoreConditions = mapping.get(unsatAssertion);
       if (unsatCoreConditions != null && unsatCoreConditions.size() > 0) {
         for (Condition unsatCoreCondition : unsatCoreConditions) {
           if (unsatCoreCondition.getConditionTerms().get(0) instanceof BinaryConditionTerm) {

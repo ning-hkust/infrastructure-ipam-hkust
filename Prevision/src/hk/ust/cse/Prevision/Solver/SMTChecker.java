@@ -5,12 +5,11 @@ import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm.Comparator;
 import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Formula;
-import hk.ust.cse.Prevision.PathCondition.Formula.SMT_RESULT;
-import hk.ust.cse.Prevision.Solver.ICommand.TranslatedCommand;
-import hk.ust.cse.Prevision.Solver.Yices.YicesCommand;
-import hk.ust.cse.Prevision.Solver.Yices.YicesLoaderExe;
-import hk.ust.cse.Prevision.Solver.Yices.YicesLoaderLib;
-import hk.ust.cse.Prevision.Solver.Yices.YicesResult;
+import hk.ust.cse.Prevision.Solver.NeutralInput.Assertion;
+import hk.ust.cse.Prevision.Solver.SolverLoader.SOLVER_RESULT;
+import hk.ust.cse.Prevision.Solver.Z3.Z3Input;
+import hk.ust.cse.Prevision.Solver.Z3.Z3Loader;
+import hk.ust.cse.Prevision.Solver.Z3.Z3Result;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.util.Utils;
 
@@ -21,103 +20,81 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 
+import com.microsoft.z3.Context;
+import com.microsoft.z3.Solver;
+
 public class SMTChecker {
-  public enum SOLVERS {YICES, YICES_BIN, Z3}
+  public enum SOLVERS {Z3}
   
-  public SMTChecker(SOLVERS solver) {
-    m_solverType = solver;
-    switch (solver) {
-    case YICES:
-      m_solverLoader = new YicesLoaderLib();
-      m_command      = new YicesCommand();
-      break;
-    case YICES_BIN:
-      m_solverLoader = new YicesLoaderExe();
-      m_command      = new YicesCommand();
-      break;
+  public SMTChecker(SOLVERS solverType) {
+    m_solverType = solverType;
+    switch (solverType) {
     case Z3:
-      m_solverLoader = new YicesLoaderLib();
-      m_command      = new YicesCommand();
+      m_solverLoader = new Z3Loader();
       break;
     default:
-      m_solverLoader = new YicesLoaderLib();
-      m_command      = new YicesCommand();
+      m_solverLoader = new Z3Loader();
       break;
     }
   }
   
   // a fast simple check
-  public SMT_RESULT simpleCheck(Formula formula) {
+  public SOLVER_RESULT simpleCheck(Formula formula) {
     String simpleCheckResult = SimpleChecker.simpleCheck(formula, null, false);
-    return simpleCheckResult.startsWith("sat") ? SMT_RESULT.SAT : SMT_RESULT.UNSAT;
+    return simpleCheckResult.startsWith("sat") ? SOLVER_RESULT.SAT : SOLVER_RESULT.UNSAT;
   }
   
-  public SMT_RESULT smtCheck(Formula formula, boolean checkSatOnly, boolean retrieveModel, 
-      boolean retrievePatialModel, boolean keepUnboundedField, boolean retrieveUnsatCore, boolean usePredefObjectValues) {
+  public SOLVER_RESULT smtCheck(Formula formula, boolean checkSatOnly, boolean retrieveModel, 
+      boolean retrievePatialModel, boolean keepUnboundField, boolean retrieveUnsatCore, boolean usePredefObjectValues) {
     
-    SMT_RESULT smtCheckResult = null;
+    clearSolverData();
+    
+    Object context = null;
+    SOLVER_RESULT smtCheckResult = null;
     try {
       // use the field values of the predefined static final objects
       if (!checkSatOnly && usePredefObjectValues) {
-        addUsePredefObjectValuesTerms(formula);
+        addUsePredefinedObjValuesTerms(formula);
       }
+
+      // generate a neutral input first
+      NeutralInput neutralInput = new NeutralInput(formula, keepUnboundField, retrieveModel, retrieveUnsatCore);
       
-      // generate SMT Solver inputs
-      m_lastCmd = m_command.translateToCommand(formula, keepUnboundedField, retrieveUnsatCore);
+      // create a fresh context
+      context = m_solverLoader.createContext();
       
+      // generate a solver input from neutral input
+      m_lastSolverInput = createNewSolverInput(context, neutralInput);
+      
+      // start checking: 1) simple check, 2) full check
       boolean finishedChecking = false;
 
       // a fast simple check
       if (!finishedChecking) {
-        String simpleCheckResult = SimpleChecker.simpleCheck(formula, m_lastCmd, retrieveUnsatCore);
-        if (simpleCheckResult.startsWith("unsat")) { // try simpleChecker first
-          smtCheckResult = SMT_RESULT.UNSAT;
+        String simpleCheckResult = SimpleChecker.simpleCheck(formula, m_lastSolverInput, retrieveUnsatCore);
+        if (simpleCheckResult.startsWith("unsat")) {
+          smtCheckResult = SOLVER_RESULT.UNSAT;
           
-          m_lastSolverInput  = m_lastCmd.command;
           m_lastSolverOutput = simpleCheckResult;
-          m_lastSolverResult = createNewSolverResult();
-          m_lastSolverResult.parseOutput(m_lastSolverOutput, formula, m_lastCmd);
+          m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput);
           finishedChecking = true;
         }
       }
 
       // full SMT check
       if (!finishedChecking) {
-        ISolverLoader.SOLVER_COMP_PROCESS solverResult = m_solverLoader.check(m_lastCmd.command);
-        switch (solverResult) {
-        case SAT:
-          smtCheckResult = SMT_RESULT.SAT;
-          break;
-        case UNSAT:
-          smtCheckResult = SMT_RESULT.UNSAT;
-          break;
-        case ERROR:
-          smtCheckResult = SMT_RESULT.ERROR;
-          System.err.println(m_solverLoader.getLastOutput());
-          //System.out.println(m_lastCmd.command);
-          break;
-        case TIMEOUT:
-          smtCheckResult = SMT_RESULT.TIMEOUT;
-          break;
-        }
+        smtCheckResult = m_solverLoader.check(m_lastSolverInput);
         
-        // save SMT solver input and output right away, because s_solverLoader only  
-        // keeps the last one, so it might change from time to time
-        m_lastSolverInput  = m_solverLoader.getLastInput();
+        // save output object
         m_lastSolverOutput = m_solverLoader.getLastOutput();
-        
         if (!checkSatOnly) {
-          // may take non-trivial time due to removeUselessFuncIntrp() when there are many array operations
-          m_lastSolverResult = createNewSolverResult();
-          m_lastSolverResult.parseOutput(m_lastSolverOutput, formula, m_lastCmd);
-          if (retrieveModel && m_lastSolverResult.isSatisfactory()) {
-            m_lastSolverResult.parseOutputModel(m_lastSolverOutput, formula, m_lastCmd, retrievePatialModel);
-          }
+          m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput);
         }
       }
+      
     } catch (StackOverflowError e) {
-      System.err.println("Stack overflowed when generating SMT statements, skip!");
-      smtCheckResult = SMT_RESULT.STACK_OVERFLOW;
+      System.err.println("Stack overflowed when generating SMT solver input, skip!");
+      smtCheckResult = SOLVER_RESULT.STACK_OVERFLOW;
     } catch (Exception e) {
       if (e.getMessage() != null) {
         System.err.println(e.getMessage());
@@ -125,7 +102,11 @@ public class SMTChecker {
       else {
         e.printStackTrace();
       }
-      smtCheckResult = SMT_RESULT.ERROR;
+      smtCheckResult = SOLVER_RESULT.ERROR;
+    } finally {
+      if (context != null) {
+        m_solverLoader.deleteContext(context);
+      }
     }
     
     // save the solver SMT check result
@@ -134,156 +115,141 @@ public class SMTChecker {
     return smtCheckResult;
   }
   
-  public Object[] smtChecksInContext(int ctx, Formula ctxFormula, List<List<Condition>> ctxConditions, 
-      boolean checkSatOnly, boolean retrieveModel, boolean retrievePatialModel, 
-      boolean keepUnboundedField, boolean retrieveUnsatCore, boolean usePredefObjectValues) {
+  public SOLVER_RESULT smtCheckInContext(Object ctxStorage, Formula ctxFormula, boolean checkSatOnly, boolean retrieveModel, 
+      boolean retrievePatialModel, boolean keepUnboundField, boolean retrieveUnsatCore, boolean usePredefObjectValues) {
     
-    // results to return
-    SMT_RESULT formulaCheckResult    = null;
-    List<SMT_RESULT> smtCheckResults = new ArrayList<SMT_RESULT>();
-    List<AbstractSolverResult> solverResults = new ArrayList<AbstractSolverResult>();
+    clearSolverData();
     
-    int useCtx = -1;
-    if (ctxFormula != null) {
-      try {
-        
-        // use the field values of the predefined static final objects
-        if (!checkSatOnly && usePredefObjectValues) {
-          addUsePredefObjectValuesTerms(ctxFormula);
-        }
-        
-        // generate SMT Solver inputs
-        m_lastCmd = m_command.translateToCommand(ctxFormula, keepUnboundedField, retrieveUnsatCore);
-        
-        boolean finishedChecking = false;
-
-        // a fast simple check
-        if (!finishedChecking) {
-          String simpleCheckResult = SimpleChecker.simpleCheck(ctxFormula, m_lastCmd, retrieveUnsatCore);
-          if (simpleCheckResult.startsWith("unsat")) { // try simpleChecker first
-            formulaCheckResult = SMT_RESULT.UNSAT;
-            
-            m_lastSolverInput  = m_lastCmd.command;
-            m_lastSolverOutput = simpleCheckResult;
-            m_lastSolverResult = createNewSolverResult();
-            m_lastSolverResult.parseOutput(m_lastSolverOutput, ctxFormula, m_lastCmd);
-            finishedChecking = true;
-          }
-        }
-
-        // full SMT check
-        if (!finishedChecking) {
-          // create a new context
-          useCtx = ctx < 0 ? m_solverLoader.createContext() : ctx;
-          
-          ISolverLoader.SOLVER_COMP_PROCESS solverResult = m_solverLoader.checkInContext(useCtx, m_lastCmd.command);
-          switch (solverResult) {
-          case SAT:
-            formulaCheckResult = SMT_RESULT.SAT;
-            break;
-          case UNSAT:
-            formulaCheckResult = SMT_RESULT.UNSAT;
-            break;
-          case ERROR:
-            formulaCheckResult = SMT_RESULT.ERROR;
-            System.out.println(m_lastCmd.command);
-            break;
-          case TIMEOUT:
-            formulaCheckResult = SMT_RESULT.TIMEOUT;
-            break;
-          }
-          
-          // push the current context
-          m_solverLoader.pushContext(useCtx);
-          
-          // save SMT solver input and output right away, because s_solverLoader only  
-          // keeps the last one, so it might change from time to time
-          m_lastSolverInput  = m_solverLoader.getLastInput();
-          m_lastSolverOutput = m_solverLoader.getLastOutput();
-          
-          if (!checkSatOnly) {
-            // may take non-trivial time due to removeUselessFuncIntrp() when there are many array operations
-            m_lastSolverResult = createNewSolverResult();
-            m_lastSolverResult.parseOutput(m_lastSolverOutput, ctxFormula, m_lastCmd);
-            if (retrieveModel && m_lastSolverResult.isSatisfactory()) {
-              m_lastSolverResult.parseOutputModel(m_lastSolverOutput, ctxFormula, m_lastCmd, retrievePatialModel);
-            }
-          }
-        }
-      } catch (StackOverflowError e) {
-        System.err.println("Stack overflowed when generating SMT statements, skip!");
-        formulaCheckResult = SMT_RESULT.STACK_OVERFLOW;
+    SOLVER_RESULT smtCheckResult = null;
+    try {
+      // use the field values of the predefined static final objects
+      if (!checkSatOnly && usePredefObjectValues) {
+        addUsePredefinedObjValuesTerms(ctxFormula);
       }
-    }
+
+      // generate a neutral input first
+      NeutralInput neutralInput = new NeutralInput(ctxFormula, keepUnboundField, retrieveModel, retrieveUnsatCore);
       
-    // check each context conditions
-    if ((formulaCheckResult == SMT_RESULT.SAT || ctx >= 0) && ctxConditions != null) {
-      for (int i = 0, size = ctxConditions.size(); i < size; i++) {
-        StringBuilder additionalCmds = new StringBuilder();
-        for (Condition condition : ctxConditions.get(i)) {
-          String command = m_command.translateToCommand(condition, keepUnboundedField, retrieveUnsatCore);
-          if (command.length() > 0) {
-            if (!command.contains("%%UnboundField%%")) {
-              additionalCmds.append(command);
-            }
-          }
+      // generate a solver input from neutral input
+      m_lastSolverInput = createNewSolverInput(ctxStorage, neutralInput);
+      
+      // start checking: 1) simple check, 2) full check
+      boolean finishedChecking = false;
+
+      // a fast simple check
+      if (!finishedChecking) {
+        String simpleCheckResult = SimpleChecker.simpleCheck(ctxFormula, m_lastSolverInput, retrieveUnsatCore);
+        if (simpleCheckResult.startsWith("unsat")) {
+          smtCheckResult = SOLVER_RESULT.UNSAT;
+          
+          m_lastSolverOutput = simpleCheckResult;
+          m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput);
+          finishedChecking = true;
         }
-        additionalCmds.append(m_command.getCheckCommand());
-        
-        // restore context
-        useCtx = useCtx < 0 ? ctx : useCtx;
-        m_solverLoader.popContext(useCtx);
-        m_solverLoader.pushContext(useCtx);
-        
-        // check in context
-        SMT_RESULT smtCheckResult = null;
-        ISolverLoader.SOLVER_COMP_PROCESS solverResult2 = m_solverLoader.checkInContext(useCtx, additionalCmds.toString());
-        switch (solverResult2) {
-        case SAT:
-          smtCheckResult = SMT_RESULT.SAT;
-          break;
-        case UNSAT:
-          smtCheckResult = SMT_RESULT.UNSAT;
-          break;
-        case ERROR:
-          smtCheckResult = SMT_RESULT.ERROR;
-          System.out.println(m_lastCmd.command);
-          break;
-        case TIMEOUT:
-          smtCheckResult = SMT_RESULT.TIMEOUT;
-          break;
-        }
-        smtCheckResults.add(smtCheckResult);
-        
-        // save ISolverResult
-        AbstractSolverResult lastSolverResult = null;
-        if (!checkSatOnly) {
-          // may take non-trivial time due to removeUselessFuncIntrp() when there are many array operations
-          try {
-            lastSolverResult = createNewSolverResult();
-            lastSolverResult.parseOutput(m_solverLoader.getLastOutput(), ctxFormula, m_lastCmd);
-            if (retrieveModel && m_lastSolverResult.isSatisfactory()) {
-              lastSolverResult.parseOutputModel(m_solverLoader.getLastOutput(), ctxFormula, m_lastCmd, retrievePatialModel);
-            }
-          } catch (Exception e) {}
-        }
-        solverResults.add(lastSolverResult);
       }
-    }
-    
-    // delete the context only if it is create by this method
-    if (ctx < 0 && useCtx >= 0) {
-      m_solverLoader.deleteContext(useCtx);
+
+      // full SMT check
+      if (!finishedChecking) {
+        smtCheckResult = m_solverLoader.checkInContext(ctxStorage, m_lastSolverInput);
+        
+        // save output object
+        m_lastSolverOutput = m_solverLoader.getLastOutput();
+        if (!checkSatOnly) {
+          m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput);
+        }
+      }
+      
+    } catch (StackOverflowError e) {
+      System.err.println("Stack overflowed when generating SMT solver input, skip!");
+      smtCheckResult = SOLVER_RESULT.STACK_OVERFLOW;
+    } catch (Exception e) {
+      if (e.getMessage() != null) {
+        System.err.println(e.getMessage());
+      }
+      else {
+        e.printStackTrace();
+      }
+      smtCheckResult = SOLVER_RESULT.ERROR;
     }
     
     // save the solver SMT check result
-    m_lastSMTCheckResult = formulaCheckResult;
+    m_lastSMTCheckResult = smtCheckResult;
     
-    return new Object[] {formulaCheckResult, smtCheckResults, solverResults};
+    return smtCheckResult;
+  }
+  
+  // check the additional conditions
+  public SOLVER_RESULT smtCheckInContext(Object ctxStorage, Formula ctxFormula, NeutralInput ctxInput, 
+      List<Condition> conditions, boolean checkSatOnly, boolean retrieveModel, boolean retrievePatialModel, 
+      boolean keepUnboundField, boolean retrieveUnsatCore, boolean usePredefObjectValues) {
+    
+    clearSolverData();
+    
+    SOLVER_RESULT smtCheckResult = null;
+    try {
+      // generate a neutral input first
+      NeutralInput neutralInput = new NeutralInput(ctxFormula, ctxInput, conditions);
+      
+      // generate a solver input from neutral input
+      m_lastSolverInput = createNewSolverInput(ctxStorage, neutralInput);
+      
+      // find the assertions of the conditions
+      Assertion[] assertions = new Assertion[conditions.size()];
+      for (int i = 0; i < assertions.length; i++) {
+        assertions[i] = neutralInput.getConditionAssertionMapping().get(conditions.get(i));
+      }
+      
+      // check in context
+      smtCheckResult = m_solverLoader.checkInContext(ctxStorage, m_lastSolverInput, assertions);
+      
+      // save output object
+      m_lastSolverOutput = m_solverLoader.getLastOutput();
+      if (!checkSatOnly) {
+        m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput);
+      }
+
+    } catch (Exception e) {
+      e.printStackTrace();
+      smtCheckResult = SOLVER_RESULT.ERROR;
+    }
+
+    // save the solver SMT check result
+    m_lastSMTCheckResult = smtCheckResult;
+    
+    return smtCheckResult;
+  }
+  
+  public List<Condition> findLastUnsatCoreConditions() {
+    List<Condition> unsatCoreConds = new ArrayList<Condition>();
+
+    List<Assertion> unsatCoreAssertions = findLastUnsatCoreExpressions();
+    for (Assertion unsatCoreAssertion : unsatCoreAssertions) {
+      List<Condition> unsatCoreConditions = 
+          m_lastSolverInput.getNeutralInput().getAssertionCondsMapping().get(unsatCoreAssertion);
+      if (unsatCoreConditions != null && unsatCoreConditions.size() > 0) {
+        Condition unsatCore = unsatCoreConditions.get(0); // get the first one
+        unsatCoreConds.add(unsatCore);
+      }
+    }
+    return unsatCoreConds;
+  }
+  
+  private List<Assertion> findLastUnsatCoreExpressions() {
+    List<Assertion> unsatCoreAssertions = new ArrayList<Assertion>();
+
+    List<Integer> unsatCoreIds = m_lastSolverResult.getUnsatCoreIds();
+    if (unsatCoreIds != null && unsatCoreIds.size() > 0) {
+      for (Integer unsatCoreId : unsatCoreIds) {
+        Assertion unsatCoreAssertion = 
+            m_lastSolverInput.getNeutralInput().getAssertions().get(unsatCoreId - 1);
+        unsatCoreAssertions.add(unsatCoreAssertion);
+      }
+    }
+    return unsatCoreAssertions;
   }
   
   // add equal to predefined static final object's integer field value terms
-  private void addUsePredefObjectValuesTerms(Formula formula) {
+  private void addUsePredefinedObjValuesTerms(Formula formula) {
     
     // collect all instances with int type
     HashSet<Instance> intInstances = new HashSet<Instance>();
@@ -353,89 +319,73 @@ public class SMTChecker {
     }
   }
   
-  public int createContext() {
-    return m_solverLoader.createContext();
-  }
-  
-  public void deleteContext(int ctx) {
-    m_solverLoader.deleteContext(ctx);
-  }
-  
-  public List<String> findLastUnsatCoreCmds() {
-    List<String> unsatCoreCmds = new ArrayList<String>();
-
-    List<Integer> unsatCoreIds = m_lastSolverResult.getUnsatCoreIds();
-    if (unsatCoreIds != null && unsatCoreIds.size() > 0) {
-      for (Integer unsatCoreId : unsatCoreIds) {
-        String unsatCoreCmd = m_lastCmd.assertCmds.get(unsatCoreId - 1);
-        unsatCoreCmds.add(unsatCoreCmd);
-      }
-    }
-    return unsatCoreCmds;
-  }
-  
-  public List<Condition> findLastUnsatCoreConditions() {
-    List<Condition> unsatCoreConds = new ArrayList<Condition>();
-
-    List<String> unsatCoreCmds = findLastUnsatCoreCmds();
-    for (String unsatCoreCmd : unsatCoreCmds) {
-      List<Condition> unsatCoreConditions = m_lastCmd.assertCmdCondsMapping.get(unsatCoreCmd);
-      if (unsatCoreConditions != null && unsatCoreConditions.size() > 0) {
-        Condition unsatCore = unsatCoreConditions.get(0); // get the first one
-        unsatCoreConds.add(unsatCore);
-      }
-    }
-    return unsatCoreConds;
-  }
-  
-  private AbstractSolverResult createNewSolverResult() {
-    AbstractSolverResult solverResult = null;
+  private SolverInput createNewSolverInput(Object context, NeutralInput neutralInput) throws Exception {
+    SolverInput solverInput = null;
     switch (m_solverType) {
-    case YICES:
-      solverResult = new YicesResult();
-      break;
     case Z3:
-      solverResult = new YicesResult();
+      if (context instanceof Solver) {
+        context = ((Z3Loader) m_solverLoader).getSolverContext((Solver) context);
+      }
+      solverInput = new Z3Input((Context) context, neutralInput);
       break;
     default:
-      solverResult = new YicesResult();
+      break;
+    }
+    return solverInput;
+  }
+  
+  private SolverResult createNewSolverResult(SOLVER_RESULT result, Object output, SolverInput solverInput) {
+    SolverResult solverResult = null;
+    switch (m_solverType) {
+    case Z3:
+      solverResult = new Z3Result(result, output, (Z3Input) solverInput);
+      break;
+    default:
       break;
     }
     return solverResult;
   }
   
-  public void clearSolverData() {
-    m_lastSolverInput  = null;
-    m_lastSolverOutput = null;
-    m_lastSolverResult = null;
+  public Object createContext() {
+    return m_solverLoader.createContext();
   }
   
-  public String getLastSolverOutput() {
-    return m_lastSolverOutput;
+  public void deleteContext(Object ctx) {
+    m_solverLoader.deleteContext(ctx);
+  }
+  
+  public void clearSolverData() {
+    m_lastSolverInput    = null;
+    m_lastSolverOutput   = null;
+    m_lastSolverResult   = null;
+    m_lastSMTCheckResult = null;
   }
 
-  public String getLastSolverInput() {
+  public SolverInput getLastSolverInput() {
     return m_lastSolverInput;
   }
   
-  public AbstractSolverResult getLastResult() {
+  public Object getLastSolverOutput() {
+    return m_lastSolverOutput;
+  }
+  
+  public SolverResult getLastResult() {
     return m_lastSolverResult;
   }
   
-  public SMT_RESULT getLastSMTCheckResult() {
+  public SOLVER_RESULT getLastSMTCheckResult() {
     return m_lastSMTCheckResult;
   }
   
-  public TranslatedCommand getLastTranslatedCommand() {
-    return m_lastCmd;
+  public SolverLoader getSolverLoader() {
+    return m_solverLoader;
   }
   
-  private String              m_lastSolverInput;
-  private String              m_lastSolverOutput;
-  private AbstractSolverResult m_lastSolverResult;
-  private SMT_RESULT         m_lastSMTCheckResult;
-  private TranslatedCommand   m_lastCmd;
-  private final SOLVERS       m_solverType;
-  private final ISolverLoader m_solverLoader;
-  private final ICommand      m_command;
+  private SolverInput         m_lastSolverInput;
+  private Object              m_lastSolverOutput;
+  private SolverResult        m_lastSolverResult;
+  private SOLVER_RESULT      m_lastSMTCheckResult;
+  
+  private final SOLVERS      m_solverType;
+  private final SolverLoader m_solverLoader;
 }

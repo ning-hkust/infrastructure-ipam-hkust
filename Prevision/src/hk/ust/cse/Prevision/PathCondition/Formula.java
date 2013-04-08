@@ -1,7 +1,9 @@
 package hk.ust.cse.Prevision.PathCondition;
 
-import hk.ust.cse.Prevision.Solver.AbstractSolverResult;
 import hk.ust.cse.Prevision.Solver.SMTChecker;
+import hk.ust.cse.Prevision.Solver.SolverInput;
+import hk.ust.cse.Prevision.Solver.SolverLoader.SOLVER_RESULT;
+import hk.ust.cse.Prevision.Solver.SolverResult;
 import hk.ust.cse.Prevision.VirtualMachine.AbstractMemory;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
@@ -18,8 +20,6 @@ import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAInstruction;
 
 public class Formula {
-  public enum SMT_RESULT {SAT, UNSAT, ERROR, TIMEOUT, STACK_OVERFLOW}
-  
   public static final int NORMAL_SUCCESSOR      = 0;
   public static final int EXCEPTIONAL_SUCCESSOR = 1;
   
@@ -93,19 +93,19 @@ public class Formula {
     m_traversedPath.add(new Object[] {traversed, methData, callSites, phiVarID});
   }
   
-  public String getLastSolverOutput() {
+  public Object getLastSolverOutput() {
     return m_lastSolverOutput;
   }
 
-  public String getLastSolverInput() {
+  public SolverInput getLastSolverInput() {
     return m_lastSolverInput;
   }
   
-  public AbstractSolverResult getLastSolverResult() {
+  public SolverResult getLastSolverResult() {
     return m_lastSolverResult;
   }
   
-  public SMT_RESULT getLastSMTCheckResult() {
+  public SOLVER_RESULT getLastSMTCheckResult() {
     return m_lastSMTCheckResult;
   }
 
@@ -168,8 +168,8 @@ public class Formula {
     return relation.getDomainValues().get(index);
   }
   
-  public Relation addFieldRelation(String relationName, boolean forward) {
-    return m_abstractMemory.addFieldRelation(relationName, forward);
+  public Relation addFieldRelation(String relationName, boolean forward, String[] domainTypes, String rangeType) {
+    return m_abstractMemory.addFieldRelation(relationName, forward, domainTypes, rangeType);
   }
 
   public Hashtable<ISSABasicBlock, Integer> getVisitedRecord() {
@@ -251,8 +251,8 @@ public class Formula {
   private Hashtable<String, List<Long>>      m_fieldAssignTimes;
   private List<Object[]>                     m_traversedPath;
   private Hashtable<ISSABasicBlock, Integer> m_visitedRecord;
-  private String                             m_lastSolverInput;
-  private String                             m_lastSolverOutput;
-  private AbstractSolverResult               m_lastSolverResult;
-  private SMT_RESULT                        m_lastSMTCheckResult;
+  private SolverInput                        m_lastSolverInput;
+  private Object                             m_lastSolverOutput;
+  private SolverResult                       m_lastSolverResult;
+  private SOLVER_RESULT                     m_lastSMTCheckResult;
 }

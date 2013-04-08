@@ -5,7 +5,7 @@ import hk.ust.cse.Prevision.InstructionHandlers.CompleteForwardHandler;
 import hk.ust.cse.Prevision.Misc.CallStack;
 import hk.ust.cse.Prevision.Misc.InvalidStackTraceException;
 import hk.ust.cse.Prevision.PathCondition.Formula;
-import hk.ust.cse.Prevision.PathCondition.Formula.SMT_RESULT;
+import hk.ust.cse.Prevision.Solver.SolverLoader.SOLVER_RESULT;
 import hk.ust.cse.Prevision.Solver.SMTChecker;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionOptions;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionResult;
@@ -187,7 +187,7 @@ public class ForwardExecutor extends AbstractExecutor {
           
           // on the fly checks
           if (execOptions.checkOnTheFly && normSuccBB.size() > 1) {
-            SMT_RESULT smtResult = m_smtChecker.smtCheck(
+            SOLVER_RESULT smtResult = m_smtChecker.smtCheck(
                 postCond, false, false, false, true, execOptions.heuristicBacktrack, true);
             postCond.setSolverResult(m_smtChecker);
             
@@ -198,7 +198,7 @@ public class ForwardExecutor extends AbstractExecutor {
               } catch (Exception e) {e.printStackTrace();}
             }
             
-            if (smtResult == Formula.SMT_RESULT.UNSAT) {
+            if (smtResult == SOLVER_RESULT.UNSAT) {
               System.out.println("Inner contradiction developed, discard block.");
               continue;
             }
@@ -255,7 +255,7 @@ public class ForwardExecutor extends AbstractExecutor {
           printPropagationPath(infoItem);
           
           // use SMT Solver to check postCond and obtain a model
-          SMT_RESULT smtResult = m_smtChecker.smtCheck(
+          SOLVER_RESULT smtResult = m_smtChecker.smtCheck(
               postCond, false, true, true, true, execOptions.heuristicBacktrack, true);
           postCond.setSolverResult(m_smtChecker);
           
@@ -274,7 +274,7 @@ public class ForwardExecutor extends AbstractExecutor {
             canBreak = true;
           }
           
-          if (smtResult == SMT_RESULT.SAT) {
+          if (smtResult == SOLVER_RESULT.SAT) {
             System.out.println("SMT Check succeeded!\n");
             
             // save the satisfiable precondition
@@ -450,7 +450,7 @@ public class ForwardExecutor extends AbstractExecutor {
   public static void main(String args[]) {
     try {      
       AbstractHandler instHandler = new CompleteForwardHandler();
-      SMTChecker smtChecker = new SMTChecker(SMTChecker.SOLVERS.YICES);
+      SMTChecker smtChecker = new SMTChecker(SMTChecker.SOLVERS.Z3);
       ForwardExecutor executor = new ForwardExecutor(args[0]/*jar file path*/, null, instHandler, smtChecker);
       Utils.loadJarFile(args[0]);
       

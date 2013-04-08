@@ -19,7 +19,7 @@ public class Main {
 
   public static void main(String[] args) throws Exception {
     AbstractHandler instHandler = new CompleteForwardHandler();
-    SMTChecker smtChecker = new SMTChecker(SMTChecker.SOLVERS.YICES);
+    SMTChecker smtChecker = new SMTChecker(SMTChecker.SOLVERS.Z3);
     ForwardExecutor executor = new ForwardExecutor("./hk.ust.cse.Prevision.jar", null, instHandler, smtChecker);
 
     // load all test suites
@@ -51,7 +51,7 @@ public class Main {
           if (sats.size() >= targetSat) {
             boolean ret = true;
             for (int i = 1; i < result.length && ret; i++) {
-              ret &= sats.get(targetSat - 1).getLastSolverOutput().contains((String) result[i]);
+              ret &= sats.get(targetSat - 1).getLastSolverOutput().toString().contains((String) result[i]);
             }
             System.out.println((ret ? "Test passed: " : "Test failed: ") + test);
           }

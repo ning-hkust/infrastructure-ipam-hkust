@@ -59,6 +59,25 @@ public class BinaryConditionTerm extends ConditionTerm {
       }
     }
     
+    public String toString() {
+      switch (m_index) {
+      case 0:
+        return "==";
+      case 1:
+        return "!=";
+      case 2:
+        return ">";
+      case 3:
+        return ">=";
+      case 4:
+        return "<";
+      case 5:
+        return "<=";
+      default:
+        return null;
+      }
+    }
+    
     private final int m_index;
   }
   
