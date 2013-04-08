@@ -828,7 +828,7 @@ public class Utils {
     return str;
   }
   
-  public static List<?> deleteRedundents(List<?> list) {
+  public static <E> List<E> deleteRedundents(List<E> list) {
     HashSet<Object> hashSet = new HashSet<Object>();
     for (int i = 0; i < list.size(); i++) {
       Object o = list.get(i);
