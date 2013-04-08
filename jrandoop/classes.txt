@@ -1,4 +1,0 @@
-randoop.main.Main
-randoop.ocat.CapturedObjectDecl
-randoop.ocat.CapturedObjectSequences
-
