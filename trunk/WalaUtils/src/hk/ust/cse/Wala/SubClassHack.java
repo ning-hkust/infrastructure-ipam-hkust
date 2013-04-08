@@ -49,6 +49,12 @@ public class SubClassHack {
       List<String> list10 = new ArrayList<String>();
       list10.add("Ljava/io/ByteArrayInputStream");
       s_frequentList.put("java.io.InputStream", list10);
+      List<String> list11 = new ArrayList<String>();
+      list11.add("Ljava/util/AbstractList");
+      s_frequentList.put("java.util.AbstractCollection", list11);
+      List<String> list12 = new ArrayList<String>();
+      list12.add("Ljava/util/HashSet");
+      s_frequentList.put("java.util.AbstractSet", list12);
     }
     
     superClass = Utils.getClassTypeJavaStr(superClass);
