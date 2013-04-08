@@ -13,7 +13,7 @@ public class AbstractMemory {
     m_relationMap = new Hashtable<String, Relation>();
     
     // always have a special relation for array
-    addRelation("@@array", 2, forward);
+    addRelation("@@array", 2, forward, new String[] {"not_null_reference", "I"}, "Unknown-Type");
   }
   
   public AbstractMemory(Hashtable<String, Hashtable<String, Reference>> refMap, 
@@ -40,15 +40,17 @@ public class AbstractMemory {
     return m_relationMap.get(relationName);
   }
   
-  public Relation addRelation(String relationName, int domainDimension, boolean forward) {
+  public Relation addRelation(String relationName, 
+      int domainDimension, boolean forward, String[] domainTypes, String rangeType) {
+    
     if (!m_relationMap.containsKey(relationName)) {
-      m_relationMap.put(relationName, new Relation(relationName, domainDimension, forward));
+      m_relationMap.put(relationName, new Relation(relationName, domainDimension, forward, domainTypes, rangeType));
     }
     return getRelation(relationName);
   }
   
-  public Relation addFieldRelation(String relationName, boolean forward) {
-    return addRelation(relationName, 1, forward);
+  public Relation addFieldRelation(String relationName, boolean forward, String[] domainTypes, String rangeType) {
+    return addRelation(relationName, 1, forward, domainTypes, rangeType);
   }
   
   public AbstractMemory deepClone(Hashtable<Object, Object> cloneMap) {

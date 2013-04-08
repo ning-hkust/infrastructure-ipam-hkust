@@ -1488,6 +1488,8 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(valSizeRef.getInstance(), Comparator.OP_GREATER_EQUAL, zeroRef.getInstance()));
       conditionList.add(new Condition(conditionTerms));
+
+      addRefToRefMap(newRefMap, valSizeRef);
       
       List<Reference> lenRefs = defRef.getFieldReferences("length");
       if (lenRefs.size() == 0) {
@@ -1523,7 +1525,6 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
           }
           lenRef.putInstancesToOld();
         }
-        addRefToRefMap(newRefMap, valSizeRef);
       }
       postCond.addFieldAssignTime("length", System.nanoTime());
       

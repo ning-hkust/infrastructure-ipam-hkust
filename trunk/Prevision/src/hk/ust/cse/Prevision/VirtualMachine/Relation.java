@@ -12,12 +12,14 @@ import com.ibm.wala.ssa.ISSABasicBlock;
  * functions (read, update) from the array theory
  */
 public class Relation {
-  public Relation(String name, int domainDimension, boolean forward) {
+  public Relation(String name, int domainDimension, boolean forward, String[] domainTypes, String rangeType) {
     m_name            = name;
     m_domainDimension = domainDimension; // should be one for field (parent) and two for array (base and index)
     m_forward         = forward; // direction of the symbolic execution
     
     // to save relational updates
+    m_domainTypes   = domainTypes;
+    m_rangeType     = rangeType;
     m_domainValues  = new ArrayList<Instance[]>();
     m_rangeValues   = new ArrayList<Instance>();
     m_functionTimes = new ArrayList<Long>();
@@ -102,6 +104,14 @@ public class Relation {
     return readStr.substring(5, readStr.lastIndexOf('_'));
   }
   
+  public String[] getDomainTypes() {
+    return m_domainTypes;
+  }
+  
+  public String getRangeType() {
+    return m_rangeType;
+  }
+  
   public List<Instance[]> getDomainValues() {
     return m_domainValues;
   }
@@ -135,7 +145,7 @@ public class Relation {
   }
   
   public Relation deepClone(Hashtable<Object, Object> cloneMap) {
-    Relation cloneRelation = new Relation(m_name, m_domainDimension, m_forward);
+    Relation cloneRelation = new Relation(m_name, m_domainDimension, m_forward, m_domainTypes, m_rangeType);
   
     for (Instance[] domainValues : m_domainValues) {
       Instance[] cloneDomainValues = new Instance[domainValues.length];
@@ -159,6 +169,8 @@ public class Relation {
   private final int              m_domainDimension;
   private final boolean          m_forward;
   
+  private final String[]         m_domainTypes;
+  private final String           m_rangeType;
   private final List<Instance[]> m_domainValues;
   private final List<Instance>   m_rangeValues;
   private final List<Long>       m_functionTimes;

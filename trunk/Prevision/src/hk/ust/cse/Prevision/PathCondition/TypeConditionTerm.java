@@ -34,6 +34,21 @@ public class TypeConditionTerm extends ConditionTerm {
       }
     }
     
+    public String toString() {
+      switch (m_index) {
+      case 0:
+        return "subtypeof";
+      case 1:
+        return "non_subtypeof";
+      case 2:
+        return "instanceof";
+      case 3:
+        return "not_instanceof";
+      default:
+        return null;
+      }
+    }
+    
     private final int m_index;
   }
   

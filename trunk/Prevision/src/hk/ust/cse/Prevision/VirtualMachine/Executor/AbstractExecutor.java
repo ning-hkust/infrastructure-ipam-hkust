@@ -3,13 +3,11 @@ package hk.ust.cse.Prevision.VirtualMachine.Executor;
 import hk.ust.cse.Prevision.InstructionHandlers.AbstractHandler;
 import hk.ust.cse.Prevision.Misc.CallStack;
 import hk.ust.cse.Prevision.Misc.InvalidStackTraceException;
-import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.Solver.SMTChecker;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionOptions;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionOptions.EXCEPTION_TYPE;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionResult;
-import hk.ust.cse.Prevision.VirtualMachine.Reference;
 import hk.ust.cse.Prevision_PseudoImpl.PseudoImplMap;
 import hk.ust.cse.Wala.Jar2IR;
 import hk.ust.cse.Wala.MethodMetaData;
@@ -23,10 +21,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Hashtable;
 import java.util.List;
 import java.util.Stack;
 
@@ -249,6 +245,28 @@ public abstract class AbstractExecutor {
         targetNodes[i] = irCGNodeMap.get(targetIRs[i]);
       }
     }
+
+    // sort to make sure deterministic
+    if (targetIRs != null) {
+      // put to one array
+      Object[][] targets = new Object[targetIRs.length][];
+      for (int i = 0; i < targets.length; i++) {
+        targets[i] = new Object[] {targetIRs[i], targetNodes[i]};
+      }
+      Arrays.sort(targets, new Comparator<Object[]>() {
+        @Override
+        public int compare(Object[] target1, Object[] target2) {
+          return ((IR) target1[0]).getMethod().getSignature().compareTo(
+                 ((IR) target2[0]).getMethod().getSignature());
+        }
+      });
+      
+      // separate again
+      for (int i = 0; i < targets.length; i++) {
+        targetIRs[i]   = (IR) targets[i][0];
+        targetNodes[i] = (CGNode) targets[i][1];
+      }
+    }
     
     return new Object[] {targetIRs, targetNodes};
   }
@@ -269,8 +287,10 @@ public abstract class AbstractExecutor {
       // naive compare first, sometimes can avoid including subject jar in the classpath
       if (!invokingMethod.equals(methodNameOrSign)) {
         IR ir = Jar2IR.getIR(m_walaAnalyzer, mr.getSignature());
-        isSame = (Utils.getClassTypeJavaStr(ir.getMethod().getDeclaringClass().getName().toString())
-            + "." + mr.getName().toString()).equals(methodNameOrSign);
+        if (ir != null) {
+          isSame = (Utils.getClassTypeJavaStr(ir.getMethod().getDeclaringClass().getName().toString())
+              + "." + mr.getName().toString()).equals(methodNameOrSign);
+        }
       }
       else {
         isSame = true;
@@ -409,40 +429,34 @@ public abstract class AbstractExecutor {
       System.out.println(preCond.getLastSolverInput());
       
       System.out.println("SMT Solver Output----------------------------------");
-      System.out.println(preCond.getLastSolverOutput());
-      
-//      System.out.println("Parsed SatModel----------------------------------");
-//      for (int i = 0, size = preCond.getLastSatModel().size(); i < size; i++) {
-//        System.out.println(preCond.getLastSatModel().get(i).toYicesExprString());
+      System.out.println(preCond.getLastSolverResult().getOutputInfo(preCond));
+
+//      System.out.println("Path Conditions--------------------------------");
+//      HashSet<String> outputted = new HashSet<String>();
+//      List<Condition> conditions = preCond.getConditionList();
+//      for (int i = conditions.size() - 1; i >= 0; i--) {
+//        String conditionStr = conditions.get(i).toString();
+//
+//        if (!outputted.contains(conditionStr)) {
+//          System.out.println(conditionStr);
+//          outputted.add(conditionStr);
+//        }
 //      }
 //      System.out.println();
-
-      System.out.println("Path Conditions--------------------------------");
-      HashSet<String> outputted = new HashSet<String>();
-      List<Condition> conditions = preCond.getConditionList();
-      for (int i = conditions.size() - 1; i >= 0; i--) {
-        String conditionStr = conditions.get(i).toString();
-
-        if (!outputted.contains(conditionStr)) {
-          System.out.println(conditionStr);
-          outputted.add(conditionStr);
-        }
-      }
-      System.out.println();
-      
-      System.out.println("Path RefMap-------------------------------------");
-      Hashtable<String, Hashtable<String, Reference>> refMap = preCond.getRefMap();
-      Enumeration<String> keys = refMap.keys();
-      while (keys.hasMoreElements()) {
-        String key = (String) keys.nextElement();
-        System.out.println("Method Callsites: " + key);
-        Hashtable<String, Reference> methodRefs = refMap.get(key);
-        Enumeration<String> keys2 = methodRefs.keys();
-        while (keys2.hasMoreElements()) {
-          String key2 = (String) keys2.nextElement();
-          System.out.println(methodRefs.get(key2).toString());
-        }
-      }
+//      
+//      System.out.println("Path RefMap-------------------------------------");
+//      Hashtable<String, Hashtable<String, Reference>> refMap = preCond.getRefMap();
+//      Enumeration<String> keys = refMap.keys();
+//      while (keys.hasMoreElements()) {
+//        String key = (String) keys.nextElement();
+//        System.out.println("Method Callsites: " + key);
+//        Hashtable<String, Reference> methodRefs = refMap.get(key);
+//        Enumeration<String> keys2 = methodRefs.keys();
+//        while (keys2.hasMoreElements()) {
+//          String key2 = (String) keys2.nextElement();
+//          System.out.println(methodRefs.get(key2).toString());
+//        }
+//      }
     }
     else {
       System.out.println("The line is unreachable!");

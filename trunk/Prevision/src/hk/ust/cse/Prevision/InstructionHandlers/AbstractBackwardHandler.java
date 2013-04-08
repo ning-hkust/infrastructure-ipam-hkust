@@ -314,9 +314,7 @@ public abstract class AbstractBackwardHandler extends AbstractHandler {
     
     // build current path
     StringBuilder str = new StringBuilder();
-    str.append(lastPath);
-    str.append(".");
-    str.append(ref.getName());
+    str.append(lastPath).append(lastPath.length() > 0 ? "." : "").append(ref.getName());
     String path = str.toString();
     
     // look through all instances and old instances
@@ -436,15 +434,23 @@ public abstract class AbstractBackwardHandler extends AbstractHandler {
       for (ConditionTerm term : conditionTerms) {
         Instance[] instances = term.getInstances();
         for (Instance instance : instances) {
-          if (!instance.isBounded() && instance.getBoundedValues().size() > 0) {
-            // supposedly there is only one bounded value at most 
-            // from previous setEquivalentInstances method
-            try {
-              instance.setValue(instance.getBoundedValues().iterator().next());
-            } catch (Exception e) {e.printStackTrace();}
-          }
+          setSoloInstance(instance);
         }
       }
+    }
+  }
+  
+  private void setSoloInstance(Instance instance) {
+    if (!instance.isBounded() && instance.getBoundedValues().size() > 0) {
+      // supposedly there is only one bounded value at most 
+      // from previous setEquivalentInstances method
+      try {
+        instance.setValue(instance.getBoundedValues().iterator().next());
+      } catch (Exception e) {e.printStackTrace();}
+    }
+    else if (instance.isBounded() && !instance.isAtomic()) {
+      setSoloInstance(instance.getLeft());
+      setSoloInstance(instance.getRight());
     }
   }
 }

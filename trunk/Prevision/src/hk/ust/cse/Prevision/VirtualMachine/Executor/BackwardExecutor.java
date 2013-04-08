@@ -8,8 +8,8 @@ import hk.ust.cse.Prevision.Misc.InvalidStackTraceException;
 import hk.ust.cse.Prevision.Optimization.DefAnalyzerWrapper;
 import hk.ust.cse.Prevision.Optimization.HeuristicBacktrack;
 import hk.ust.cse.Prevision.PathCondition.Formula;
-import hk.ust.cse.Prevision.PathCondition.Formula.SMT_RESULT;
 import hk.ust.cse.Prevision.Solver.SMTChecker;
+import hk.ust.cse.Prevision.Solver.SolverLoader.SOLVER_RESULT;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionOptions;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionResult;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
@@ -262,7 +262,7 @@ public class BackwardExecutor extends AbstractExecutor {
         Hashtable<String, Reference> methodRefs = precond.getRefMap().get(infoItem.callSites);
         if (execOptions.checkOnTheFly && normPredBB.size() > 1) {
           if (!infoItem.currentBB.isExitBlock() || methodRefs == null || !methodRefs.containsKey("RET")) {
-            SMT_RESULT smtResult = m_smtChecker.smtCheck(
+            SOLVER_RESULT smtResult = m_smtChecker.smtCheck(
                 precond, false, false, false, false, execOptions.heuristicBacktrack, true);
             precond.setSolverResult(m_smtChecker);
             
@@ -273,7 +273,7 @@ public class BackwardExecutor extends AbstractExecutor {
               } catch (Exception e) {e.printStackTrace();}
             }
             
-            if (smtResult == Formula.SMT_RESULT.UNSAT) {
+            if (smtResult == SOLVER_RESULT.UNSAT) {
               System.out.println("Inner contradiction developed, discard block.");
               
               // once smt check failed, we track back heuristically
@@ -303,8 +303,8 @@ public class BackwardExecutor extends AbstractExecutor {
 //        }
         
         // try to skip method
-        if (execOptions.skipUselessMethods && !startingToBranches && infoItem.currentBB.isExitBlock() && 
-            (methodRefs == null || !methodRefs.containsKey("RET"))) {
+        if (execOptions.skipUselessMethods && !startingToBranches && !methData.getIR().getMethod().isInit() && 
+            infoItem.currentBB.isExitBlock() && (methodRefs == null || !methodRefs.containsKey("RET"))) {
           ISSABasicBlock skipToEntryBB = m_defAnalyzer.findSkipToBasicBlocks(methData.getIR(), precond);
           if (skipToEntryBB != null) {
             normPredBB.clear();
@@ -331,6 +331,7 @@ public class BackwardExecutor extends AbstractExecutor {
         
         // try to skip branches
         int totalSkipped = 0;
+        BBorInstInfo skipToCondBBInfo = null;
         List<Object[]> bbPreConds = new ArrayList<Object[]>();
         Enumeration<ISSABasicBlock> keys = phiedPreConds.keys();
         while (keys.hasMoreElements()) {
@@ -354,6 +355,11 @@ public class BackwardExecutor extends AbstractExecutor {
                     bbPreConds.add(new Object[] {skipToPredBB, phiedPreCond});
                   }
                 }
+                
+                // save the skip to bb info
+                skipToCondBBInfo = new BBorInstInfo(skipToCondBB, false, true, infoItem.formula, 
+                    infoItem.formula4BB, infoItem.controlType, infoItem.currentBB, infoItem, 
+                    infoItem.methData, infoItem.callSites, infoItem.workList, infoItem.executor);
               }
               else {
                 List<Object[]> condBBToPush = new ArrayList<Object[]>();
@@ -380,6 +386,9 @@ public class BackwardExecutor extends AbstractExecutor {
         }
         if (totalSkipped > 0) {
           System.out.println(totalSkipped + " branches skipped!");
+          
+          // we now switch the current bb to the skip to bb
+          infoItem = skipToCondBBInfo != null ? skipToCondBBInfo : infoItem;
         }
         
         // iterate all normal predecessors
@@ -405,7 +414,7 @@ public class BackwardExecutor extends AbstractExecutor {
         printPropagationPath(infoItem);
         
         // use SMT Solver to check precond and obtain a model
-        SMT_RESULT smtResult = m_smtChecker.smtCheck(
+        SOLVER_RESULT smtResult = m_smtChecker.smtCheck(
             precond, false, true, false, true, execOptions.heuristicBacktrack, true);
         precond.setSolverResult(m_smtChecker);
         
@@ -424,7 +433,7 @@ public class BackwardExecutor extends AbstractExecutor {
           canBreak = true;
         }
         
-        if (smtResult == SMT_RESULT.SAT) {
+        if (smtResult == SOLVER_RESULT.SAT) {
           System.out.println("SMT Check succeeded!\n");
           
           // save the satisfiable precondition
@@ -446,7 +455,7 @@ public class BackwardExecutor extends AbstractExecutor {
           System.out.println("SMT Check failed!\n");
           
           // once smt check failed, we track back heuristically
-          if (execOptions.heuristicBacktrack && smtResult == SMT_RESULT.UNSAT) {
+          if (execOptions.heuristicBacktrack && smtResult == SOLVER_RESULT.UNSAT) {
             m_heuristicBacktrack.backtrack(workList, curInvokeDepth, execOptions.maxInvokeDepth);
           }
           
@@ -687,14 +696,16 @@ public class BackwardExecutor extends AbstractExecutor {
     
     List<Formula> initFormulas = PrepInitFormula.prepInitFormula(preCond, methData, execOptions);
     
-    // remove those identical to the computed ones
-    for (int i = 0; i < initFormulas.size(); i++) {
-      String conditionListStr = initFormulas.get(i).getConditionList().toString();
-      if (m_computedInitPrep.contains(conditionListStr)) {
-        initFormulas.remove(i--);
-      }
-      else {
-        m_computedInitPrep.add(conditionListStr);
+    if (infoItem.target == null) {
+      // remove those identical to the computed ones
+      for (int i = 0; i < initFormulas.size(); i++) {
+        String conditionListStr = initFormulas.get(i).getConditionList().toString();
+        if (m_computedInitPrep.contains(conditionListStr)) {
+          initFormulas.remove(i--);
+        }
+        else {
+          m_computedInitPrep.add(conditionListStr);
+        }
       }
     }
     
@@ -831,7 +842,7 @@ public class BackwardExecutor extends AbstractExecutor {
   public static void main(String args[]) {
     try {
       AbstractHandler instHandler = new CompleteBackwardHandler();
-      SMTChecker smtChecker = new SMTChecker(SMTChecker.SOLVERS.YICES);
+      SMTChecker smtChecker = new SMTChecker(SMTChecker.SOLVERS.Z3);
       BackwardExecutor executor = new BackwardExecutor(args[0]/*jar file path*/, args[1], instHandler, smtChecker);
       Utils.loadJarFile(args[0]);
       
@@ -847,12 +858,14 @@ public class BackwardExecutor extends AbstractExecutor {
       // set options
       ExecutionOptions execOptions = new ExecutionOptions(callStack);
       execOptions.maxDispatchTargets  = 2;
-      execOptions.maxRetrieve         = 10;
+      execOptions.maxRetrieve         = 1;
       execOptions.maxSmtCheck         = 5000;
       execOptions.maxInvokeDepth      = 10;
-      execOptions.maxLoop             = 2;
-      execOptions.skipUselessBranches = false;
-      execOptions.skipUselessMethods  = false;
+      execOptions.maxLoop             = 3;
+      //execOptions.skipUselessBranches = false;
+      //execOptions.skipUselessMethods  = false;
+      //execOptions.heuristicBacktrack  = false;
+      //execOptions.checkOnTheFly       = false;
       
       executor.compute(execOptions, null);
       // wp.heapTracer();
