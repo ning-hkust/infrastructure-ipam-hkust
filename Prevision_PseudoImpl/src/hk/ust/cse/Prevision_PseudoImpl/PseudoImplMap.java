@@ -272,8 +272,10 @@ public class PseudoImplMap {
       s_map2.put("java\\.lang\\.Integer\\.parseInt\\(Ljava/lang/String;\\)I", integerParse1);
       s_map2.put("java\\.lang\\.Integer\\.parseInt\\(Ljava/lang/String;I\\)I", integerParse2);
       
-      s_map2.put("java\\.io\\.PrintStream\\.println\\(Ljava/lang/String;\\)V", noEffect);
-      s_map2.put("java\\.io\\.PrintStream\\.print\\(Ljava/lang/String;\\)V", noEffect);
+      s_map2.put("java\\.io\\.PrintStream\\.[\\S]*\\([\\S]*\\)V", noEffect);
+      s_map2.put("java\\.io\\.PrintWriter\\.[\\S]*\\([\\S]*\\)V", noEffect);
+      s_map2.put("java\\.io\\.BufferedReader\\.[\\S]*\\([\\S]*\\)V", noEffect);
+      s_map2.put("java\\.io\\.LineNumberReader\\.[\\S]*\\([\\S]*\\)V", noEffect);
       
       s_map3.put("[\\S]+Hash[\\S]+Map.size", "hk.ust.cse.Prevision_PseudoImpl.Map.size");
       s_map3.put("java\\.util\\.Hashtable\\.count", "hk.ust.cse.Prevision_PseudoImpl.Table.count");
