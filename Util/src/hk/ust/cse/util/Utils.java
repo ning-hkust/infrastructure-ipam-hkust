@@ -387,6 +387,7 @@ public class Utils {
     return succeed;
   }
   
+  private static LRUCache s_classCache = new LRUCache(100);
   public static Class<?> findClass(String clsName) {
     Class<?> cls = null;
     try {
@@ -423,8 +424,14 @@ public class Utils {
         }
       }
       else {
-        String javaClsName = Utils.getClassTypeForNameStr(clsName);
-        cls = Class.forName(javaClsName);
+        cls = (Class<?>) s_classCache.find(clsName);
+        if (cls == null) {
+          String javaClsName = Utils.getClassTypeForNameStr(clsName);
+          cls = Class.forName(javaClsName);
+          if (cls != null) {
+            s_classCache.put(clsName, cls);
+          }
+        }
       }
     } catch (Throwable e1) {
       //System.err.println("Cannot find class: " + clsName);
