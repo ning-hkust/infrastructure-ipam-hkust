@@ -177,6 +177,9 @@ public class String2 {
     if (str.value.length == 0) {
       return 0;
     }
+    else if (value.length == 0) {
+      return -1;
+    }
     else if (str.value.length == 1) {
       if (value[0] == str.value[0]) {
         return 0;
@@ -354,6 +357,9 @@ public class String2 {
   public int indexOf(String2 str, int start) {
     if (str.value.length == 0) {
       return start;
+    }
+    else if (value.length == start) {
+      return -1;
     }
     else if (str.value.length == 1) {
       if (value[start] == str.value[0]) {
