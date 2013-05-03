@@ -12,20 +12,21 @@ import hk.ust.cse.Prevision.VirtualMachine.Relation;
 import hk.ust.cse.util.Utils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.List;
 
 public class SimpleChecker {
 
-  public static String simpleCheck(Formula formula, SolverInput solverInput, boolean retrieveUnsatCore) {
+  public static String simpleCheck(Formula formula, NeutralInput neutralInput, boolean retrieveUnsatCore) {
     boolean contradicted = false;
     List<Condition> unsatCoreConds = new ArrayList<Condition>();
     
     // create instance-name mapping
     Hashtable<Instance, String> instanceNameMapping = new Hashtable<Instance, String>();
-    if (solverInput != null) {
-      instanceNameMapping = solverInput.getNeutralInput().getInstanceNameMapping();
+    if (neutralInput != null) {
+      instanceNameMapping = neutralInput.getInstanceNameMapping();
     }
 
     Hashtable<List<String>, List<Object[]>> statements = 
@@ -43,9 +44,11 @@ public class SimpleChecker {
       
       if (condTerm instanceof TypeConditionTerm) {
         TypeConditionTerm thisTypeTerm = (TypeConditionTerm) condTerm;
+        Class<?> typeClass = Utils.findClass(thisTypeTerm.getTypeString());
         
         if (thisTypeTerm.getComparator() == TypeConditionTerm.Comparator.OP_INSTANCEOF && 
-            thisTypeTerm.getInstance1().getLastReference() != null) {
+            thisTypeTerm.getInstance1().getLastReference() != null && 
+            typeClass != null && !typeClass.isInterface()) {
           String instanceStr1 = thisTypeTerm.getInstance1().getLastReference().getNameWithCallSite();
           List<Condition> prevTypes = prevInstanceOf.get(instanceStr1);
           if (prevTypes == null) {
@@ -113,10 +116,7 @@ public class SimpleChecker {
         }
         
         // simplify rule 4: 
-        List<String> key = new ArrayList<String>();
-        key.add(var1Str);
-        key.add(var2Str);
-        
+        List<String> key = Arrays.asList(var1Str, var2Str);
         List<Object[]> previousOps = statements.get(key);
         if (previousOps == null) {
           previousOps = new ArrayList<Object[]>();
@@ -171,6 +171,35 @@ public class SimpleChecker {
           }
         }
         previousOps.add(new Object[] {op, conditions.get(i)});
+        
+        // also put in the reverse, e.g. null != v1
+        if (!var1Str.equals(var2Str)) {
+          key = Arrays.asList(var2Str, var1Str);
+          previousOps = statements.get(key);
+          if (previousOps == null) {
+            previousOps = new ArrayList<Object[]>();
+            statements.put(key, previousOps);
+          }
+          switch (op) {
+          case OP_EQUAL:
+          case OP_INEQUAL:
+            break;
+          case OP_GREATER:
+            op = Comparator.OP_SMALLER;
+            break;
+          case OP_GREATER_EQUAL:
+            op = Comparator.OP_SMALLER_EQUAL;
+            break;
+          case OP_SMALLER:
+            op = Comparator.OP_GREATER;
+            break;
+          case OP_SMALLER_EQUAL:
+            op = Comparator.OP_GREATER_EQUAL;
+          default:
+            break;
+          }
+          previousOps.add(new Object[] {op, conditions.get(i)});
+        }
       }
     }
     
@@ -180,8 +209,8 @@ public class SimpleChecker {
       
       // retrieve unsat core
       if (retrieveUnsatCore) {
-        List<Assertion> assertions                    = solverInput.getNeutralInput().getAssertions();
-        Hashtable<Assertion, List<Condition>> mapping = solverInput.getNeutralInput().getAssertionCondsMapping();
+        List<Assertion> assertions                    = neutralInput.getAssertions();
+        Hashtable<Assertion, List<Condition>> mapping = neutralInput.getAssertionCondsMapping();
         List<Integer> unsatCoreIds = new ArrayList<Integer>();
         for (Condition unsatCoreCond : unsatCoreConds) {
           Enumeration<Assertion> keys = mapping.keys();
@@ -262,8 +291,8 @@ public class SimpleChecker {
         }
       }
       else if (instance.isRelationRead()) {
-        String relName = Relation.getReadStringRelName(instance.getLastRefName());
-        long readTime  = Relation.getReadStringTime(instance.getLastRefName());
+        String relName = instance.getLastReference().getReadRelName();
+        long readTime  = instance.getLastReference().getReadRelTime();
         
         Relation relation = formula.getAbstractMemory().getRelation(relName);
         int index = relation.getIndex(readTime);

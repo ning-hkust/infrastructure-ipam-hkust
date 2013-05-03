@@ -202,7 +202,7 @@ public class Z3Loader extends SolverLoader {
     params.add(":timeout", 10000);
     solver.setParameters(params);
 
-    int trackerIdFrom = input.getAssertionExprs().indexOf(assertions.get(0));
+    int trackerIdFrom = assertions.size() > 0 ? input.getAssertionExprs().indexOf(assertions.get(0)) : -1;
     trackerIdFrom = trackerIdFrom < 0 ? input.getAssertionExprs().size() : trackerIdFrom;
     
     // add assertions

@@ -23,6 +23,12 @@ public class Reference {
     m_lifeTimes    = new Hashtable<Instance, Long[]>(1);
     m_declInstance = declInstance;
 
+    if (m_name.startsWith("read_")) {
+      int index = m_name.lastIndexOf('_');
+      m_readRelName = m_name.substring(5, index);
+      m_readRelTime = Long.parseLong(m_name.substring(index + 1));
+    }
+    
     if (name.equals("null") || name.startsWith("#") || name.equals("true") || name.equals("false")) { // is constant
       // ignore original instance    
       if (instance != null) {
@@ -363,6 +369,14 @@ public class Reference {
     return m_declInstance;
   }
   
+  public String getReadRelName() {
+    return m_readRelName;
+  }
+  
+  public Long getReadRelTime() {
+    return m_readRelTime;
+  }
+  
   public boolean isSSAVariable() {
     boolean isSSAVar = false;
     
@@ -536,6 +550,8 @@ public class Reference {
 
   private String                      m_type;
   private String                      m_name;
+  private String                      m_readRelName;
+  private Long                        m_readRelTime;
   private String                      m_callSites;
   private HashSet<Instance>           m_instances;    // instance should never be null, even if it is a null reference, use a 'null' instance
   private HashSet<Instance>           m_oldInstances;

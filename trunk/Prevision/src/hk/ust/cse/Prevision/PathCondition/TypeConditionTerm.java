@@ -39,11 +39,11 @@ public class TypeConditionTerm extends ConditionTerm {
       case 0:
         return "subtypeof";
       case 1:
-        return "non_subtypeof";
+        return "nonsubtypeof";
       case 2:
         return "instanceof";
       case 3:
-        return "not_instanceof";
+        return "notinstanceof";
       default:
         return null;
       }
@@ -118,6 +118,16 @@ public class TypeConditionTerm extends ConditionTerm {
   public TypeConditionTerm deepClone(Hashtable<Object, Object> cloneMap) {
     Instance clone1 = m_instance1.deepClone(cloneMap);
     return new TypeConditionTerm(clone1, m_op, m_typeString);
+  }
+  
+  public ConditionTerm replaceInstances(Hashtable<Instance, Instance> replaceMap) {
+    Instance instance1 = m_instance1.replaceInstances(replaceMap);
+    if (instance1 != m_instance1) {
+      return new TypeConditionTerm(instance1, m_op, m_typeString);
+    }
+    else {
+      return this;
+    }
   }
   
   private final Instance    m_instance1;

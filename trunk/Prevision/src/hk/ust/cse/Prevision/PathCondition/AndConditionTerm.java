@@ -62,5 +62,16 @@ public class AndConditionTerm extends ConditionTerm {
     return new AndConditionTerm(cloneList);
   }
   
+  public ConditionTerm replaceInstances(Hashtable<Instance, Instance> replaceMap) {
+    boolean changed = false;
+    List<ConditionTerm> andTerms = new ArrayList<ConditionTerm>();
+    for (ConditionTerm andTerm : m_andConditionTerms) {
+      ConditionTerm andTerm2 = andTerm.replaceInstances(replaceMap);
+      andTerms.add(andTerm2);
+      changed |= andTerm2 != andTerm;
+    }
+    return changed ? new AndConditionTerm(andTerms) : this;
+  }
+  
   private final List<ConditionTerm> m_andConditionTerms;
 }

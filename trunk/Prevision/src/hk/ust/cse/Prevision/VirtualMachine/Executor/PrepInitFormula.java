@@ -50,9 +50,7 @@ public class PrepInitFormula {
 
       if (condition.getConditionTerms().size() == 1 && term instanceof BinaryConditionTerm) {
         BinaryConditionTerm binaryTerm = (BinaryConditionTerm) term;
-        if (binaryTerm.getComparator().equals(BinaryConditionTerm.Comparator.OP_INEQUAL) && 
-            binaryTerm.getInstance2().isAtomic() && binaryTerm.getInstance2().getValue().equals("null")) { // v1 != null
-          
+        if (binaryTerm.isNotEqualToNull()) { // v1 != null
           // XXX may not always be sound, but should be good in most cases
           ISSABasicBlock createBB = binaryTerm.getInstance2().getCreateBlock(); // where did we create this null
           if (createBB != null && createBB.getMethod().equals(methData.getIR().getMethod())) {

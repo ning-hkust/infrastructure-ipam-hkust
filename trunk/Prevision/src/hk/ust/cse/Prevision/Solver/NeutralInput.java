@@ -255,19 +255,22 @@ public class NeutralInput {
       return toString().equals(((Assertion) o).toString());
     }
     
+    public String toString() {
+      return assertString;
+    }
+    
     public int hashCode() {
       return toString().hashCode();
     }
+    
+    protected String assertString;
   }
   
   // true / false
   public class AtomicAssertion extends Assertion {
     public AtomicAssertion(String value) {
-      this.value = value;
-    }
-    
-    public String toString() {
-      return "assert " + value;
+      this.value        = value;
+      this.assertString = "assert " + value;
     }
     
     public final String value;
@@ -275,13 +278,10 @@ public class NeutralInput {
   
   public class BinaryAssertion extends Assertion {
     public BinaryAssertion(Expression expr1, BinaryConditionTerm.Comparator comp, Expression expr2) {
-      this.expr1 = expr1;
-      this.expr2 = expr2;
-      this.comp  = comp;
-    }
-    
-    public String toString() {
-      return "assert (" + comp.toString() + " " + expr1.value + " " + expr2.value + ")";
+      this.expr1        = expr1;
+      this.expr2        = expr2;
+      this.comp         = comp;
+      this.assertString = "assert (" + comp.toString() + " " + expr1.value + " " + expr2.value + ")";
     }
     
     public final Expression expr1;
@@ -291,13 +291,10 @@ public class NeutralInput {
   
   public class TypeAssertion extends Assertion {
     public TypeAssertion(Expression expr, TypeConditionTerm.Comparator comp, String typeString) {
-      this.expr       = expr;
-      this.comp       = comp;
-      this.typeString = typeString;
-    }
-    
-    public String toString() {
-      return "assert (" + expr.value + " " + comp.toString() + " " + typeString + ")";
+      this.expr         = expr;
+      this.comp         = comp;
+      this.typeString   = typeString;
+      this.assertString = "assert (" + expr.value + " " + comp.toString() + " " + typeString + ")";
     }
     
     public final Expression expr;
@@ -307,11 +304,12 @@ public class NeutralInput {
   
   public class MultiAssertion extends Assertion {
     public MultiAssertion(Assertion[] assertions, String connector) {
-      this.assertions = assertions;
-      this.connector  = connector;
+      this.assertions   = assertions;
+      this.connector    = connector;
+      this.assertString = createAssertString();
     }
 
-    public String toString() {
+    private String createAssertString() {
       StringBuilder str = new StringBuilder();
 
       str.append(assertions.length > 1 ? ("(" + connector + " ") : "");
@@ -344,6 +342,7 @@ public class NeutralInput {
     m_helperExprs           = new Hashtable<Expression, Expression>();
     m_nameInstanceMapping   = new Hashtable<String, Instance>();
     m_constInstanceMapping  = new Hashtable<String, Instance>();
+    m_instanceExprMapping   = new Hashtable<Instance, Expression>();
     m_instanceNameMapping   = new Hashtable<Instance, String>();
     m_assertionCondsMapping = new Hashtable<Assertion, List<Condition>>();
     m_conditionAssertionMapping = new Hashtable<Condition, Assertion>();
@@ -367,6 +366,7 @@ public class NeutralInput {
     m_helperExprs           = origInput.m_helperExprs;
     m_nameInstanceMapping   = origInput.m_nameInstanceMapping;
     m_constInstanceMapping  = origInput.m_constInstanceMapping;
+    m_instanceExprMapping   = origInput.m_instanceExprMapping;
     m_instanceNameMapping   = origInput.m_instanceNameMapping;
     
     // need to clone a new assertion list
@@ -1174,7 +1174,10 @@ public class NeutralInput {
   }
   
   private Expression createExpression(Instance instance, Formula formula) {
-    Expression expression = null;
+    Expression expression = m_instanceExprMapping.get(instance);
+    if (expression != null) {
+      return expression;
+    }
     
     // if instance is not bound, try to show its last reference name
     if (!instance.isBounded()) {
@@ -1184,7 +1187,7 @@ public class NeutralInput {
           String readStr    = instance.getLastRefName();
           Relation relation = formula.getRelation(readStr);
 
-          int readIndex  = relation.getIndex(Relation.getReadStringTime(readStr));
+          int readIndex  = relation.getIndex(instance.getLastReference().getReadRelTime());
           int lastUpdate = relation.getLastUpdateIndex(readIndex);
 
           Instance[] domainValues = relation.getDomainValues().get(readIndex);
@@ -1195,7 +1198,6 @@ public class NeutralInput {
               domain = makeHelperWhenNecessary(domain, "number"); // the index should always be number
             }
             domains[i] = domain;
-
           }
           expression = new ReadArrayExpr(relation.getName(), lastUpdate + 1, domains, "number");
         }
@@ -1261,6 +1263,11 @@ public class NeutralInput {
         }
       }
     }
+    
+    if (expression != null) {
+      m_instanceExprMapping.put(instance, expression);
+    }
+    
     return expression;
   }
   
@@ -1385,26 +1392,33 @@ public class NeutralInput {
     List<Condition> newContracts = new ArrayList<Condition>();
 
     Instance zero = new Instance("#!0", "I", null);
-    HashSet<Instance> added = new HashSet<Instance>();
+    Instance hund = new Instance("#!100", "I", null);
+    HashSet<Instance> checked = new HashSet<Instance>();
     for (Condition condition : formula.getConditionList()) {
-      HashSet<Instance> instances = condition.getRelatedInstances(formula, false, true);
+      HashSet<Instance> instances = condition.getRelatedInstances(formula.getRelationMap(), false, false, true);
       for (Instance instance : instances) {
-        String fieldName = null;
-        if (instance.isRelationRead()) {
-          fieldName = Relation.getReadStringRelName(instance.toString()).toLowerCase();
-        }
-        else if (instance.getLastReference() != null && instance.getLastRefType().equals("I")) {
-          fieldName = instance.getLastRefName().toLowerCase();
-        }
-        
-        if (fieldName != null && 
-           (fieldName.endsWith("size") || fieldName.endsWith("count") || 
-            fieldName.endsWith("length") || fieldName.endsWith("cursor"))) {
-          if (!added.contains(instance)) {
+        if (!checked.contains(instance)) {
+          String fieldName = null;
+          if (instance.isRelationRead()) {
+            fieldName = instance.getLastReference().getReadRelName().toLowerCase();
+          }
+          else if (instance.getLastReference() != null && instance.getLastRefType().equals("I")) {
+            fieldName = instance.getLastRefName().toLowerCase();
+          }
+          
+          if (fieldName != null && 
+             (fieldName.endsWith("size") || fieldName.endsWith("count") || fieldName.endsWith("length") || 
+              fieldName.endsWith("cursor") || fieldName.endsWith("height"))) {
             newContracts.add(new Condition(
                 new BinaryConditionTerm(instance, Comparator.OP_GREATER_EQUAL, zero)));
-            added.add(instance);
+            
+            // this extra condition is useful in practice for preventing huge size arrays, 
+            // but it may also cause unsound UNSAT in theory due to this upper bound
+            newContracts.add(new Condition(
+                new BinaryConditionTerm(instance, Comparator.OP_SMALLER, hund)));
           }
+
+          checked.add(instance);
         }
       }
     }
@@ -1516,6 +1530,7 @@ public class NeutralInput {
   private final Hashtable<Expression, Expression>  m_helperExprs;
   private final Hashtable<String, Instance>        m_nameInstanceMapping;
   private final Hashtable<String, Instance>        m_constInstanceMapping;
+  private final Hashtable<Instance, Expression>    m_instanceExprMapping;
   private final Hashtable<Instance, String>        m_instanceNameMapping;
   private final Hashtable<Condition, Assertion>    m_conditionAssertionMapping;
   private final Hashtable<Assertion, List<Condition>> m_assertionCondsMapping;

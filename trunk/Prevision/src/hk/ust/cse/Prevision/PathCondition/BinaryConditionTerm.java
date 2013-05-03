@@ -40,6 +40,25 @@ public class BinaryConditionTerm extends ConditionTerm {
       }
     }
     
+    public Comparator getOpposite() {
+      switch (this) {
+      case OP_EQUAL:
+        return OP_INEQUAL;
+      case OP_GREATER:
+        return OP_SMALLER_EQUAL;
+      case OP_GREATER_EQUAL:
+        return OP_SMALLER;
+      case OP_INEQUAL:
+        return OP_EQUAL;
+      case OP_SMALLER:
+        return OP_GREATER_EQUAL;
+      case OP_SMALLER_EQUAL:
+        return OP_GREATER;
+      default:
+        return null;
+      }
+    }
+    
     public static Comparator fromString(String str) {
       switch (str) {
       case "==":
@@ -154,6 +173,25 @@ public class BinaryConditionTerm extends ConditionTerm {
     Instance clone1 = m_instance1.deepClone(cloneMap);
     Instance clone2 = m_instance2.deepClone(cloneMap);
     return new BinaryConditionTerm(clone1, m_op, clone2);
+  }
+  
+  public ConditionTerm replaceInstances(Hashtable<Instance, Instance> replaceMap) {
+    Instance instance1 = m_instance1.replaceInstances(replaceMap);
+    Instance instance2 = m_instance2.replaceInstances(replaceMap);
+    if (instance1 != m_instance1 || instance2 != m_instance2) {
+      return new BinaryConditionTerm(instance1, m_op, instance2);
+    }
+    else {
+      return this;
+    }
+  }
+  
+  public boolean isNotEqualToNull() {
+    return m_op == Comparator.OP_INEQUAL && m_instance2.isNullConstant();
+  }
+  
+  public boolean isEqualToNull() {
+    return m_op == Comparator.OP_EQUAL && m_instance2.isNullConstant();
   }
   
   private final Instance    m_instance1;

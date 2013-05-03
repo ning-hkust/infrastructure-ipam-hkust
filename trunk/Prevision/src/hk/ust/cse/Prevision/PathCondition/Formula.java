@@ -158,9 +158,8 @@ public class Formula {
   }
   
   public Instance[] getReadRelationDomainValues(Instance readInstance) {
-    String readStr = readInstance.toString();
-    String relName = Relation.getReadStringRelName(readStr);
-    long readTime  = Relation.getReadStringTime(readStr);
+    String relName = readInstance.getLastReference().getReadRelName();
+    long readTime  = readInstance.getLastReference().getReadRelTime();
     
     Relation relation = getRelation(relName);
     int index = relation.getIndex(readTime);
