@@ -1,6 +1,7 @@
 package hk.ust.cse.Prevision.PathCondition;
 
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
+import hk.ust.cse.Prevision.VirtualMachine.Relation;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -34,29 +35,64 @@ public class Condition {
     m_timeStamp = System.nanoTime();
   }
 
+  // create a new condition which is the same as this one except for instances in replaceMap
+  public Condition replaceInstances(Hashtable<Instance, Instance> replaceMap) {
+    boolean changed = false;
+    List<ConditionTerm> newTerms = new ArrayList<ConditionTerm>();
+    for (ConditionTerm term : m_terms) {
+      ConditionTerm newTerm = term.replaceInstances(replaceMap);
+      newTerms.add(newTerm);
+      changed |= newTerm != term;
+    }
+    
+    return changed ? new Condition(newTerms) : this;
+  }
+  
   public List<ConditionTerm> getConditionTerms() {
     return m_terms;
+  }
+  
+  // return the only BinaryConditionTerm
+  public BinaryConditionTerm getOnlyBinaryTerm() {
+    if (m_terms.size() == 1 && m_terms.get(0) instanceof BinaryConditionTerm) {
+      return (BinaryConditionTerm) m_terms.get(0);
+    }
+    else {
+      return null;
+    }
+  }
+  
+  // return the only TypeConditionTerm
+  public TypeConditionTerm getOnlyTypeTerm() {
+    if (m_terms.size() == 1 && m_terms.get(0) instanceof TypeConditionTerm) {
+      return (TypeConditionTerm) m_terms.get(0);
+    }
+    else {
+      return null;
+    }
   }
   
   public long getTimeStamp() {
     return m_timeStamp;
   }
 
-  public HashSet<Instance> getRelatedInstances(Formula formula, boolean inclDeclInstances, boolean inclArrayRefIndex) {
+  public HashSet<Instance> getRelatedInstances(Hashtable<String, Relation> relationMap, 
+      boolean inclDeclInstances, boolean inclArrayRefIndexInDecl, boolean inclReadRelDomains) {
     HashSet<Instance> instances = new HashSet<>();
     for (ConditionTerm term : m_terms) {
       for (Instance instance : term.getInstances()) {
-        instances.addAll(instance.getRelatedInstances(formula, inclDeclInstances, inclArrayRefIndex));
+        instances.addAll(instance.getRelatedInstances(
+            relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains));
       }  
     }
     return instances;
   }
 
-  public HashSet<Instance> getRelatedTopInstances(Formula formula) {
+  public HashSet<Instance> getRelatedTopInstances(Hashtable<String, Relation> relationMap) {
     HashSet<Instance> instances = new HashSet<>();
     for (ConditionTerm term : m_terms) {
       for (Instance instance : term.getInstances()) {
-        instances.addAll(instance.getRelatedTopInstances(formula));
+        instances.addAll(instance.getRelatedTopInstances(relationMap));
       }  
     }
     return instances;

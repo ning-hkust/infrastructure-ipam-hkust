@@ -96,20 +96,20 @@ public class Relation {
     return getIndex(Long.parseLong(time));
   }
   
-  public static long getReadStringTime(String readStr) {
-    return Long.parseLong(readStr.substring(readStr.lastIndexOf("_") + 1));
-  }
-  
-  public static String getReadStringRelName(String readStr) {
-    return readStr.substring(5, readStr.lastIndexOf('_'));
-  }
-  
   public String[] getDomainTypes() {
     return m_domainTypes;
   }
   
+  public void setDomainTypes(String[] domainTypes) {
+    m_domainTypes = domainTypes;
+  }
+  
   public String getRangeType() {
     return m_rangeType;
+  }
+  
+  public void setRangeType(String rangeType) {
+    m_rangeType = rangeType;
   }
   
   public List<Instance[]> getDomainValues() {
@@ -169,8 +169,8 @@ public class Relation {
   private final int              m_domainDimension;
   private final boolean          m_forward;
   
-  private final String[]         m_domainTypes;
-  private final String           m_rangeType;
+  private String[]               m_domainTypes;
+  private String                 m_rangeType;
   private final List<Instance[]> m_domainValues;
   private final List<Instance>   m_rangeValues;
   private final List<Long>       m_functionTimes;

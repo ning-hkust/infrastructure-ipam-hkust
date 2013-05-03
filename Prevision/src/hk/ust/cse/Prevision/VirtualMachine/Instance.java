@@ -1,11 +1,12 @@
 package hk.ust.cse.Prevision.VirtualMachine;
 
-import hk.ust.cse.Prevision.PathCondition.Formula;
-
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Hashtable;
+import java.util.List;
 
 import com.ibm.wala.ssa.ISSABasicBlock;
 
@@ -103,7 +104,7 @@ public class Instance {
    */
   public Instance(String value, String type, ISSABasicBlock createBlock) { // initially known instance, immediately bounded
     m_value         = value;
-    m_type          = type;
+    m_type          = type == null && isStringConstant() ? "Ljava/lang/String" : type;
     
     m_createTime    = System.nanoTime();
     m_setValueTime  = m_createTime; // value is set when create
@@ -217,6 +218,62 @@ public class Instance {
     }
   }
 
+  // #!0 + #!1
+  public String computeArithmetic() {
+    String computed = null;
+    if (isNumberConstant()) {
+      computed = m_value;
+    }
+    else if (isBounded()) { 
+      try {
+        String leftStr  = m_left.computeArithmetic();
+        String rightStr = m_right.computeArithmetic();
+        if (leftStr != null && rightStr != null && leftStr.startsWith("#!") && rightStr.startsWith("#!")) {
+          int leftInt  = Integer.parseInt(leftStr.substring(2));
+          int rightInt = Integer.parseInt(rightStr.substring(2));
+          switch (m_op) {
+          case ADD:
+            computed = "#!" + String.valueOf(leftInt + rightInt);
+            break;
+          case AND:
+            computed = "#!" + String.valueOf(leftInt & rightInt);
+            break;
+          case SUB:
+            computed = "#!" + String.valueOf(leftInt - rightInt);
+            break;
+          case MUL:
+            computed = "#!" + String.valueOf(leftInt * rightInt);
+            break;
+          case DIV:
+            computed = "#!" + String.valueOf(leftInt / rightInt);
+            break;
+          case OR:
+            computed = "#!" + String.valueOf(leftInt | rightInt);
+            break;
+          case REM:
+            computed = "#!" + String.valueOf(leftInt % rightInt);
+            break;
+          case XOR:
+            computed = "#!" + String.valueOf(leftInt ^ rightInt);
+            break;
+          case SHL:
+            computed = "#!" + String.valueOf(leftInt << rightInt);
+            break;
+          case SHR:
+            computed = "#!" + String.valueOf(leftInt >> rightInt);
+            break;
+          case USHR:
+            computed = "#!" + String.valueOf(leftInt >> rightInt);
+            break;
+          default:
+            break;
+          }
+        }
+      } catch (Exception e) {}
+    }
+    return computed;
+  }
+  
   public boolean isBounded() {
     return m_value != null || m_left != null;
   }
@@ -251,6 +308,18 @@ public class Instance {
     }
 
     return isDeclInstance;
+  }
+  
+  public boolean isNullConstant() {
+    return m_value != null && m_value.equals("null");
+  }
+  
+  public boolean isNumberConstant() {
+    return m_value != null && m_value.startsWith("#!");
+  }
+  
+  public boolean isStringConstant() {
+    return m_value != null && m_value.startsWith("##");
   }
   
   public boolean hasDeclaringInstance() {
@@ -334,9 +403,7 @@ public class Instance {
     HashSet<Instance> prevInstances = new HashSet<Instance>();
     
     Instance currentInstance = this;
-    while (currentInstance != null && currentInstance.getLastReference() != null && 
-           currentInstance.getLastReference().getDeclaringInstance() != null) {  
-      
+    while (currentInstance != null && currentInstance.hasDeclaringInstance()) {
       if (!prevInstances.contains(currentInstance)) {
         prevInstances.add(currentInstance);
         currentInstance = currentInstance.getLastReference().getDeclaringInstance();
@@ -350,59 +417,123 @@ public class Instance {
     return currentInstance;
   }
   
-  public HashSet<Instance> getRelatedInstances(Formula formula, boolean inclDeclInstances, boolean inclArrayRefIndex) {
+  public Reference getField(String[] fieldNames) {
+    Reference fieldRef = null;
+    
+    if (fieldNames.length == 1) {
+      fieldRef = m_fields.get(fieldNames[0]);
+    }
+    else if (fieldNames.length > 1) {
+      fieldRef = m_fields.get(fieldNames[0]);
+      if (fieldRef != null) {
+        fieldRef = fieldRef.getInstance().getField(Arrays.copyOfRange(fieldNames, 1, fieldNames.length));
+      }
+    }
+    return fieldRef;
+  }
+  
+  // including the current one
+  public String[] getDeclFieldNames() {
+    List<String> fieldNames = new ArrayList<String>();
+    
+    Reference lastRef = m_lastRef;
+    while(lastRef != null && lastRef.getDeclaringInstance() != null) {
+      fieldNames.add(0, lastRef.getName());
+      lastRef = lastRef.getDeclaringInstance().getLastReference();
+    }
+    return fieldNames.toArray(new String[fieldNames.size()]);
+  }
+
+  // including the current one
+  public Instance[] getDeclFieldInstances() {
+    List<Instance> instances = new ArrayList<Instance>();
+    
+    Instance current  = this;
+    Reference lastRef = m_lastRef;
+    while(lastRef != null && lastRef.getDeclaringInstance() != null) {
+      instances.add(0, current);
+      current = lastRef.getDeclaringInstance();
+      lastRef = lastRef.getDeclaringInstance().getLastReference();
+    }
+    return instances.toArray(new Instance[instances.size()]);
+  }
+  
+  public HashSet<Instance> getRelatedInstances(Hashtable<String, Relation> relationMap, 
+      boolean inclDeclInstances, boolean inclArrayRefIndexInDecl, boolean inclReadRelDomains) {
     HashSet<Instance> instances = new HashSet<Instance>();
-    getRelatedInstances(instances, formula, inclDeclInstances, inclArrayRefIndex);
+    getRelatedInstances(instances, relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains);
     return instances;
   }
   
-  private void getRelatedInstances(HashSet<Instance> instances, Formula formula, boolean inclDeclInstances, boolean inclArrayRefIndex) {
+  // inclArrayRefIndexInDecl: include v1.list and v1.index in (v1.list @ v1.index).field
+  private void getRelatedInstances(HashSet<Instance> instances, Hashtable<String, Relation> relationMap, 
+      boolean inclDeclInstances, boolean inclArrayRefIndexInDecl, boolean inclReadRelDomains) {
     if (!isBounded()) {
       Instance currentInstance = this;
       while (currentInstance != null) {
         if (!currentInstance.isBounded()) {
-          instances.add(currentInstance);
-          if (currentInstance.isRelationRead() && inclArrayRefIndex) {
-            Instance[] relInstances = formula.getReadRelationDomainValues(currentInstance);
+          if (currentInstance == this || inclDeclInstances) {
+            instances.add(currentInstance);
+          }
+          if (currentInstance.isRelationRead() && inclReadRelDomains) {
+            String relName          = currentInstance.getLastReference().getReadRelName();
+            long readTime           = currentInstance.getLastReference().getReadRelTime();
+            Relation relation       = relationMap.get(relName);
+            Instance[] relInstances = relation.getDomainValues().get(relation.getIndex(readTime));
+            
             for (Instance relInstance : relInstances) {
-              relInstance.getRelatedInstances(instances, formula, inclDeclInstances, inclArrayRefIndex);
+              relInstance.getRelatedInstances(instances, 
+                  relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains);
             }
           }
         }
-        currentInstance = inclDeclInstances && currentInstance.getLastReference() != null ? 
+        else if (!currentInstance.isAtomic()) {
+          currentInstance.getLeft().getRelatedInstances(
+              instances, relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains);
+          currentInstance.getRight().getRelatedInstances(
+              instances, relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains);
+        }
+        currentInstance = (inclDeclInstances || inclArrayRefIndexInDecl) && currentInstance.getLastReference() != null ? 
             currentInstance.getLastReference().getDeclaringInstance() : null;
       }
     }
     else if (!isAtomic()) {
-      getLeft().getRelatedInstances(instances, formula, inclDeclInstances, inclArrayRefIndex);
-      getRight().getRelatedInstances(instances, formula, inclDeclInstances, inclArrayRefIndex);
+      getLeft().getRelatedInstances(instances, relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains);
+      getRight().getRelatedInstances(instances, relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains);
     }
   }
   
-  public HashSet<Instance> getRelatedTopInstances(Formula formula) {
+  public HashSet<Instance> getRelatedTopInstances(Hashtable<String, Relation> relationMap) {
     HashSet<Instance> instances = new HashSet<Instance>();
-    getRelatedTopInstances(instances, formula);
+    getRelatedTopInstances(instances, relationMap);
     return instances;
   }
   
-  private void getRelatedTopInstances(HashSet<Instance> instances, Formula formula) {
+  private void getRelatedTopInstances(HashSet<Instance> instances, Hashtable<String, Relation> relationMap) {
     if (!isBounded()) {
       Instance topInstance = getToppestInstance();
       if (topInstance != null && !topInstance.isBounded()) {
         if (topInstance.isRelationRead()) {
-          Instance[] relInstances = formula.getReadRelationDomainValues(topInstance);
+          String relName          = topInstance.getLastReference().getReadRelName();
+          long readTime           = topInstance.getLastReference().getReadRelTime();
+          Relation relation       = relationMap.get(relName);
+          Instance[] relInstances = relation.getDomainValues().get(relation.getIndex(readTime));
+
           for (Instance relInstance : relInstances) {
-            relInstance.getRelatedTopInstances(instances, formula);
+            relInstance.getRelatedTopInstances(instances, relationMap);
           }
         }
         else {
           instances.add(topInstance);
         }
       }
+      else if (topInstance != null) {
+        topInstance.getRelatedTopInstances(instances, relationMap);
+      }
     }
     else if (!isAtomic()) {
-      getLeft().getRelatedTopInstances(instances, formula);
-      getRight().getRelatedTopInstances(instances, formula);
+      getLeft().getRelatedTopInstances(instances, relationMap);
+      getRight().getRelatedTopInstances(instances, relationMap);
     }
   }
   
@@ -497,6 +628,31 @@ public class Instance {
       ret.append(")");
     }
     return ret.toString();
+  }
+  
+  public Instance replaceInstances(Hashtable<Instance, Instance> replaceMap) {
+    Instance replace = replaceMap.get(this);
+    if (replace != null) {
+      return replace;
+    }
+    
+    replace = this;
+    if (isBounded() && !isAtomic()) {
+      Instance left  = m_left.replaceInstances(replaceMap);
+      Instance right = m_right.replaceInstances(replaceMap);
+      if (left != m_left || right != m_right) {
+        replace = new Instance(left, m_op, right, m_createBlock);
+      }
+    }
+    else if (!isBounded() && m_lastRef != null && m_lastRef.getDeclaringInstance() != null) {
+      Instance declInstance = m_lastRef.getDeclaringInstance().replaceInstances(replaceMap);
+      if (declInstance != m_lastRef.getDeclaringInstance()) {
+        replace = new Instance(m_initCallSites, m_createBlock);
+        declInstance.setField(m_lastRef.getName(), m_lastRef.getType(), m_lastRef.getCallSites(), replace, true, true);
+      }
+    }
+    
+    return replace;
   }
   
   public Instance deepClone(Hashtable<Object, Object> cloneMap) {

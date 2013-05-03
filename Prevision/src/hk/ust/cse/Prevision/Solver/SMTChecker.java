@@ -60,18 +60,12 @@ public class SMTChecker {
       // generate a neutral input first
       NeutralInput neutralInput = new NeutralInput(formula, keepUnboundField, retrieveModel, retrieveUnsatCore);
       
-      // create a fresh context
-      context = m_solverLoader.createContext();
-      
-      // generate a solver input from neutral input
-      m_lastSolverInput = createNewSolverInput(context, neutralInput);
-      
       // start checking: 1) simple check, 2) full check
       boolean finishedChecking = false;
 
       // a fast simple check
       if (!finishedChecking) {
-        String simpleCheckResult = SimpleChecker.simpleCheck(formula, m_lastSolverInput, retrieveUnsatCore);
+        String simpleCheckResult = SimpleChecker.simpleCheck(formula, neutralInput, retrieveUnsatCore);
         if (simpleCheckResult.startsWith("unsat")) {
           smtCheckResult = SOLVER_RESULT.UNSAT;
           
@@ -83,6 +77,12 @@ public class SMTChecker {
 
       // full SMT check
       if (!finishedChecking) {
+        // create a fresh context
+        context = m_solverLoader.createContext();
+        
+        // generate a solver input from neutral input
+        m_lastSolverInput = createNewSolverInput(context, neutralInput);
+        
         smtCheckResult = m_solverLoader.check(m_lastSolverInput);
         
         // save output object
@@ -91,7 +91,6 @@ public class SMTChecker {
           m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput);
         }
       }
-      
     } catch (StackOverflowError e) {
       System.err.println("Stack overflowed when generating SMT solver input, skip!");
       smtCheckResult = SOLVER_RESULT.STACK_OVERFLOW;
@@ -138,7 +137,7 @@ public class SMTChecker {
 
       // a fast simple check
       if (!finishedChecking) {
-        String simpleCheckResult = SimpleChecker.simpleCheck(ctxFormula, m_lastSolverInput, retrieveUnsatCore);
+        String simpleCheckResult = SimpleChecker.simpleCheck(ctxFormula, neutralInput, retrieveUnsatCore);
         if (simpleCheckResult.startsWith("unsat")) {
           smtCheckResult = SOLVER_RESULT.UNSAT;
           
