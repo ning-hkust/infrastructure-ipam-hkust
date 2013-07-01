@@ -9,6 +9,7 @@ import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
 import hk.ust.cse.Prevision.VirtualMachine.Relation;
 import hk.ust.cse.Prevision.VirtualMachine.Executor.AbstractExecutor.BBorInstInfo;
+import hk.ust.cse.Prevision.VirtualMachine.Executor.AbstractExecutor.InvokeInstData;
 import hk.ust.cse.Prevision_PseudoImpl.PseudoImplMap;
 import hk.ust.cse.Wala.MethodMetaData;
 
@@ -346,7 +347,7 @@ public abstract class AbstractHandler {
     defMap.remove(callSites + String.format("%04d", invokeInst.getProgramCounter()));
   }
   
-  protected final Formula computeToEnterCallSite(SSAInvokeInstruction invokeInst,BBorInstInfo instInfo, 
+  protected final Formula computeToEnterCallSite(SSAInvokeInstruction invokeInst, BBorInstInfo instInfo, 
       ExecutionOptions execOptions, CGNode caller, CallStack callStack, int curInvokeDepth, 
       String callSites, Formula newPostCond) throws InvalidStackTraceException, TimeLimitExceededException {
     Formula preCond = null;
@@ -373,14 +374,18 @@ public abstract class AbstractHandler {
     // we only consider inclLine & starting instruction at the innermost call
     boolean inclLine = (innerCallStack.getDepth() == 1) ? execOptions.inclInnerMostLine : true;
     int startingInst = (innerCallStack.getDepth() == 1) ? execOptions.startingInst : -1;
-
-    // create workList if necessary
-    instInfo.workList = (instInfo.workList == null) ? new Stack<BBorInstInfo>() : instInfo.workList;
     
-    // call compute
-    String newCallSites = callSites + String.format("%04d", invokeInst.getProgramCounter());
-    ExecutionResult execResult = instInfo.executor.computeRec(execOptions, methodNode, methodSig, lineNo, 
-        startingInst, inclLine, innerCallStack, curInvokeDepth, newCallSites, instInfo.workList, newPostCond);
+    // create a new invokeInstData if we are not continuing
+    if (instInfo.invokeInstData == null) { // a new traverse in this invocation
+      String newCallSites = callSites + String.format("%04d", invokeInst.getProgramCounter());
+      instInfo.invokeInstData = new InvokeInstData(lineNo, startingInst, inclLine,
+          innerCallStack, curInvokeDepth, newCallSites, new Stack<BBorInstInfo>());
+    }
+    InvokeInstData invokeInstData = instInfo.invokeInstData;
+
+    ExecutionResult execResult = instInfo.executor.computeRec(execOptions, methodNode, methodSig, 
+        invokeInstData.startLine, invokeInstData.startInst, invokeInstData.inclLine, invokeInstData.callStack, 
+        invokeInstData.curInvokeDepth, invokeInstData.callSites, invokeInstData.workList, newPostCond);
     preCond = execResult.getFirstSatisfiable();
     System.out.println("Come back to caller method: " + instInfo.methData.getName());
     
@@ -413,13 +418,17 @@ public abstract class AbstractHandler {
       methodSig = pseudoImpl != null ? pseudoImpl : methodSig;
     }
     
-    // create workList if necessary
-    instInfo.workList = (instInfo.workList == null) ? new Stack<BBorInstInfo>() : instInfo.workList;
-    
-    // call compute, startLine = -1 (meaning from the exit block)
-    String newCallSites = callSites + String.format("%04d", invokeInst.getProgramCounter());
+    // create a new invokeInstData if we are not continuing
+    if (instInfo.invokeInstData == null) { // a new traverse in this invocation
+      String newCallSites = callSites + String.format("%04d", invokeInst.getProgramCounter());
+      instInfo.invokeInstData = new InvokeInstData(-1, -1, false,
+          callStack, curInvokeDepth + 1, newCallSites, new Stack<BBorInstInfo>());
+    }
+    InvokeInstData invokeInstData = instInfo.invokeInstData;
+
     ExecutionResult exeResult = instInfo.executor.computeRec(execOptions, methodNode, methodSig, 
-        -1, -1, false, callStack, curInvokeDepth + 1, newCallSites, instInfo.workList, newPostCond);
+        invokeInstData.startLine, invokeInstData.startInst, invokeInstData.inclLine, invokeInstData.callStack, 
+        invokeInstData.curInvokeDepth, invokeInstData.callSites, invokeInstData.workList, newPostCond);
     preCond = exeResult.getFirstSatisfiable();
     System.out.println("Come back to caller method: " + instInfo.methData.getName());
     
@@ -498,7 +507,7 @@ public abstract class AbstractHandler {
         }
         if (newConstStr) {
           // add chars to array
-          for (int i = 0, size = str.length(); i < size; i++) {
+          for (int i = 0, size = str.length(); i < size && i < 3 /* for solver performance reason */; i++) {
             char c = str.charAt(i);
             Instance[] domains = new Instance[] {valueInstance, new Instance("#!" + i, "I", null)};
             arrayRel.update(domains, new Instance("#!" + ((int) c), "C", null));

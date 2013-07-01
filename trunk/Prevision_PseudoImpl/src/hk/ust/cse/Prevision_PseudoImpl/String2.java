@@ -115,6 +115,10 @@ public class String2 {
     this.count =  -100;
   }
   
+  public boolean contains(String2 str) {
+    return this == str;
+  }
+  
   public int indexOf(int paramInt) {
     
     if (value.length == 0) {
@@ -165,6 +169,64 @@ public class String2 {
 //    
 //    if (value[6] == paramInt) {
 //      return 6;
+//    }
+//    else if (value.length == 7) {
+//      return -1;
+//    }
+    
+    return -1;
+  }
+  
+  public int lastIndexOf(int paramInt) {
+    
+    if (value.length == 0) {
+      return -1;
+    }
+    
+    if (value[value.length - 1] == paramInt) {
+      return value.length - 1;
+    }
+    else if (value.length == 1) {
+      return -1;
+    }
+    
+    if (value[value.length - 2] == paramInt) {
+      return 2;
+    }
+    else if (value.length == 2) {
+      return -1;
+    }
+    
+    if (value[value.length - 3] == paramInt) {
+      return 3;
+    }
+    else if (value.length == 3) {
+      return -1;
+    }
+    
+    if (value[value.length - 4] == paramInt) {
+      return value.length - 4;
+    }
+//    else if (value.length == 4) {
+//      return -1;
+//    }
+//    
+//    if (value[value.length - 5] == paramInt) {
+//      return value.length - 5;
+//    }
+//    else if (value.length == 5) {
+//      return -1;
+//    }
+//    
+//    if (value[value.length - 6] == paramInt) {
+//      return value.length - 6;
+//    }
+//    else if (value.length == 6) {
+//      return -1;
+//    }
+//    
+//    if (value[value.length - 7] == paramInt) {
+//      return value.length - 7;
 //    }
 //    else if (value.length == 7) {
 //      return -1;
@@ -348,6 +410,64 @@ public class String2 {
 //      return start + 6;
 //    }
 //    else if (value.length == start + 7){
+//      return -1;
+//    }
+    
+    return -1;
+  }
+  
+  public int lastIndexOf(int paramInt, int start) {
+
+    if (start < 0) {
+      return -1;
+    }
+    
+    if (value[start] == paramInt) {
+      return start;
+    }
+    else if (start - 1 < 0){
+      return -1;
+    }
+    
+    if (value[start + 1] == paramInt) {
+      return start + 1;
+    }
+    else if (start - 2 < 0){
+      return -1;
+    }
+
+    if (value[start + 2] == paramInt) {
+      return start + 2;
+    }
+    else if (start - 3 < 0){
+      return -1;
+    }
+    
+    if (value[start + 3] == paramInt) {
+      return start + 3;
+    }
+//    else if (start - 4 < 0){
+//      return -1;
+//    }
+    
+//    if (value[start + 4] == paramInt) {
+//      return start + 4;
+//    }
+//    else if (start - 5 < 0){
+//      return -1;
+//    }
+    
+//    if (value[start + 5] == paramInt) {
+//      return start + 5;
+//    }
+//    else if (start - 6 < 0){
+//      return -1;
+//    }
+//    
+//    if (value[start + 6] == paramInt) {
+//      return start + 6;
+//    }
+//    else if (start - 7 < 0){
 //      return -1;
 //    }
     
@@ -702,6 +822,14 @@ public class String2 {
       --i;
 
     return (((j > 0) || (i < this.count)) ? substring(j, i) : this);
+  }
+
+  public String2 toLowerCase() {
+    return this;
+  }
+
+  public String2 toUpperCase() {
+    return this;
   }
   
   public int length() {

@@ -16,6 +16,10 @@ public class StringBuffer {
     return this;
   }
   
+  public int capacity() {
+    return value.length;
+  }
+  
   public String toString() {
     return "";
   }

@@ -44,29 +44,29 @@ public abstract class AbstractExecutor {
   public class BBorInstInfo {
     public BBorInstInfo(ISSABasicBlock currentBB, boolean startingBB, boolean skipToBB, Formula formula, 
         Formula formula4BB, int controlType, ISSABasicBlock previousBB, BBorInstInfo previousInfo, 
-        MethodMetaData methData, String callSites, Stack<BBorInstInfo> workList, AbstractExecutor executor) {
-      this.currentBB    = currentBB;
-      this.startingBB   = startingBB;
-      this.skipToBB     = skipToBB;
-      this.formula      = formula;
-      this.formula4BB   = formula4BB;
-      this.controlType  = controlType;
-      this.previousBB   = previousBB;
-      this.previousInfo = previousInfo;
-      this.methData     = methData;
-      this.callSites    = callSites;
-      this.workList     = workList; // only used for invocation instructions
-      this.executor     = executor;
+        MethodMetaData methData, String callSites, InvokeInstData invokeInstData, AbstractExecutor executor) {
+      this.currentBB      = currentBB;
+      this.startingBB     = startingBB;
+      this.skipToBB       = skipToBB;
+      this.formula        = formula;
+      this.formula4BB     = formula4BB;
+      this.controlType    = controlType;
+      this.previousBB     = previousBB;
+      this.previousInfo   = previousInfo;
+      this.methData       = methData;
+      this.callSites      = callSites;
+      this.invokeInstData = invokeInstData; // only used for invocation instructions
+      this.executor       = executor;
     }
     
     public BBorInstInfo clone() {
       BBorInstInfo newInfo = new BBorInstInfo(currentBB, startingBB, skipToBB, formula, formula4BB, 
-          controlType, previousBB, previousInfo, methData, callSites, workList, executor);
+          controlType, previousBB, previousInfo, methData, callSites, invokeInstData, executor);
       newInfo.target = target;
       return newInfo;
     }
 
-    public Stack<BBorInstInfo>  workList;
+    public InvokeInstData       invokeInstData;
     public Object[]             target; // SSAInvokeInstruction, IR, CGNode
     
     public Formula              formula;
@@ -80,6 +80,27 @@ public abstract class AbstractExecutor {
     public final MethodMetaData methData;
     public final String         callSites;
     public final AbstractExecutor executor;
+  }
+  
+  public static class InvokeInstData {
+    public InvokeInstData(int startLine, int startInst, boolean inclLine, 
+        CallStack callStack, int curInvokeDepth, String callSites, Stack<BBorInstInfo> workList) {
+      this.startLine      = startLine;
+      this.startInst      = startInst;
+      this.inclLine       = inclLine;
+      this.callStack      = callStack;
+      this.curInvokeDepth = curInvokeDepth;
+      this.callSites      = callSites;
+      this.workList       = workList;
+    }
+
+    public final int                 startLine;
+    public final int                 startInst;
+    public final int                 curInvokeDepth;
+    public final boolean             inclLine;
+    public final CallStack           callStack;
+    public final String              callSites;
+    public final Stack<BBorInstInfo> workList;
   }
 
   protected AbstractExecutor(String appJar, String pseudoImplJarFile, AbstractHandler instHandler, 
@@ -327,9 +348,9 @@ public abstract class AbstractExecutor {
     return basicBlock;
   }
   
-  protected void pushChildrenBlocks(List<Object[]> childrenBlocks, boolean skipToBlocks, 
-      final boolean pushAsc, final BBorInstInfo currentInfo, final MethodMetaData methData, int controlType, 
-      Stack<BBorInstInfo> workList, int maxLoop, String callSites, boolean starting) {
+  protected void pushChildrenBlocks(List<Object[]> childrenBlocks, boolean skipToBlocks, final boolean pushAsc, 
+      final BBorInstInfo currentInfo, final MethodMetaData methData, int controlType, Stack<BBorInstInfo> workList, 
+      CallStack callStack, int curInvokeDepth, int maxLoop, String callSites, boolean starting) {
     
     List<Object[]> visitedList    = new ArrayList<Object[]>();
     List<Object[]> notvisitedList = new ArrayList<Object[]>();
@@ -343,10 +364,15 @@ public abstract class AbstractExecutor {
       
       // get all visited records    
       Integer count = ((Formula) childrenBlock[1]).getVisitedRecord().get(childrenBlock[0]);
-      if (count != null && count > 0 && count < maxLoop) {
+      
+      // also consider the case where a call stack entering point is within a loop
+      count = (count == null ? 0 : count) + 
+          (isFlyingOverStartingLine(currentInfo.currentBB, bb, callStack, curInvokeDepth, methData) ? 1 : 0);
+      
+      if (count > 0 && count < maxLoop) {
         visitedList.add(childrenBlock);
       }
-      else if (count == null || count == 0) {
+      else if (count == 0) {
         notvisitedList.add(childrenBlock);
       }
       else if (count >= maxLoop) {
@@ -379,7 +405,9 @@ public abstract class AbstractExecutor {
     });
     
     // push the visited ones into the beginning of the stack
+    System.out.print("Push: ");
     for (Object[] visited : visitedList) {
+      System.out.print("BB" + ((ISSABasicBlock) visited[0]).getNumber() + " ");
       workList.push(new BBorInstInfo((ISSABasicBlock) visited[0], (currentInfo.startingBB && starting), 
           skipToBlocks, (Formula) visited[1], (Formula) visited[1], controlType, currentInfo.currentBB, 
           currentInfo, methData, callSites, null, this));
@@ -387,10 +415,27 @@ public abstract class AbstractExecutor {
     
     // push the non visited ones into the beginning of the stack
     for (Object[] notvisited : notvisitedList) {
+      System.out.print("BB" + ((ISSABasicBlock) notvisited[0]).getNumber() + " ");
       workList.push(new BBorInstInfo((ISSABasicBlock) notvisited[0], (currentInfo.startingBB && starting), 
           skipToBlocks, (Formula) notvisited[1], (Formula) notvisited[1], controlType, currentInfo.currentBB, 
           currentInfo, methData, callSites, null, this));
     }
+    System.out.println("");
+  }
+
+  // only useful for backward execution
+  private boolean isFlyingOverStartingLine(ISSABasicBlock fromBB, ISSABasicBlock toBB, 
+      CallStack callStack, int curInvokeDepth, MethodMetaData methData) {
+
+    boolean flyingOver = false;
+    if (!m_forward && callStack.getCurLineNo() > 0 && curInvokeDepth == 0 /* not in any invocation context */) {
+      int fromLine = methData.getLineNumber(fromBB);
+      int toLine   = methData.getLineNumber(toBB);
+      
+      flyingOver = fromLine > 0 && toLine > 0 && fromLine < callStack.getCurLineNo() && 
+          toLine >= callStack.getCurLineNo() && methData.getcfg().getNormalPredecessors(fromBB).size() > 1;
+    }
+    return flyingOver;
   }
   
   private boolean isConditionalBlock(ISSABasicBlock bb, MethodMetaData methData) {
@@ -415,8 +460,11 @@ public abstract class AbstractExecutor {
     computePath.append(0);
     BBorInstInfo currentBB = entryNode;
     while (currentBB.previousInfo != null) {
-      computePath.append(" >- ").append(
-          new StringBuilder(String.valueOf(currentBB.previousBB.getNumber())).reverse());
+      String bbNum  = String.valueOf(currentBB.previousBB.getNumber());
+      String lineNo = String.valueOf(currentBB.methData.getLineNumber(currentBB.previousBB));
+      computePath.append(" >- ")
+                 .append(new StringBuilder("(" + lineNo + ")").reverse())
+                 .append(new StringBuilder(bbNum).reverse());
       currentBB = currentBB.previousInfo;
     }
     System.out.print(computePath.reverse());

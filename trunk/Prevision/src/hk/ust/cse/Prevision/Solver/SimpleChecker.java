@@ -6,20 +6,18 @@ import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.PathCondition.TypeConditionTerm;
-import hk.ust.cse.Prevision.Solver.NeutralInput.Assertion;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.Prevision.VirtualMachine.Relation;
 import hk.ust.cse.util.Utils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.List;
 
 public class SimpleChecker {
 
-  public static String simpleCheck(Formula formula, NeutralInput neutralInput, boolean retrieveUnsatCore) {
+  public static Object simpleCheck(Formula formula, NeutralInput neutralInput, boolean retrieveUnsatCore) {
     boolean contradicted = false;
     List<Condition> unsatCoreConds = new ArrayList<Condition>();
     
@@ -180,69 +178,13 @@ public class SimpleChecker {
             previousOps = new ArrayList<Object[]>();
             statements.put(key, previousOps);
           }
-          switch (op) {
-          case OP_EQUAL:
-          case OP_INEQUAL:
-            break;
-          case OP_GREATER:
-            op = Comparator.OP_SMALLER;
-            break;
-          case OP_GREATER_EQUAL:
-            op = Comparator.OP_SMALLER_EQUAL;
-            break;
-          case OP_SMALLER:
-            op = Comparator.OP_GREATER;
-            break;
-          case OP_SMALLER_EQUAL:
-            op = Comparator.OP_GREATER_EQUAL;
-          default:
-            break;
-          }
-          previousOps.add(new Object[] {op, conditions.get(i)});
+          previousOps.add(new Object[] {op.getReverse(), conditions.get(i)});
         }
       }
     }
     
-    StringBuilder outputStr = new StringBuilder();
-    if (contradicted) {
-      outputStr.append("unsat").append(LINE_SEPARATOR);
-      
-      // retrieve unsat core
-      if (retrieveUnsatCore) {
-        List<Assertion> assertions                    = neutralInput.getAssertions();
-        Hashtable<Assertion, List<Condition>> mapping = neutralInput.getAssertionCondsMapping();
-        List<Integer> unsatCoreIds = new ArrayList<Integer>();
-        for (Condition unsatCoreCond : unsatCoreConds) {
-          Enumeration<Assertion> keys = mapping.keys();
-          while (keys.hasMoreElements()) {
-            Assertion key = (Assertion) keys.nextElement();
-            List<Condition> conds = mapping.get(key);
-            if (conds.contains(unsatCoreCond)) {
-              int index = assertions.indexOf(key);
-              if (index >= 0) {
-                unsatCoreIds.add(index + 1);
-              }
-            }
-          }
-        }
-        if (unsatCoreIds.size() > 0) {
-          outputStr.append("unsat core ids: ");
-          for (int i = 0, size = unsatCoreIds.size(); i < size; i++) {
-            outputStr.append(unsatCoreIds.get(i));
-            if (i != size - 1) {
-              outputStr.append(" ");
-            }
-          }
-          outputStr.append(LINE_SEPARATOR);
-        }
-      }
-      outputStr.append("Proven contradicted by simple checker.");
-    }
-    else {
-      outputStr.append("sat");
-    }
-    
-    return outputStr.toString();
+    Object output = contradicted ? unsatCoreConds.toArray(new Condition[unsatCoreConds.size()]) : "sat";
+    return output;
   }
     
   private static String getInstanceName(Instance instance, Formula formula, Hashtable<Instance, String> instanceNameMapping) {
@@ -315,6 +257,4 @@ public class SimpleChecker {
     
     return str;
   }
-  
-  private static final String LINE_SEPARATOR = System.getProperty("line.separator");
 }

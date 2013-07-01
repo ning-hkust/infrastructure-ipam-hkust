@@ -525,7 +525,7 @@ public class Utils {
     else if (superClass.startsWith("[") && childClass.startsWith("[")) {
       return canCastTo(superClass.substring(1), childClass.substring(1));
     }
-    else if (superClass.equals("Ljava/lang/Object")) {
+    else if (superClass.equals("Ljava/lang/Object") && !Utils.isPrimitiveType(childClass)) {
       // this only happens when childClass is an interface
       return true;
     }

@@ -56,7 +56,7 @@ public class DefAnalyzer {
           IR ir = Jar2IR.getIR(m_walaAnalyzer, method.getSignature()); // getIR
           if (ir != null) {
             System.out.println("Finding all defs for: " + method.getSignature());
-            getAllDefs(ir, 0, maxLookDepth, result);
+            getAllDefs(ir, maxLookDepth, result);
           }
         }
       }        
@@ -68,11 +68,19 @@ public class DefAnalyzer {
   public void findAllDefs(IR ir, int maxLookDepth, DefAnalysisResult result) {
     if (ir != null && !ir.getMethod().isAbstract() && !ir.getMethod().isNative()) {
       System.out.println("Finding all defs for: " + ir.getMethod().getSignature());
-      getAllDefs(ir, 0, maxLookDepth, result);
+      getAllDefs(ir, maxLookDepth, result);
     }
   }
   
-  private void getAllDefs(IR ir, int curDepth, int maxDepth, DefAnalysisResult result) {
+  private void getAllDefs(IR ir, int maxDepth, DefAnalysisResult globalResult) {
+    DefAnalysisResult localResult = new DefAnalysisResult();
+    getAllDefs(ir, 0, maxDepth, new boolean[] {false}, localResult, globalResult);
+    globalResult.addAll(localResult);
+  }
+  
+  private void getAllDefs(IR ir, int curDepth, int maxDepth, 
+      boolean[] hitMaxDepth, DefAnalysisResult localResult, DefAnalysisResult globalResult) {
+    
     MethodMetaData methData = new MethodMetaData(ir);
     SSACFG cfg = methData.getcfg();
     
@@ -80,7 +88,7 @@ public class DefAnalyzer {
     Hashtable<String, String[]> varMappings = new Hashtable<String, String[]>();
     
     // add method first in case there is no def in method
-    result.addMethodDef(ir.getMethod());
+    localResult.addMethodDef(ir.getMethod());
     
     Hashtable<SSAInstruction, ISSABasicBlock> instBBMapping = new Hashtable<SSAInstruction, ISSABasicBlock>();
     SSAInstruction[] insts = getInstructions(ir, instBBMapping);
@@ -118,12 +126,14 @@ public class DefAnalyzer {
           declaredField += varName;
           // get the name of the field
           declaredField += "." + putfieldInst.getDeclaredField().getName();
+          // get the class type that declared this field
+          declaredField += "|" + putfieldInst.getDeclaredField().getDeclaringClass().getName().toString();
           declaredFields.add(declaredField);
         }
         // save field to all conditional branches
-        result.addCondBranchDef(currentCondBranchDefs, declaredFields);
+        localResult.addCondBranchDef(currentCondBranchDefs, declaredFields);
         // save field to method defs
-        result.addMethodDef(ir.getMethod(), declaredFields);
+        localResult.addMethodDef(ir.getMethod(), declaredFields);
       }
       else if (insts[i] instanceof SSANewInstruction) {
         SSANewInstruction newInst = (SSANewInstruction) insts[i];
@@ -133,10 +143,10 @@ public class DefAnalyzer {
         // for array types, we have ".length" variables
         if (newInst.getConcreteType().isArrayType()) {
           // name of ".length" variables
-          String defLength = def + ".length";
-          result.addCondBranchDef(currentCondBranchDefs, defLength);
+          String defLength = def + ".length|" + newInst.getConcreteType().getName().toString();
+          localResult.addCondBranchDef(currentCondBranchDefs, defLength);
           // save length field to method defs
-          result.addMethodDef(ir.getMethod(), defLength);
+          localResult.addMethodDef(ir.getMethod(), defLength);
         }
         // each member fields
         else if (newInst.getConcreteType().isClassType()) {
@@ -151,12 +161,14 @@ public class DefAnalyzer {
               declaredField += def;
               // get the name of the field
               declaredField += "." + field.getName();
+              // get the class type that declared this field
+              declaredField += "|" + newInst.getConcreteType().getName().toString();
               // the member field
               defs.add(declaredField);
             }
-            result.addCondBranchDef(currentCondBranchDefs, defs);
+            localResult.addCondBranchDef(currentCondBranchDefs, defs);
             // save fields to method defs
-            result.addMethodDef(ir.getMethod(), defs);
+            localResult.addMethodDef(ir.getMethod(), defs);
           }
         }
       }
@@ -165,25 +177,45 @@ public class DefAnalyzer {
         
         String[] arrayRefs = getVarName(methData, arrayStoreInst.getArrayRef(), varMappings);
         // save array ref to all conditional branches
-        result.addCondBranchDef(currentCondBranchDefs, Arrays.asList(arrayRefs));
+        localResult.addCondBranchDef(currentCondBranchDefs, Arrays.asList(arrayRefs));
         // save array ref to method defs
-        result.addMethodDef(ir.getMethod(), Arrays.asList(arrayRefs));
+        localResult.addMethodDef(ir.getMethod(), Arrays.asList(arrayRefs));
       }
       else if (insts[i] instanceof SSAInvokeInstruction && curDepth < maxDepth) {
         SSAInvokeInstruction invokeInst = (SSAInvokeInstruction) insts[i];
         
         IR ir2 = Jar2IR.getIR(m_walaAnalyzer, invokeInst.getDeclaredTarget().getSignature());
+//        if (ir2 == null) {
+//          String superClass = invokeInst.getDeclaredTarget().getDeclaringClass().getName().toString();
+//          IR[] freqIRs = SubClassHack.findFreqSubclassIRs(m_walaAnalyzer, superClass, invokeInst.getDeclaredTarget().getSignature());
+//          if (freqIRs != null) {
+//            ir2 = freqIRs[0];
+//          }
+//        }
+        
         if (ir2 != null) {
           HashSet<String> defs = null;
           if (curDepth < maxDepth) {
             // try to get cached result first
-            defs = result.getMethodDefs(ir2.getMethod());
+            defs = globalResult.getMethodDefs(ir2.getMethod());
             if (defs == null) {
               // recursively call getAllDefs
+              boolean[] ir2HitMaxDepth = new boolean[] {false};
               DefAnalysisResult invokeResult = new DefAnalysisResult();
-              getAllDefs(ir2, curDepth + 1, maxDepth, invokeResult);
+              getAllDefs(ir2, curDepth + 1, maxDepth, ir2HitMaxDepth, invokeResult, globalResult);
               defs = invokeResult.getMethodDefs(ir2.getMethod());
+              
+              // move result to global
+              if (!ir2HitMaxDepth[0] && !globalResult.containsMethod(ir2.getMethod())) {
+                globalResult.addAll(invokeResult);
+              }
+              else if (ir2HitMaxDepth[0]) {
+                hitMaxDepth[0] = true;
+              }
             }
+          }
+          else {
+            hitMaxDepth[0] = true;
           }
           
           // translate result
@@ -218,23 +250,23 @@ public class DefAnalyzer {
           }
           
           // save callee defs to all conditional branches
-          result.addCondBranchDef(currentCondBranchDefs, methodDefs);
+          localResult.addCondBranchDef(currentCondBranchDefs, methodDefs);
           // save callee defs to method defs
-          result.addMethodDef(ir.getMethod(), methodDefs);
+          localResult.addMethodDef(ir.getMethod(), methodDefs);
         }
       }
       else if (insts[i] instanceof SSAConditionalBranchInstruction) {
         // save current conditional branch
         ISSABasicBlock mergingBB = findMergingBB(cfg, currentBlock);
         if (mergingBB != null) {
-          ConditionalBranchDefs condBranchDefs = result.new ConditionalBranchDefs(
+          ConditionalBranchDefs condBranchDefs = new ConditionalBranchDefs(
               cfg, currentBlock, currentCondBranchDefs, mergingBB);
           if (condBranchDefs.endingBlock != null) {
             currentCondBranchDefs.add(condBranchDefs);
             
             // it is possible that this conditional branch has no defs at 
             // all, so we always add it first at the beginning
-            result.addCondBranchDef(condBranchDefs);
+            localResult.addCondBranchDef(condBranchDefs);
           }
         }
       }
@@ -244,8 +276,8 @@ public class DefAnalyzer {
         String[] defs = getVarName(methData, insts[i].getDef(), varMappings);
         for (String def : defs) {
           if (def.startsWith("v") && !def.equals("v-1")) {
-            result.addCondBranchDef(currentCondBranchDefs, def);
-            result.addMethodDef(ir.getMethod(), def);
+            localResult.addCondBranchDef(currentCondBranchDefs, def);
+            localResult.addMethodDef(ir.getMethod(), def);
           }
         }
       }
@@ -375,7 +407,7 @@ public class DefAnalyzer {
         instBBMapping.put(piInst, basicBlock);
       }
     }
-    return insts.toArray(new SSAInstruction[0]);
+    return insts.toArray(new SSAInstruction[insts.size()]);
   }
   
   private ISSABasicBlock findMergingBB(SSACFG cfg, ISSABasicBlock condBranchBB) {

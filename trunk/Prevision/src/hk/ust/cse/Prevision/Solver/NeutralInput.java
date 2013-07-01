@@ -922,8 +922,16 @@ public class NeutralInput {
       else if (!instance.isRelationRead()) {
         if (instance.getLastReference() != null && instance.getLastRefName().contains("__instanceof__")) {
           instance = instance.getLastReference().getDeclaringInstance();
+          if (!instance.isRelationRead()) {
+            defines.add(createUnboundDefineStmt(instance));
+          }
         }
-        defines.add(createUnboundDefineStmt(instance));
+        else if (instance.getLastReference() != null && instance.getLastRefName().endsWith(".class")) {
+          defines.add(createClassFieldDefineStmt(instance));
+        }
+        else {
+          defines.add(createUnboundDefineStmt(instance));
+        }
       }
     }
     
@@ -987,7 +995,12 @@ public class NeutralInput {
       long half = (long) (0.5 * (range[1] - range[0]));
       long defValue = range[0] + half + (long) (Math.random() * half);
       defines.add(new DefineConstant(instance.getValue() + ".value", "[C", defValue));
-
+      
+      // save the constant value
+      if (instance.getField("value") != null) {
+        m_constInstanceMapping.put(String.valueOf(defValue), instance.getField("value").getInstance());
+      }
+      
       // define constant string value.length
       defines.add(new DefineConstant(instance.getValue() + ".value.length", "I", instance.getValue().length() - 2));
     }
@@ -1026,6 +1039,26 @@ public class NeutralInput {
       m_constInstanceMapping.put(String.valueOf(defValue), instance);
     }
     
+    return define;
+  }
+
+  private DefineConstant createClassFieldDefineStmt(Instance instance) {
+    DefineConstant define = null;
+    
+    Reference lastRef = instance.getLastReference();
+    if (lastRef != null) {
+      // get the new value
+      long[] range = m_typeRanges.get(lastRef.getType()).get(0);
+      long half = (long) (0.5 * (range[1] - range[0]));
+      long defValue = range[0] + half + (long) (Math.random() * half);
+
+      String varName = lastRef.getLongNameWithCallSites();
+      String varType = lastRef.getType();
+      define = new DefineConstant(varName, varType, defValue);
+
+      // save the constant value
+      m_constInstanceMapping.put(String.valueOf(defValue), instance);
+    }
     return define;
   }
 
@@ -1389,13 +1422,14 @@ public class NeutralInput {
   }
   
   private void addCommonContracts(Formula formula) {
-    List<Condition> newContracts = new ArrayList<Condition>();
-
-    Instance zero = new Instance("#!0", "I", null);
-    Instance hund = new Instance("#!100", "I", null);
+    
+    Instance lower = new Instance("#!0", "I", null);
+    Instance upper = new Instance("#!10000", "I", null);
     HashSet<Instance> checked = new HashSet<Instance>();
-    for (Condition condition : formula.getConditionList()) {
-      HashSet<Instance> instances = condition.getRelatedInstances(formula.getRelationMap(), false, false, true);
+    
+    for (int i = 0; i < formula.getConditionList().size(); i++) {
+      Condition condition = formula.getConditionList().get(i);
+      HashSet<Instance> instances = condition.getRelatedInstances(formula.getRelationMap(), false, false, true, false);
       for (Instance instance : instances) {
         if (!checked.contains(instance)) {
           String fieldName = null;
@@ -1409,21 +1443,23 @@ public class NeutralInput {
           if (fieldName != null && 
              (fieldName.endsWith("size") || fieldName.endsWith("count") || fieldName.endsWith("length") || 
               fieldName.endsWith("cursor") || fieldName.endsWith("height"))) {
-            newContracts.add(new Condition(
-                new BinaryConditionTerm(instance, Comparator.OP_GREATER_EQUAL, zero)));
+            Condition newContract1 = new Condition(
+                new BinaryConditionTerm(instance, Comparator.OP_GREATER_EQUAL, lower));
             
             // this extra condition is useful in practice for preventing huge size arrays, 
             // but it may also cause unsound UNSAT in theory due to this upper bound
-            newContracts.add(new Condition(
-                new BinaryConditionTerm(instance, Comparator.OP_SMALLER, hund)));
+            Condition newContract2 = new Condition(
+                new BinaryConditionTerm(instance, Comparator.OP_SMALLER, upper));
+            
+            formula.getConditionList().add(i + 1, newContract1);
+            formula.getConditionList().add(i + 2, newContract2);
+            i += 2;
           }
 
           checked.add(instance);
         }
       }
     }
-    
-    formula.getConditionList().addAll(newContracts);
   }
   
   public String toString() {

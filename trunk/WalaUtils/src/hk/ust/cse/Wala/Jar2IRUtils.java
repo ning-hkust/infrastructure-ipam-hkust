@@ -89,7 +89,7 @@ class Jar2IRUtils {
         // method name matches?
         String methName = declaringClass + "." + aMethod.getName().toString();
         if (methName.equals(methodName)) {
-          if (isMethodAtLine(aMethod, lineNo)) {
+          if (methName.endsWith("<clinit>") || isMethodAtLine(aMethod, lineNo)) {
             mr = aMethod.getReference();
             break;
           }

@@ -1,5 +1,8 @@
 package hk.ust.cse.Prevision_PseudoImpl;
 
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.NoSuchElementException;
 
 
@@ -65,9 +68,9 @@ public class Table {
       return null;
     }
   }
-  
+
   public boolean containsKey(HashCode hashCode) {
-    return hashCode.__hashcode__ >= 0 && hashCode.__hashcode__ < count;
+    return hashCode.__hashcode__ >= 0 && hashCode.__hashcode__ < count && count == __table__.length;
   }
   
   public KeySet keySet() {
@@ -76,6 +79,63 @@ public class Table {
   
   public KeyEnumerator keys() {
     return new KeyEnumerator(count);
+  }
+  
+  public EntrySet entrySet() {
+    return new EntrySet(__table__, count);
+  }
+
+  public Collection values() {
+    ArrayList l = new ArrayList();
+    for (int i = 0; i < __table__.length; i++) {
+      l.add(__table__[i]);
+    }
+    return l;
+  }
+  
+  public static class EntrySet {
+
+    public EntrySet(Object[] entries, int size) {
+      if (size >= 0) {
+        this.size = size;
+        this.entries = entries;
+      }
+      else {
+        throw new IllegalArgumentException();
+      }
+    }
+    
+    public EntryIterator iterator() {
+      return new EntryIterator((Object[]) entries, size);
+    }
+    
+    public int size;
+    public Object[] entries;
+  }
+  
+  public static class EntryIterator {
+    public EntryIterator(Object[] entries, int size) {
+      this.size = size;
+      this.current = 0;
+      this.entries = entries;
+    }
+    
+    public boolean hasNext() {
+      return current < size;
+    }
+    
+    public java.util.Map.Entry next() {
+      if (current < size) {
+        return new AbstractMap.SimpleEntry(new HashCode(current), entries[current++]);
+      }
+      else {
+        throw new NoSuchElementException();
+      }
+    }
+    
+    public int size;
+    public int current;
+    public Object[] entries;
   }
   
   public static class KeySet {

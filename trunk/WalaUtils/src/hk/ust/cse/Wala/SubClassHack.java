@@ -3,7 +3,6 @@ package hk.ust.cse.Wala;
 import hk.ust.cse.util.Utils;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 
@@ -87,7 +86,7 @@ public class SubClassHack {
           }
         }
       }
-      
+      retainedIRs = Utils.deleteRedundents(retainedIRs);
       selectedIRs = retainedIRs.size() > 0 ? retainedIRs.toArray(new IR[retainedIRs.size()]) : targetIRs;
     }
 
@@ -103,7 +102,7 @@ public class SubClassHack {
     List<String> freqSubclasses = SubClassHack.useFreqSubclasses(superClass);
     if (freqSubclasses != null) {
       // get the IRs
-      HashSet<IR> irs = new HashSet<IR>();
+      List<IR> irs = new ArrayList<IR>();
       for (String subclass : freqSubclasses) {
         String newMethodSig = Utils.getClassTypeJavaStr(subclass, false) + methodSelector;
         IR ir = Jar2IR.getIR(walaAnalyzer, newMethodSig);
@@ -111,6 +110,7 @@ public class SubClassHack {
           irs.add(ir);
         }
       }
+      irs = Utils.deleteRedundents(irs);
       freqSubclassIRs = irs.size() > 0 ? irs.toArray(new IR[irs.size()]) : null;
     }
 

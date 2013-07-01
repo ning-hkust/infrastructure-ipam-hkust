@@ -220,14 +220,19 @@ public class Instance {
 
   // #!0 + #!1
   public String computeArithmetic() {
+    return computeArithmetic(new Hashtable<String, String>());
+  }
+  
+  // v1.head + #!1
+  public String computeArithmetic(Hashtable<String, String> nameValueMap) {
     String computed = null;
     if (isNumberConstant()) {
       computed = m_value;
     }
-    else if (isBounded()) { 
+    else if (isBounded()) {
       try {
-        String leftStr  = m_left.computeArithmetic();
-        String rightStr = m_right.computeArithmetic();
+        String leftStr  = m_left.computeArithmetic(nameValueMap);
+        String rightStr = m_right.computeArithmetic(nameValueMap);
         if (leftStr != null && rightStr != null && leftStr.startsWith("#!") && rightStr.startsWith("#!")) {
           int leftInt  = Integer.parseInt(leftStr.substring(2));
           int rightInt = Integer.parseInt(rightStr.substring(2));
@@ -271,7 +276,73 @@ public class Instance {
         }
       } catch (Exception e) {}
     }
+    else if (m_lastRef != null) {
+      computed = nameValueMap.get(toString());
+    }
     return computed;
+  }
+  
+
+  // (v1 @ (#!0 + #!1))
+  public String computeInnerArithmetic() {
+    return computeInnerArithmetic(new Hashtable<String, String>());
+  }
+  
+  // (v1 @ (v1.head + #!1))
+  public String computeInnerArithmetic(Hashtable<String, String> nameValueMap) {
+    String computed = computeArithmetic();
+    if (computed != null) {
+      return computed;
+    }
+    
+    if (isBounded()) {
+      String leftStr  = m_left.computeInnerArithmetic(nameValueMap);
+      String rightStr = m_right.computeInnerArithmetic(nameValueMap);
+      computed = "(" + leftStr;
+      switch (m_op) {
+      case ADD:
+        computed += " + ";
+        break;
+      case AND:
+        computed += " & ";
+        break;
+      case SUB:
+        computed += " - ";
+        break;
+      case MUL:
+        computed += " * ";
+        break;
+      case DIV:
+        computed += " / ";
+        break;
+      case OR:
+        computed += " | ";
+        break;
+      case REM:
+        computed += " % ";
+        break;
+      case XOR:
+        computed += " ^ ";
+        break;
+      case SHL:
+        computed += " << ";
+        break;
+      case SHR:
+        computed += " >> ";
+        break;
+      case USHR:
+        computed += " >> ";
+        break;
+      case DUMMY:
+        computed += " @ ";
+        break;
+      default:
+        computed += " ? "; // unknown op
+        break;
+      }
+      computed += rightStr + ")";
+    }
+    return computed != null ? computed : toString();
   }
   
   public boolean isBounded() {
@@ -459,15 +530,15 @@ public class Instance {
   }
   
   public HashSet<Instance> getRelatedInstances(Hashtable<String, Relation> relationMap, 
-      boolean inclDeclInstances, boolean inclArrayRefIndexInDecl, boolean inclReadRelDomains) {
+      boolean inclDeclInstances, boolean inclArrayRefIndexInDecl, boolean inclReadRelDomains, boolean inclArrayRead) {
     HashSet<Instance> instances = new HashSet<Instance>();
-    getRelatedInstances(instances, relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains);
+    getRelatedInstances(instances, relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains, inclArrayRead);
     return instances;
   }
   
   // inclArrayRefIndexInDecl: include v1.list and v1.index in (v1.list @ v1.index).field
   private void getRelatedInstances(HashSet<Instance> instances, Hashtable<String, Relation> relationMap, 
-      boolean inclDeclInstances, boolean inclArrayRefIndexInDecl, boolean inclReadRelDomains) {
+      boolean inclDeclInstances, boolean inclArrayRefIndexInDecl, boolean inclReadRelDomains, boolean inclArrayRead) {
     if (!isBounded()) {
       Instance currentInstance = this;
       while (currentInstance != null) {
@@ -482,24 +553,29 @@ public class Instance {
             Instance[] relInstances = relation.getDomainValues().get(relation.getIndex(readTime));
             
             for (Instance relInstance : relInstances) {
-              relInstance.getRelatedInstances(instances, 
-                  relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains);
+              relInstance.getRelatedInstances(instances, relationMap, 
+                  inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains, inclArrayRead);
             }
           }
         }
         else if (!currentInstance.isAtomic()) {
-          currentInstance.getLeft().getRelatedInstances(
-              instances, relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains);
-          currentInstance.getRight().getRelatedInstances(
-              instances, relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains);
+          currentInstance.getLeft().getRelatedInstances(instances, relationMap, 
+              inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains, inclArrayRead);
+          currentInstance.getRight().getRelatedInstances(instances, relationMap, 
+              inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains, inclArrayRead);
         }
         currentInstance = (inclDeclInstances || inclArrayRefIndexInDecl) && currentInstance.getLastReference() != null ? 
             currentInstance.getLastReference().getDeclaringInstance() : null;
       }
     }
     else if (!isAtomic()) {
-      getLeft().getRelatedInstances(instances, relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains);
-      getRight().getRelatedInstances(instances, relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains);
+      getLeft().getRelatedInstances(instances, relationMap, 
+          inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains, inclArrayRead);
+      getRight().getRelatedInstances(instances, relationMap, 
+          inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains, inclArrayRead);
+      if (inclArrayRead && m_op == INSTANCE_OP.DUMMY) {
+        instances.add(this);
+      }
     }
   }
   

@@ -56,6 +56,7 @@ public class CallGraph {
     // get constructed call graph and the pointer analysis information 
     // computed as a side-effect of call graph construction
     m_callGraph       = callGraphBuilder.getCallGraph();
+    //System.err.println(CallGraphStats.getStats(m_callGraph));
     
     // not used at the moment
     //m_pointerAnalysis = callGraphBuilder.getPointerAnalysis();

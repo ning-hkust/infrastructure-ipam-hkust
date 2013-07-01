@@ -77,12 +77,12 @@ public class Condition {
   }
 
   public HashSet<Instance> getRelatedInstances(Hashtable<String, Relation> relationMap, 
-      boolean inclDeclInstances, boolean inclArrayRefIndexInDecl, boolean inclReadRelDomains) {
+      boolean inclDeclInstances, boolean inclArrayRefIndexInDecl, boolean inclReadRelDomains, boolean inclArrayRead) {
     HashSet<Instance> instances = new HashSet<>();
     for (ConditionTerm term : m_terms) {
       for (Instance instance : term.getInstances()) {
         instances.addAll(instance.getRelatedInstances(
-            relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains));
+            relationMap, inclDeclInstances, inclArrayRefIndexInDecl, inclReadRelDomains, inclArrayRead));
       }  
     }
     return instances;
