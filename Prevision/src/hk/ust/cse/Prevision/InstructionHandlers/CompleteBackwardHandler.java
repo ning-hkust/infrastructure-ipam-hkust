@@ -57,6 +57,7 @@ import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SSASwitchInstruction;
 import com.ibm.wala.ssa.SSAThrowInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
+import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 
 public class CompleteBackwardHandler extends AbstractBackwardHandler {
@@ -180,44 +181,17 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     List<Condition> conditionList = new ArrayList<Condition>();
     switch (instInfo.controlType) {
     case Formula.NORMAL_SUCCESSOR:
-      Reference arrayRefRef = findOrCreateReference(arrayRef, "[" + elemType, callSites, currentBB, postCond);
-      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, postCond);
-
-      // new conditions: arrayIndex >= 0 && arrayIndex < arryLength
+      Reference arrayRefRef   = findOrCreateReference(arrayRef, "[" + elemType, callSites, currentBB, postCond);
       Reference arrayIndexRef = findOrCreateReference(arrayIndex, "I", callSites, currentBB, postCond);
-      Reference zeroRef       = findOrCreateReference("#!0", "I", "", currentBB, postCond);
 
-      // get the array length field
-      List<Reference> lenRefs = arrayRefRef.getFieldReferences("length");
-      if (lenRefs.size() == 0) {
-        Reference lenRef = new Reference("length", "I", callSites, 
-            new Instance(callSites, currentBB), arrayRefRef.getInstance(), true);
-        arrayRefRef.getInstance().setField("length", "I", callSites, lenRef.getInstances(), true, false);
-        lenRefs = arrayRefRef.getFieldReferences("length");
-      }
-      Reference arrayLenRef = lenRefs.get(0); // simply use the first one
-      
-      conditionTerms = new ArrayList<ConditionTerm>();
-      conditionTerms.add(new BinaryConditionTerm(arrayIndexRef.getInstance(), Comparator.OP_GREATER_EQUAL, zeroRef.getInstance()));
-      conditionList.add(new Condition(conditionTerms));
-      conditionTerms = new ArrayList<ConditionTerm>();
-      conditionTerms.add(new BinaryConditionTerm(arrayIndexRef.getInstance(), Comparator.OP_SMALLER, arrayLenRef.getInstance()));
-      conditionList.add(new Condition(conditionTerms));
-
-      // new condition: arrayRef != null
-      conditionTerms = new ArrayList<ConditionTerm>();
-      conditionTerms.add(new BinaryConditionTerm(arrayRefRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
-      conditionList.add(new Condition(conditionTerms));
-      
       // add new references to refMap
       addRefToRefMap(newRefMap, arrayRefRef);
       addRefToRefMap(newRefMap, arrayIndexRef);
       
       Reference defRef = findOrCreateReference(def, elemType, callSites, currentBB, postCond);
 
-      Relation relation = postCond.getRelation("@@array");
-      
       // merge with the same read appearing later
+      Relation relation = postCond.getRelation("@@array");
       Reference laterReadRef = null;
       for (int i = 0, size = relation.getFunctionCount(); i < size; i++) {
         Instance[] domains = relation.getDomainValues().get(i);
@@ -247,6 +221,33 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
         assignInstance(laterReadRef, readRef, newRefMap, newDefMap);
       }
       assignInstance(defRef, readRef, newRefMap, newDefMap);
+
+      // new conditions: arrayIndex >= 0 && arrayIndex < arrayLength
+      Reference zeroRef = findOrCreateReference("#!0", "I", "", currentBB, postCond);
+
+      // get the array length field
+      List<Reference> lenRefs = arrayRefRef.getFieldReferences("length");
+      if (lenRefs.size() == 0) {
+        Reference lenRef = new Reference("length", "I", callSites, 
+            new Instance(callSites, currentBB), arrayRefRef.getInstance(), true);
+        arrayRefRef.getInstance().setField("length", "I", callSites, lenRef.getInstances(), true, false);
+        lenRefs = arrayRefRef.getFieldReferences("length");
+      }
+      Reference arrayLenRef = lenRefs.get(0); // simply use the first one
+      
+      conditionTerms = new ArrayList<ConditionTerm>();
+      conditionTerms.add(new BinaryConditionTerm(arrayIndexRef.getInstance(), Comparator.OP_GREATER_EQUAL, zeroRef.getInstance()));
+      conditionList.add(new Condition(conditionTerms));
+      conditionTerms = new ArrayList<ConditionTerm>();
+      conditionTerms.add(new BinaryConditionTerm(arrayIndexRef.getInstance(), Comparator.OP_SMALLER, arrayLenRef.getInstance()));
+      conditionList.add(new Condition(conditionTerms));
+
+      // new condition: arrayRef != null
+      Reference nullRef = findOrCreateReference("null", "", "", currentBB, postCond);
+      conditionTerms = new ArrayList<ConditionTerm>();
+      conditionTerms.add(new BinaryConditionTerm(arrayRefRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
+      conditionList.add(new Condition(conditionTerms));
+      
       break;
 //    case Formula.EXCEPTIONAL_SUCCESSOR:
 //      TypeReference excepType = methData.getExceptionType(instInfo.currentBB, instInfo.previousBB);
@@ -325,13 +326,22 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     List<Condition> conditionList = new ArrayList<Condition>();
     switch (instInfo.controlType) {
     case Formula.NORMAL_SUCCESSOR:
-      Reference arrayRefRef = findOrCreateReference(arrayRef, "[" + elemType, callSites, currentBB, postCond);
-      Reference nullRef     = findOrCreateReference("null", "", "", currentBB, postCond);
-      
-      // new conditions: arrayIndex >= 0 && arrayIndex < arryLength
+      Reference arrayRefRef   = findOrCreateReference(arrayRef, "[" + elemType, callSites, currentBB, postCond);
       Reference arrayIndexRef = findOrCreateReference(arrayIndex, "I", callSites, currentBB, postCond);
-      Reference zeroRef       = findOrCreateReference("#!0", "I", "", currentBB, postCond);
+
+      // add new references to refMap
+      addRefToRefMap(newRefMap, arrayRefRef);
+      addRefToRefMap(newRefMap, arrayIndexRef);
+
+      Reference storeValRef = findOrCreateReference(storeValue, elemType, callSites, currentBB, postCond);
+
+      Relation relation = postCond.getRelation("@@array");
+      relation.update(new Instance[] {arrayRefRef.getInstance(), arrayIndexRef.getInstance()}, storeValRef.getInstance());
+      addRefToRefMap(newRefMap, storeValRef);
       
+      // new conditions: arrayIndex >= 0 && arrayIndex < arrayLength
+      Reference zeroRef = findOrCreateReference("#!0", "I", "", currentBB, postCond);
+
       // get the array length field
       List<Reference> lenRefs = arrayRefRef.getFieldReferences("length");
       if (lenRefs.size() == 0) {
@@ -350,19 +360,11 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       conditionList.add(new Condition(conditionTerms));
 
       // new condition: arrayRef != null
+      Reference nullRef = findOrCreateReference("null", "", "", currentBB, postCond);
       conditionTerms = new ArrayList<ConditionTerm>();
       conditionTerms.add(new BinaryConditionTerm(arrayRefRef.getInstance(), Comparator.OP_INEQUAL, nullRef.getInstance())); 
       conditionList.add(new Condition(conditionTerms));
       
-      // add new references to refMap
-      addRefToRefMap(newRefMap, arrayRefRef);
-      addRefToRefMap(newRefMap, arrayIndexRef);
-
-      Reference storeValRef = findOrCreateReference(storeValue, elemType, callSites, currentBB, postCond);
-
-      Relation relation = postCond.getRelation("@@array");
-      relation.update(new Instance[] {arrayRefRef.getInstance(), arrayIndexRef.getInstance()}, storeValRef.getInstance());
-      addRefToRefMap(newRefMap, storeValRef);
       break;
 //    case Formula.EXCEPTIONAL_SUCCESSOR:
 //      TypeReference excepType = methData.getExceptionType(instInfo.currentBB, instInfo.previousBB);
@@ -719,7 +721,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
     SSAConditionalBranchInstruction condBranchInst            = (SSAConditionalBranchInstruction) inst;
-
+    
     // check whether or not the conditional branch has been taken
     // the branch instruction will always be the last instruction
     // of the current block, so we can check whether the branch has
@@ -1128,14 +1130,19 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     }
 
     // the variable define by the invokestatic instruction
+    MethodReference declTarget = invokestaticInst.getDeclaredTarget();
     String invocationType = invokestaticInst.getDeclaredResultType().getName().toString();
     if (containsRef(def, callSites, newRefMap)) {
+      if (declTarget.getSignature().startsWith(("java.lang.Class.forName(Ljava/lang/String;"))) {
+        handleClassForName(def, params.get(0), postCond, newRefMap, callSites, currentBB);
+      }
+      
       StringBuilder invocation = new StringBuilder();
       // get the fieldType of the declared field of the invokestatic instruction
       // get the class type that declared this field
-      invocation.append(invokestaticInst.getDeclaredTarget().getDeclaringClass().getName());
+      invocation.append(declTarget.getDeclaringClass().getName());
       // get the name of the field
-      invocation.append("." + invokestaticInst.getDeclaredTarget().getSelector().getName());
+      invocation.append("." + declTarget.getSelector().getName());
       // get the parameters
       invocation.append("(");
       for (int i = 0; i < params.size(); i++) {
@@ -1529,18 +1536,18 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
       postCond.addFieldAssignTime("length", System.nanoTime());
       
       // assign initial values to array elements, XXX currently only works for constant size array
-      if (valSize.startsWith("#!")) {
-        TypeReference elemType = newInst.getConcreteType().getArrayElementType();
-        String val = elemType.isPrimitiveType() ? "#!0" /* number or boolean(false)*/ : "null";
-        Reference valRef = findOrCreateReference(val, elemType.getName().toString(), "", currentBB, postCond);
-        
-        int size = Integer.parseInt(valSize.substring(2));
-        for (int i = 0; i < size; i++) {
-          Reference indexRef = findOrCreateReference("#!" + i, "I", "", currentBB, postCond);
-          Relation relation = postCond.getRelation("@@array");
-          relation.update(new Instance[] {defRef.getInstance(), indexRef.getInstance()}, valRef.getInstance());
-        }
+      int size = valSize.startsWith("#!") ? Integer.parseInt(valSize.substring(2)) : 3;
+      size = size > 10 ? 10 : size; // avoid large number of array stores which causes performance problem in solver
+      
+      TypeReference elemType = newInst.getConcreteType().getArrayElementType();
+      String val = elemType.isPrimitiveType() ? "#!0" /* number or boolean(false)*/ : "null";
+      Reference valRef = findOrCreateReference(val, elemType.getName().toString(), "", currentBB, postCond);
+      for (int i = 0; i < size; i++) {
+        Reference indexRef = findOrCreateReference("#!" + i, "I", "", currentBB, postCond);
+        Relation relation = postCond.getRelation("@@array");
+        relation.update(new Instance[] {defRef.getInstance(), indexRef.getInstance()}, valRef.getInstance());
       }
+      addRefToRefMap(newRefMap, defRef);
     }
 //    // initialize the default values of each member fields // done in the entry block of <init> already
 //    else if (newInst.getConcreteType().isClassType()) {
@@ -1890,7 +1897,7 @@ public class CompleteBackwardHandler extends AbstractBackwardHandler {
     MethodMetaData methData                                   = instInfo.methData;
     Hashtable<String, Hashtable<String, Reference>> newRefMap = postCond.getRefMap();
     Hashtable<String, Hashtable<String, Integer>> newDefMap   = postCond.getDefMap();
-
+    
     // for the outermost frame, need to add this != null manually
     List<ConditionTerm> conditionTerms = null;
     List<Condition> conditionList = new ArrayList<Condition>();

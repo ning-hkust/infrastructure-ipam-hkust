@@ -7,6 +7,7 @@ import hk.ust.cse.StaticAnalysis.DefAnalyzer.DefAnalysisResult;
 import hk.ust.cse.StaticAnalysis.DefAnalyzer.DefAnalysisResult.ConditionalBranchDefs;
 import hk.ust.cse.StaticAnalysis.DefAnalyzer.DefAnalyzer;
 import hk.ust.cse.Wala.WalaAnalyzer;
+import hk.ust.cse.util.Utils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -19,6 +20,7 @@ import java.util.List;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSAMonitorInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SSAThrowInstruction;
 
@@ -53,10 +55,12 @@ public class DefAnalyzerWrapper {
     HashSet<String> methodDefs = m_lastResult.getMethodDefs(ir.getMethod());
     if (methodDefs != null) {
       for (String def : methodDefs) {
-        int index = def.lastIndexOf('.');
-        if (index >= 0) {
+        int index1 = def.lastIndexOf('.');
+        int index2 = def.lastIndexOf("|");
+        index2 = index2 == -1 ? def.length() : index2;
+        if (index1 >= 0 && index2 >= 0) {
           // get the last field name
-          String fieldName = def.substring(index + 1);
+          String fieldName = def.substring(index1 + 1, index2);
           varsAndFieldNames.add(fieldName);
         }
       }
@@ -108,17 +112,33 @@ public class DefAnalyzerWrapper {
     }
     
     HashSet<String> methodDefs = m_lastResult.getMethodDefs(ir.getMethod());
-    HashSet<String> fieldNamesInFormula = findAllFieldNames(formula);
+    HashSet<String> fieldNamesWithDeclTypeInFormula = findAllFieldNamesWithDeclType(formula);
+    HashSet<String> fieldNamesInFormula = new HashSet<String>();
+    for (String fieldNameWithDeclTypeInFormula : fieldNamesWithDeclTypeInFormula) {
+      int index = fieldNameWithDeclTypeInFormula.indexOf(".");
+      fieldNamesInFormula.add(fieldNameWithDeclTypeInFormula.substring(index + 1));
+    }
     
     ISSABasicBlock skipTo = ir.getControlFlowGraph().entry();
     for (String def : methodDefs) {
-      int index = def.lastIndexOf('.');
-      if (index >= 0) {
+      int index1 = def.lastIndexOf('.');
+      int index2 = def.lastIndexOf("|");
+      index2 = index2 == -1 ? def.length() : index2;
+      if (index1 >= 0 && index2 >= 0) {
         // get the last field name
-        String fieldName = def.substring(index + 1);
+        String fieldName = def.substring(index1 + 1, index2);
+        String declType  = index2 == def.length() ? null : def.substring(index2 + 1);
         if (fieldNamesInFormula.contains(fieldName)) {
-          skipTo = null;
-          break;
+          for (String fieldNameWithDeclTypeInFormula : fieldNamesWithDeclTypeInFormula) {
+            int index = fieldNameWithDeclTypeInFormula.indexOf(".");
+            String declTypeInFormula  = fieldNameWithDeclTypeInFormula.substring(0, index);
+            String fieldNameInFormula = fieldNameWithDeclTypeInFormula.substring(index + 1);
+            if (fieldNameInFormula.equals(fieldName) && (declType == null || declTypeInFormula == null || 
+                Utils.canCastTo(declTypeInFormula, declType) || Utils.canCastTo(declType, declTypeInFormula))) {
+              skipTo = null;
+              break;
+            }
+          }
         }
       }
     }
@@ -126,7 +146,16 @@ public class DefAnalyzerWrapper {
     // do not skip methods with explicit throw statements
     SSAInstruction[] instructions = ir.getInstructions();
     for (int i = 0; i < instructions.length && skipTo != null; i++) {
-      skipTo = instructions[i] instanceof SSAThrowInstruction ? null : skipTo;
+      if (instructions[i] instanceof SSAThrowInstruction) {
+        for (int j = i - 1; j >= 0; j--) {
+          if (instructions[j] != null && !(instructions[j] instanceof SSAMonitorInstruction)) {
+            skipTo = null; // skip method
+          }
+          else if (instructions[j] != null) {
+            break; // it is a throw instruction automatically added after the synchronized block
+          }
+        }
+      }
     }
     
     return skipTo;
@@ -285,6 +314,33 @@ public class DefAnalyzerWrapper {
       // recursive for instance's fields
       for (Reference fieldRef : refInstance.getFields()) {
         findAllFieldNames(fieldRef, allFieldNames, true);
+      }
+    }
+  }
+  
+  private HashSet<String> findAllFieldNamesWithDeclType(Formula formula) {
+    List<String> allFieldNames = new ArrayList<String>();
+    Hashtable<String, Hashtable<String, Reference>> refMap = formula.getRefMap();
+    for (Hashtable<String, Reference> methodRefs : refMap.values()) {
+      for (Reference ref : methodRefs.values()) {
+        findAllFieldNamesWithDeclType(ref, allFieldNames, false);
+      }
+    }
+    return new HashSet<String>(allFieldNames);
+  }
+  
+  private void findAllFieldNamesWithDeclType(Reference ref, List<String> allFieldNames, boolean isField) {
+    if (isField) {
+      Instance declInstance = ref.getDeclaringInstance();
+      String declType = declInstance.getType() != null ? declInstance.getType() : 
+          (declInstance.getLastReference() != null) ? declInstance.getLastRefType() : "";
+      allFieldNames.add(declType + "." + ref.getName());
+    }
+
+    for (Instance refInstance : ref.getInstances()) {
+      // recursive for instance's fields
+      for (Reference fieldRef : refInstance.getFields()) {
+        findAllFieldNamesWithDeclType(fieldRef, allFieldNames, true);
       }
     }
   }

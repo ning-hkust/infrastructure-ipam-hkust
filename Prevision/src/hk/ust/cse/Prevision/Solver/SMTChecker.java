@@ -26,6 +26,10 @@ import com.microsoft.z3.Solver;
 public class SMTChecker {
   public enum SOLVERS {Z3}
   
+  public static abstract class SatModelProcessor {
+    public abstract List<ConditionTerm> process(List<ConditionTerm> satModel, Formula formula);
+  }
+  
   public SMTChecker(SOLVERS solverType) {
     m_solverType = solverType;
     switch (solverType) {
@@ -36,12 +40,13 @@ public class SMTChecker {
       m_solverLoader = new Z3Loader();
       break;
     }
+    m_satModelProcessors = new ArrayList<SatModelProcessor>();
   }
   
   // a fast simple check
   public SOLVER_RESULT simpleCheck(Formula formula) {
-    String simpleCheckResult = SimpleChecker.simpleCheck(formula, null, false);
-    return simpleCheckResult.startsWith("sat") ? SOLVER_RESULT.SAT : SOLVER_RESULT.UNSAT;
+    Object simpleCheckResult = SimpleChecker.simpleCheck(formula, null, false);
+    return simpleCheckResult.equals("sat") ? SOLVER_RESULT.SAT : SOLVER_RESULT.UNSAT;
   }
   
   public SOLVER_RESULT smtCheck(Formula formula, boolean checkSatOnly, boolean retrieveModel, 
@@ -58,19 +63,19 @@ public class SMTChecker {
       }
 
       // generate a neutral input first
-      NeutralInput neutralInput = new NeutralInput(formula, keepUnboundField, retrieveModel, retrieveUnsatCore);
+      m_lastNeutralInput = new NeutralInput(formula, keepUnboundField, retrieveModel, retrieveUnsatCore);
       
       // start checking: 1) simple check, 2) full check
       boolean finishedChecking = false;
 
       // a fast simple check
       if (!finishedChecking) {
-        String simpleCheckResult = SimpleChecker.simpleCheck(formula, neutralInput, retrieveUnsatCore);
-        if (simpleCheckResult.startsWith("unsat")) {
+        Object simpleCheckResult = SimpleChecker.simpleCheck(formula, m_lastNeutralInput, retrieveUnsatCore);
+        if (simpleCheckResult instanceof Condition[] /*unsat*/) {
           smtCheckResult = SOLVER_RESULT.UNSAT;
           
           m_lastSolverOutput = simpleCheckResult;
-          m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput);
+          m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput, formula);
           finishedChecking = true;
         }
       }
@@ -81,14 +86,14 @@ public class SMTChecker {
         context = m_solverLoader.createContext();
         
         // generate a solver input from neutral input
-        m_lastSolverInput = createNewSolverInput(context, neutralInput);
+        m_lastSolverInput = createNewSolverInput(context, m_lastNeutralInput);
         
         smtCheckResult = m_solverLoader.check(m_lastSolverInput);
         
         // save output object
         m_lastSolverOutput = m_solverLoader.getLastOutput();
         if (!checkSatOnly) {
-          m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput);
+          m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput, formula);
         }
       }
     } catch (StackOverflowError e) {
@@ -127,22 +132,22 @@ public class SMTChecker {
       }
 
       // generate a neutral input first
-      NeutralInput neutralInput = new NeutralInput(ctxFormula, keepUnboundField, retrieveModel, retrieveUnsatCore);
+      m_lastNeutralInput = new NeutralInput(ctxFormula, keepUnboundField, retrieveModel, retrieveUnsatCore);
       
       // generate a solver input from neutral input
-      m_lastSolverInput = createNewSolverInput(ctxStorage, neutralInput);
+      m_lastSolverInput = createNewSolverInput(ctxStorage, m_lastNeutralInput);
       
       // start checking: 1) simple check, 2) full check
       boolean finishedChecking = false;
 
       // a fast simple check
       if (!finishedChecking) {
-        String simpleCheckResult = SimpleChecker.simpleCheck(ctxFormula, neutralInput, retrieveUnsatCore);
-        if (simpleCheckResult.startsWith("unsat")) {
+        Object simpleCheckResult = SimpleChecker.simpleCheck(ctxFormula, m_lastNeutralInput, retrieveUnsatCore);
+        if (simpleCheckResult instanceof Condition[] /*unsat*/) {
           smtCheckResult = SOLVER_RESULT.UNSAT;
           
           m_lastSolverOutput = simpleCheckResult;
-          m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput);
+          m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput, ctxFormula);
           finishedChecking = true;
         }
       }
@@ -154,7 +159,7 @@ public class SMTChecker {
         // save output object
         m_lastSolverOutput = m_solverLoader.getLastOutput();
         if (!checkSatOnly) {
-          m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput);
+          m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput, ctxFormula);
         }
       }
       
@@ -187,15 +192,15 @@ public class SMTChecker {
     SOLVER_RESULT smtCheckResult = null;
     try {
       // generate a neutral input first
-      NeutralInput neutralInput = new NeutralInput(ctxFormula, ctxInput, conditions);
+      m_lastNeutralInput = new NeutralInput(ctxFormula, ctxInput, conditions);
       
       // generate a solver input from neutral input
-      m_lastSolverInput = createNewSolverInput(ctxStorage, neutralInput);
+      m_lastSolverInput = createNewSolverInput(ctxStorage, m_lastNeutralInput);
       
       // find the assertions of the conditions
       Assertion[] assertions = new Assertion[conditions.size()];
       for (int i = 0; i < assertions.length; i++) {
-        assertions[i] = neutralInput.getConditionAssertionMapping().get(conditions.get(i));
+        assertions[i] = m_lastNeutralInput.getConditionAssertionMapping().get(conditions.get(i));
       }
       
       // check in context
@@ -204,7 +209,7 @@ public class SMTChecker {
       // save output object
       m_lastSolverOutput = m_solverLoader.getLastOutput();
       if (!checkSatOnly) {
-        m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput);
+        m_lastSolverResult = createNewSolverResult(smtCheckResult, m_lastSolverOutput, m_lastSolverInput, ctxFormula);
       }
 
     } catch (Exception e) {
@@ -216,35 +221,6 @@ public class SMTChecker {
     m_lastSMTCheckResult = smtCheckResult;
     
     return smtCheckResult;
-  }
-  
-  public List<Condition> findLastUnsatCoreConditions() {
-    List<Condition> unsatCoreConds = new ArrayList<Condition>();
-
-    List<Assertion> unsatCoreAssertions = findLastUnsatCoreExpressions();
-    for (Assertion unsatCoreAssertion : unsatCoreAssertions) {
-      List<Condition> unsatCoreConditions = 
-          m_lastSolverInput.getNeutralInput().getAssertionCondsMapping().get(unsatCoreAssertion);
-      if (unsatCoreConditions != null && unsatCoreConditions.size() > 0) {
-        Condition unsatCore = unsatCoreConditions.get(0); // get the first one
-        unsatCoreConds.add(unsatCore);
-      }
-    }
-    return unsatCoreConds;
-  }
-  
-  private List<Assertion> findLastUnsatCoreExpressions() {
-    List<Assertion> unsatCoreAssertions = new ArrayList<Assertion>();
-
-    List<Integer> unsatCoreIds = m_lastSolverResult.getUnsatCoreIds();
-    if (unsatCoreIds != null && unsatCoreIds.size() > 0) {
-      for (Integer unsatCoreId : unsatCoreIds) {
-        Assertion unsatCoreAssertion = 
-            m_lastSolverInput.getNeutralInput().getAssertions().get(unsatCoreId - 1);
-        unsatCoreAssertions.add(unsatCoreAssertion);
-      }
-    }
-    return unsatCoreAssertions;
   }
   
   // add equal to predefined static final object's integer field value terms
@@ -333,7 +309,7 @@ public class SMTChecker {
     return solverInput;
   }
   
-  private SolverResult createNewSolverResult(SOLVER_RESULT result, Object output, SolverInput solverInput) {
+  private SolverResult createNewSolverResult(SOLVER_RESULT result, Object output, SolverInput solverInput, Formula formula) {
     SolverResult solverResult = null;
     switch (m_solverType) {
     case Z3:
@@ -342,6 +318,16 @@ public class SMTChecker {
     default:
       break;
     }
+    
+    // apply satModel processors
+    List<ConditionTerm> satModel = solverResult.getSatModel();
+    if (satModel != null && m_satModelProcessors.size() > 0) {
+      for (SatModelProcessor satModelProcessor : m_satModelProcessors) {
+        satModel = satModelProcessor.process(satModel, formula);
+      }
+      solverResult.setSatModel(satModel);
+    }
+    
     return solverResult;
   }
   
@@ -354,6 +340,7 @@ public class SMTChecker {
   }
   
   public void clearSolverData() {
+    m_lastNeutralInput   = null;
     m_lastSolverInput    = null;
     m_lastSolverOutput   = null;
     m_lastSolverResult   = null;
@@ -362,6 +349,14 @@ public class SMTChecker {
 
   public SolverInput getLastSolverInput() {
     return m_lastSolverInput;
+  }
+
+  public NeutralInput getLastNeutralInput() {
+    return m_lastNeutralInput;
+  }
+  
+  public void addSatModelProcessor(SatModelProcessor processor) {
+    m_satModelProcessors.add(processor);
   }
   
   public Object getLastSolverOutput() {
@@ -379,12 +374,14 @@ public class SMTChecker {
   public SolverLoader getSolverLoader() {
     return m_solverLoader;
   }
+
+  private NeutralInput                  m_lastNeutralInput;
+  private SolverInput                   m_lastSolverInput;
+  private Object                        m_lastSolverOutput;
+  private SolverResult                  m_lastSolverResult;
+  private SOLVER_RESULT                m_lastSMTCheckResult;
   
-  private SolverInput         m_lastSolverInput;
-  private Object              m_lastSolverOutput;
-  private SolverResult        m_lastSolverResult;
-  private SOLVER_RESULT      m_lastSMTCheckResult;
-  
-  private final SOLVERS      m_solverType;
-  private final SolverLoader m_solverLoader;
+  private final SOLVERS                m_solverType;
+  private final SolverLoader            m_solverLoader;
+  private final List<SatModelProcessor> m_satModelProcessors;
 }

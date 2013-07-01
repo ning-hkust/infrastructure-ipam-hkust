@@ -2,6 +2,7 @@ package hk.ust.cse.Prevision.Solver.Z3;
 
 import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm.Comparator;
+import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.PathCondition.TypeConditionTerm;
@@ -13,6 +14,7 @@ import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.Prevision.VirtualMachine.Instance.INSTANCE_OP;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.List;
@@ -38,8 +40,8 @@ public class Z3Result extends SolverResult {
       if (output instanceof Expr[]) {
         parseUnsatCore((Expr[]) output);
       }
-      else if (output instanceof String) {
-        parseUnsatCore((String) output);
+      else if (output instanceof Condition[]) {
+        parseUnsatCore((Condition[]) output);
       }
     }
   }
@@ -101,9 +103,10 @@ public class Z3Result extends SolverResult {
     // hidden information from model value and type ranges
     addTypeConditions(typeRanges);
   }
-  
+
+  // parse unsat core trackers from z3 checker
   private void parseUnsatCore(Expr[] unsatCore) {
-    m_unsatCoreIds = new ArrayList<Integer>();
+    m_unsatCore = new ArrayList<List<Condition>>();
     for (Expr unsatExpr : unsatCore) {
       String trackerName = unsatExpr.toString();
       if (trackerName.matches("tracker_[0-9]+")) {
@@ -112,24 +115,20 @@ public class Z3Result extends SolverResult {
         Expr assertExpr = ((Z3Input) m_solverInput).getAssertionExprs().get(trackerId);
         Assertion assertion = ((Z3Input) m_solverInput).getAssertionMapping1().get(assertExpr);
         if (assertion != null) {
-          int index = m_solverInput.getNeutralInput().getAssertions().indexOf(assertion);
-          if (index >= 0) {
-            m_unsatCoreIds.add(index + 1 /* for compatibility, start from 1 */);
+          List<Condition> conditions = m_solverInput.getNeutralInput().getAssertionCondsMapping().get(assertion);
+          if (conditions != null) {
+            m_unsatCore.add(conditions);
           }
         }
       }
     }
   }
 
-  // parse unsat core ids string from simple checker
-  private void parseUnsatCore(String unsatCoreIds) {
-    String[] lines = unsatCoreIds.split(LINE_SEPARATOR);
-    if (lines.length > 1 && lines[1].startsWith("unsat core ids: ")) {
-      m_unsatCoreIds = new ArrayList<Integer>();
-      String[] ids = lines[1].substring(16).split(" ");
-      for (String id : ids) {
-        m_unsatCoreIds.add(Integer.parseInt(id));
-      }
+  // parse unsat core conditions from simple checker
+  private void parseUnsatCore(Condition[] unsatCore) {
+    m_unsatCore = new ArrayList<List<Condition>>();
+    for (Condition condition : unsatCore) {
+      m_unsatCore.add(Arrays.asList(condition));
     }
   }
   
@@ -162,14 +161,23 @@ public class Z3Result extends SolverResult {
 
   // (= (@@array 2147483649 0) 2147483649)
   private List<BinaryConditionTerm> toConditionTerms(FuncInterp interp) {
+    Hashtable<Expr, DefineConstant> definedConsts = ((Z3Input) m_solverInput).getConstantMapping();
+    
     List<BinaryConditionTerm> conditionTerms = new ArrayList<BinaryConditionTerm>();
-
     try {
       for (Entry entry : interp.getEntries()) {
         try {
           Instance instanceRelObj   = new Instance("#!" + entry.getArgs()[0].getArgs()[0], "", null);
           Instance instanceRelIndex = new Instance("#!" + entry.getArgs()[0].getArgs()[1], "", null);
 
+          // discard lines like (#!60921404649 @ #!0) == #!102 where #!60921404649 is ##str.value.
+          // We have such lines because we use assertions for constant string definition instead 
+          // of array stores due to performance concern.
+          DefineConstant definedConst = definedConsts.get(entry.getArgs()[0].getArgs()[0]);
+          if (definedConst != null && definedConst.type.equals("[C") && definedConst.name.matches("##.*\\.value")) {
+            continue;
+          }
+          
           // dummy holder for function interpretation line, INSTANCE_OP.ADD is useless
           Instance instance1 = new Instance(instanceRelObj, INSTANCE_OP.DUMMY, instanceRelIndex, null);
           
@@ -319,7 +327,7 @@ public class Z3Result extends SolverResult {
     
     if (m_result == SOLVER_RESULT.SAT) {
       if (m_satModel != null && formula != null) {
-        info.append(getSatModelString(formula));
+        info.append(convSatModelToString(formula));
       }
       else {
         info.append("SAT\n");
@@ -332,11 +340,10 @@ public class Z3Result extends SolverResult {
     }
     else if (m_result == SOLVER_RESULT.UNSAT) {
       info.append("UNSAT\n");
-      if (m_unsatCoreIds != null) {
-        info.append("Unsat Core Assertions: \n");
-        for (Integer index : m_unsatCoreIds) {
-          Assertion assertion = m_solverInput.getNeutralInput().getAssertions().get(index - 1);
-          info.append(assertion).append("\n");
+      if (m_unsatCore != null) {
+        info.append("Unsat Core Conditions: \n");
+        for (List<Condition> conditions : m_unsatCore) {
+          info.append(conditions.get(0)).append("\n");
         }
       }
     }

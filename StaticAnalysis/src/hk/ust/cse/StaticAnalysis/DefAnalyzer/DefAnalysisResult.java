@@ -1,6 +1,7 @@
 package hk.ust.cse.StaticAnalysis.DefAnalyzer;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Iterator;
@@ -13,7 +14,7 @@ import com.ibm.wala.ssa.SSAConditionalBranchInstruction;
 
 public class DefAnalysisResult {
 
-  public class ConditionalBranchDefs {
+  public static class ConditionalBranchDefs {
     public ConditionalBranchDefs(SSACFG cfg, ISSABasicBlock condBranchBB, 
         List<ConditionalBranchDefs> upperCondBranchesDefs, ISSABasicBlock mergingBB) {
       
@@ -61,15 +62,12 @@ public class DefAnalysisResult {
   void addMethodDef(IMethod method) {
     HashSet<String> oriDefs = m_methodDefs.get(method);
     if (oriDefs == null) {
-      oriDefs = new HashSet<String>();
-      m_methodDefs.put(method, oriDefs);
+      m_methodDefs.put(method, new HashSet<String>());
     }
   }
   
   void addMethodDef(IMethod method, String def) {
-    List<String> defs = new ArrayList<String>();
-    defs.add(def);
-    addMethodDef(method, defs);
+    addMethodDef(method, Arrays.asList(def));
   }
   
   void addMethodDef(IMethod method, List<String> defs) {
@@ -124,6 +122,12 @@ public class DefAnalysisResult {
     }
   }
   
+  public void addAll(DefAnalysisResult otherResult) {
+    m_methodDefs.putAll(otherResult.m_methodDefs);
+    m_defsForCondBranch.putAll(otherResult.m_defsForCondBranch);
+    m_condDefsForMergingBB.putAll(otherResult.m_condDefsForMergingBB);
+  }
+  
   public ConditionalBranchDefs getCondBranchDefs(ISSABasicBlock condBranchBB) {
     return m_defsForCondBranch.get(condBranchBB);
   }
@@ -134,6 +138,10 @@ public class DefAnalysisResult {
   
   public HashSet<String> getMethodDefs(IMethod method) {
     return m_methodDefs.get(method);
+  }
+  
+  public boolean containsMethod(IMethod method) {
+    return m_methodDefs.containsKey(method);
   }
   
   private final Hashtable<IMethod, HashSet<String>>                    m_methodDefs;

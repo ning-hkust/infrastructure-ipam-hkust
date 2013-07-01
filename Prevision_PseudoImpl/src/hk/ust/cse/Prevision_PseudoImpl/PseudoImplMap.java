@@ -61,6 +61,10 @@ public class PseudoImplMap {
       String mapKeySetIter    = "hk.ust.cse.Prevision_PseudoImpl.Map$KeySet.iterator()Lhk/ust/cse/Prevision_PseudoImpl/Map$KeyIterator;";
       String mapKeySetIterHasNext = "hk.ust.cse.Prevision_PseudoImpl.Map$KeyIterator.hasNext()Z";
       String mapKeySetIterNext = "hk.ust.cse.Prevision_PseudoImpl.Map$KeyIterator.next()Lhk/ust/cse/Prevision_PseudoImpl/HashCode;";
+      String mapEntrySet      = "hk.ust.cse.Prevision_PseudoImpl.Map.entrySet()Lhk/ust/cse/Prevision_PseudoImpl/Map$EntrySet;";
+      String mapEntrySetIter  = "hk.ust.cse.Prevision_PseudoImpl.Map$EntrySet.iterator()Lhk/ust/cse/Prevision_PseudoImpl/Map$EntryIterator;";
+      String mapEntrySetIterHasNext = "hk.ust.cse.Prevision_PseudoImpl.Map$EntryIterator.hasNext()Z";
+      String mapEntrySetIterNext = "hk.ust.cse.Prevision_PseudoImpl.Map$EntryIterator.next()Ljava/util/Map$Entry;";
       String tableInit        = "hk.ust.cse.Prevision_PseudoImpl.Table.<init>(IF)V";
       String tableGet         = "hk.ust.cse.Prevision_PseudoImpl.Table.get(Lhk/ust/cse/Prevision_PseudoImpl/HashCode;)Ljava/lang/Object;";
       String tablePut         = "hk.ust.cse.Prevision_PseudoImpl.Table.put(Lhk/ust/cse/Prevision_PseudoImpl/HashCode;Ljava/lang/Object;)Ljava/lang/Object;";
@@ -71,13 +75,19 @@ public class PseudoImplMap {
       String tableKeySetIterHasNext = "hk.ust.cse.Prevision_PseudoImpl.Table$KeyIterator.hasNext()Z";
       String tableKeySetIterNext = "hk.ust.cse.Prevision_PseudoImpl.Table$KeyIterator.next()Lhk/ust/cse/Prevision_PseudoImpl/HashCode;";
       String tableKeys        = "hk.ust.cse.Prevision_PseudoImpl.Table.keys()Lhk/ust/cse/Prevision_PseudoImpl/Table$KeyEnumerator;";
+      String tableValues      = "hk.ust.cse.Prevision_PseudoImpl.Table.values()Ljava/util/Collection;";
       String tableKeyEnumHasMore = "hk.ust.cse.Prevision_PseudoImpl.Table$KeyEnumerator.hasMoreElements()Z";
       String tableKeyEnumNext = "hk.ust.cse.Prevision_PseudoImpl.Table$KeyEnumerator.nextElement()Lhk/ust/cse/Prevision_PseudoImpl/HashCode;";
+      String tableEntrySet      = "hk.ust.cse.Prevision_PseudoImpl.Table.entrySet()Lhk/ust/cse/Prevision_PseudoImpl/Table$EntrySet;";
+      String tableEntrySetIter  = "hk.ust.cse.Prevision_PseudoImpl.Table$EntrySet.iterator()Lhk/ust/cse/Prevision_PseudoImpl/Table$EntryIterator;";
+      String tableEntrySetIterHasNext = "hk.ust.cse.Prevision_PseudoImpl.Table$EntryIterator.hasNext()Z";
+      String tableEntrySetIterNext = "hk.ust.cse.Prevision_PseudoImpl.Table$EntryIterator.next()Ljava/util/Map$Entry;";
       String hashCode         = "hk.ust.cse.Prevision_PseudoImpl.HashCode.hashCode()I";
       String sbInit1          = "hk.ust.cse.Prevision_PseudoImpl.StringBuffer.<init>()V";
       String sbInit2          = "hk.ust.cse.Prevision_PseudoImpl.StringBuffer.<init>(I)V";
       String sbAppend         = "hk.ust.cse.Prevision_PseudoImpl.StringBuffer.append(Ljava/lang/Object;)Ljava/lang/Object;";
       String sbToStr          = "hk.ust.cse.Prevision_PseudoImpl.StringBuffer.toString()Ljava/lang/String;";
+      String sbCapacity       = "hk.ust.cse.Prevision_PseudoImpl.StringBuffer.capacity()I";
       String stringInit1      = "hk.ust.cse.Prevision_PseudoImpl.String2.<init>([C)V";
       String stringInit2      = "hk.ust.cse.Prevision_PseudoImpl.String2.<init>(II[C)V";
       String stringInit3      = "hk.ust.cse.Prevision_PseudoImpl.String2.<init>(Ljava/lang/String;)V";
@@ -93,10 +103,13 @@ public class PseudoImplMap {
       String stringInit13     = "hk.ust.cse.Prevision_PseudoImpl.String2.<init>([BLjava/nio/charset/Charset;)V";
       String stringInit14     = "hk.ust.cse.Prevision_PseudoImpl.String2.<init>([CII)V";
       String stringInit15     = "hk.ust.cse.Prevision_PseudoImpl.String2.<init>([III)V";
+      String stringContains   = "hk.ust.cse.Prevision_PseudoImpl.String2.contains(Lhk/ust/cse/Prevision_PseudoImpl/String2;)Z";
       String stringIndexOf1   = "hk.ust.cse.Prevision_PseudoImpl.String2.indexOf(I)I";
       String stringIndexOf2   = "hk.ust.cse.Prevision_PseudoImpl.String2.indexOf(II)I";
       String stringIndexOf3   = "hk.ust.cse.Prevision_PseudoImpl.String2.indexOf(Lhk/ust/cse/Prevision_PseudoImpl/String2;)I";
       String stringIndexOf4   = "hk.ust.cse.Prevision_PseudoImpl.String2.indexOf(Lhk/ust/cse/Prevision_PseudoImpl/String2;I)I";
+      String stringLIndexOf1  = "hk.ust.cse.Prevision_PseudoImpl.String2.lastIndexOf(I)I";
+      String stringLIndexOf2  = "hk.ust.cse.Prevision_PseudoImpl.String2.lastIndexOf(II)I";
       String stringStartsWith = "hk.ust.cse.Prevision_PseudoImpl.String2.startsWith(Lhk/ust/cse/Prevision_PseudoImpl/String2;)Z";
       String stringSubString  = "hk.ust.cse.Prevision_PseudoImpl.String2.substring(I)Lhk/ust/cse/Prevision_PseudoImpl/String2;";
       String stringSubString2 = "hk.ust.cse.Prevision_PseudoImpl.String2.substring(II)Lhk/ust/cse/Prevision_PseudoImpl/String2;";
@@ -106,10 +119,13 @@ public class PseudoImplMap {
       String stringCharAt     = "hk.ust.cse.Prevision_PseudoImpl.String2.charAt(I)C";
       String stringLength     = "hk.ust.cse.Prevision_PseudoImpl.String2.length()I";
       String stringTrim       = "hk.ust.cse.Prevision_PseudoImpl.String2.trim()Lhk/ust/cse/Prevision_PseudoImpl/String2;";
+      String stringToLower    = "hk.ust.cse.Prevision_PseudoImpl.String2.toLowerCase()Lhk/ust/cse/Prevision_PseudoImpl/String2;";
+      String stringToUpper    = "hk.ust.cse.Prevision_PseudoImpl.String2.toUpperCase()Lhk/ust/cse/Prevision_PseudoImpl/String2;";
       String objectClone      = "hk.ust.cse.Prevision_PseudoImpl.Object2.clone()Ljava/lang/Object;";
       String integerParse1    = "hk.ust.cse.Prevision_PseudoImpl.Integer2.parseInt(Lhk/ust/cse/Prevision_PseudoImpl/String2;)I";
       String integerParse2    = "hk.ust.cse.Prevision_PseudoImpl.Integer2.parseInt(Lhk/ust/cse/Prevision_PseudoImpl/String2;I)I";
-      //String fileStreamInit = "hk.ust.cse.Prevision_PseudoImpl.FileOutputStream.<init>(Ljava/io/File;Z)V";
+      String fileStreamInit1  = "hk.ust.cse.Prevision_PseudoImpl.FileOutputStream.<init>(Ljava/lang/String;Z)V";
+      String fileStreamInit2  = "hk.ust.cse.Prevision_PseudoImpl.FileOutputStream.<init>(Ljava/io/File;Z)V";
       String noEffect         = "hk.ust.cse.Prevision_PseudoImpl.NoEffect.noEffect()V";
       String listAddAll       = "hk.ust.cse.Prevision_PseudoImpl.List.addAll(Ljava/util/Collection;)Z";
       String listToArray      = "hk.ust.cse.Prevision_PseudoImpl.List.toArray()[Ljava/lang/Object;";
@@ -127,6 +143,10 @@ public class PseudoImplMap {
       s_map1.add(mapKeySetIter);
       s_map1.add(mapKeySetIterHasNext);
       s_map1.add(mapKeySetIterNext);
+      s_map1.add(mapEntrySet);
+      s_map1.add(mapEntrySetIter);
+      s_map1.add(mapEntrySetIterHasNext);
+      s_map1.add(mapEntrySetIterNext);
       s_map1.add(tableInit);
       s_map1.add(tableGet);
       s_map1.add(tablePut);
@@ -137,13 +157,19 @@ public class PseudoImplMap {
       s_map1.add(tableKeySetIterHasNext);
       s_map1.add(tableKeySetIterNext);
       s_map1.add(tableKeys);
+      s_map1.add(tableValues);
       s_map1.add(tableKeyEnumHasMore);
       s_map1.add(tableKeyEnumNext);
+      s_map1.add(tableEntrySet);
+      s_map1.add(tableEntrySetIter);
+      s_map1.add(tableEntrySetIterHasNext);
+      s_map1.add(tableEntrySetIterNext);
       s_map1.add(hashCode);
       s_map1.add(sbInit1);
       s_map1.add(sbInit2);
       s_map1.add(sbAppend);
       s_map1.add(sbToStr);
+      s_map1.add(sbCapacity);
       s_map1.add(stringInit1);
       s_map1.add(stringInit2);
       s_map1.add(stringInit3);
@@ -159,10 +185,13 @@ public class PseudoImplMap {
       s_map1.add(stringInit13);
       s_map1.add(stringInit14);
       s_map1.add(stringInit15);
+      s_map1.add(stringContains);
       s_map1.add(stringIndexOf1);
       s_map1.add(stringIndexOf2);
       s_map1.add(stringIndexOf3);
       s_map1.add(stringIndexOf4);
+      s_map1.add(stringLIndexOf1);
+      s_map1.add(stringLIndexOf2);
       s_map1.add(stringStartsWith);
       s_map1.add(stringSubString);
       s_map1.add(stringSubString2);
@@ -171,9 +200,12 @@ public class PseudoImplMap {
       s_map1.add(stringEqualsIgnC);
       s_map1.add(stringCharAt);
       s_map1.add(stringTrim);
+      s_map1.add(stringToLower);
+      s_map1.add(stringToUpper);
       s_map1.add(stringLength);
       s_map1.add(objectClone);
-      //s_map1.add(fileStreamInit);
+      s_map1.add(fileStreamInit1);
+      s_map1.add(fileStreamInit2);
       s_map1.add(integerParse1);
       s_map1.add(integerParse2);
       s_map1.add(noEffect);
@@ -191,8 +223,21 @@ public class PseudoImplMap {
       s_map2.put("java\\.util\\.[\\S]+Map\\.keySet\\(\\)Ljava/util/Set;", mapKeySet);
       s_map2.put("java\\.util\\.[\\S]+Map\\$KeySet\\.iterator\\(\\)Ljava/util/Iterator;", mapKeySetIter);
       s_map2.put("java\\.util\\.[\\S]+Map\\$KeyIterator\\.hasNext\\(\\)Z", mapKeySetIterHasNext);
+      s_map2.put("java\\.util\\.[\\S]+Map\\$HashIterator\\.hasNext\\(\\)Z", mapKeySetIterHasNext);
       s_map2.put("java\\.util\\.[\\S]+Map\\$KeyIterator\\.next\\(\\)Ljava/lang/Object;", mapKeySetIterNext);
 
+      s_map2.put("java\\.util\\.[\\S]+Map\\.entrySet\\(\\)Ljava/util/Set;", mapEntrySet);
+      s_map2.put("java\\.util\\.[\\S]+Map\\$EntrySet\\.iterator\\(\\)Ljava/util/Iterator;", mapEntrySetIter);
+      s_map2.put("java\\.util\\.[\\S]+Map\\$EntryIterator\\.hasNext\\(\\)Z", mapEntrySetIterHasNext);
+      s_map2.put("java\\.util\\.[\\S]+Map\\$HashIterator\\.hasNext\\(\\)Z", mapEntrySetIterHasNext);
+      s_map2.put("java\\.util\\.[\\S]+Map\\$EntryIterator\\.next\\(\\)Ljava/lang/Object;", mapEntrySetIterNext);
+      
+      s_map2.put("java\\.util\\.Hashtable\\.entrySet\\(\\)Ljava/util/Set;", tableEntrySet);
+      s_map2.put("java\\.util\\.Hashtable\\$EntrySet\\.iterator\\(\\)Ljava/util/Iterator;", tableEntrySetIter);
+      s_map2.put("java\\.util\\.Hashtable\\$EntryIterator\\.hasNext\\(\\)Z", tableEntrySetIterHasNext);
+      s_map2.put("java\\.util\\.Hashtable\\$HashIterator\\.hasNext\\(\\)Z", tableEntrySetIterHasNext);
+      s_map2.put("java\\.util\\.Hashtable\\$EntryIterator\\.next\\(\\)Ljava/lang/Object;", tableEntrySetIterNext);
+      
       s_map2.put("java\\.util\\.[\\S]+List\\.addAll\\(Ljava/util/Collection;\\)Z", listAddAll);
       s_map2.put("java\\.util\\.Vector\\.addAll\\(Ljava/util/Collection;\\)Z", listAddAll);
       s_map2.put("java\\.util\\.[\\S]+List\\.toArray\\([\\S]*\\)\\[Ljava/lang/Object;", listToArray);
@@ -209,6 +254,7 @@ public class PseudoImplMap {
 //      s_map2.put("java\\.util\\.[\\S]+List\\$ListIterator\\.previous\\(\\)Ljava/lang/Object;", listIterPrev);
       
       s_map2.put("java\\.util\\.[\\S]+\\.keys\\(\\)Ljava/util/Enumeration;", tableKeys);
+      s_map2.put("java\\.util\\.[\\S]+\\.values\\(\\)Ljava/util/Collection;", tableValues);
       
       s_map2.put("java\\.util\\.[\\S]+Enumerator\\.hasMoreElements\\(\\)Z", tableKeyEnumHasMore);
       s_map2.put("java\\.util\\.[\\S]+Enumerator\\.nextElement\\(\\)Ljava/lang/Object;", tableKeyEnumNext);
@@ -235,6 +281,8 @@ public class PseudoImplMap {
       s_map2.put("java\\.lang\\.StringBuilder\\.append\\([\\S]+\\)[\\S]+", sbAppend);
       s_map2.put("java\\.lang\\.StringBuffer\\.toString\\(\\)Ljava/lang/String;", sbToStr);
       s_map2.put("java\\.lang\\.StringBuilder\\.toString\\(\\)Ljava/lang/String;", sbToStr);
+      s_map2.put("java\\.lang\\.StringBuffer\\.capacity\\(\\)I", sbCapacity);
+      s_map2.put("java\\.lang\\.StringBuilder\\.capacity\\(\\)I", sbCapacity);
 
       s_map2.put("java\\.lang\\.String\\.<init>\\(\\[C\\)V", stringInit1);
       s_map2.put("java\\.lang\\.String\\.<init>\\(II\\[C\\)V", stringInit2);
@@ -251,10 +299,13 @@ public class PseudoImplMap {
       s_map2.put("java\\.lang\\.String\\.<init>\\(\\[BLjava/nio/charset/Charset;\\)V", stringInit13);
       s_map2.put("java\\.lang\\.String\\.<init>\\(\\[CII\\)V", stringInit14);
       s_map2.put("java\\.lang\\.String\\.<init>\\(\\[III\\)V", stringInit15);
+      s_map2.put("java\\.lang\\.String\\.contains\\(Ljava/lang/CharSequence;\\)Z", stringContains);
       s_map2.put("java\\.lang\\.String\\.indexOf\\(I\\)I", stringIndexOf1);
       s_map2.put("java\\.lang\\.String\\.indexOf\\(II\\)I", stringIndexOf2);
       s_map2.put("java\\.lang\\.String\\.indexOf\\(Ljava/lang/String;\\)I", stringIndexOf3);
       s_map2.put("java\\.lang\\.String\\.indexOf\\(Ljava/lang/String;I\\)I", stringIndexOf4);
+      s_map2.put("java\\.lang\\.String\\.lastIndexOf\\(I\\)I", stringLIndexOf1);
+      s_map2.put("java\\.lang\\.String\\.lastIndexOf\\(II\\)I", stringLIndexOf2);
       s_map2.put("java\\.lang\\.String\\.startsWith\\(Ljava/lang/String;\\)Z", stringStartsWith);
       s_map2.put("java\\.lang\\.String\\.substring\\(I\\)Ljava/lang/String;", stringSubString);
       s_map2.put("java\\.lang\\.String\\.substring\\(II\\)Ljava/lang/String;", stringSubString2);
@@ -263,11 +314,14 @@ public class PseudoImplMap {
       s_map2.put("java\\.lang\\.String\\.equalsIgnoreCase\\(Ljava/lang/String;\\)Z", stringEqualsIgnC);
       s_map2.put("java\\.lang\\.String\\.charAt\\(I\\)C", stringCharAt);
       s_map2.put("java\\.lang\\.String\\.trim\\(\\)Ljava/lang/String;", stringTrim);
+      s_map2.put("java\\.lang\\.String\\.toLowerCase\\(\\)Ljava/lang/String;", stringToLower);
+      s_map2.put("java\\.lang\\.String\\.toUpperCase\\(\\)Ljava/lang/String;", stringToUpper);
       s_map2.put("java\\.lang\\.String\\.length\\(\\)I", stringLength);
 
       s_map2.put("[\\S]+\\.clone\\(\\)Ljava/lang/Object;", objectClone);
       
-      //s_map2.put("java\\.io\\.FileOutputStream\\.<init>\\(Ljava/io/File;Z\\)V", fileStreamInit);
+      s_map2.put("java\\.io\\.FileOutputStream\\.<init>\\(Ljava/lang/String;Z\\)V", fileStreamInit1);
+      s_map2.put("java\\.io\\.FileOutputStream\\.<init>\\(Ljava/io/File;Z\\)V", fileStreamInit2);
       
       s_map2.put("java\\.lang\\.Integer\\.parseInt\\(Ljava/lang/String;\\)I", integerParse1);
       s_map2.put("java\\.lang\\.Integer\\.parseInt\\(Ljava/lang/String;I\\)I", integerParse2);
@@ -276,6 +330,8 @@ public class PseudoImplMap {
       s_map2.put("java\\.io\\.PrintWriter\\.[\\S]*\\([\\S]*\\)V", noEffect);
       s_map2.put("java\\.io\\.BufferedReader\\.[\\S]*\\([\\S]*\\)V", noEffect);
       s_map2.put("java\\.io\\.LineNumberReader\\.[\\S]*\\([\\S]*\\)V", noEffect);
+      s_map2.put("java\\.lang\\.Throwable\\.[\\S]*\\([\\S]*\\)V", noEffect);
+      s_map2.put("java\\.util\\.[\\S]+\\.ensureCapacity\\(I\\)V", noEffect);
       
       s_map3.put("[\\S]+Hash[\\S]+Map.size", "hk.ust.cse.Prevision_PseudoImpl.Map.size");
       s_map3.put("java\\.util\\.Hashtable\\.count", "hk.ust.cse.Prevision_PseudoImpl.Table.count");

@@ -7,6 +7,7 @@ import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionOptions;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
+import hk.ust.cse.Prevision.VirtualMachine.Relation;
 import hk.ust.cse.Wala.MethodMetaData;
 
 import java.util.ArrayList;
@@ -157,6 +158,14 @@ public class PrepInitFormula {
       // all conditions before this >= #!0 condition are discarded
       for (int i = 0; i < zeroIndex; i++) {
         formula.getConditionList().remove(0);
+      }
+      
+      // all array relation operations before this >= #!0 condition are discarded
+      Relation relation = formula.getRelation("@@array");
+      for (int i = relation.getFunctionCount() - 1; i >= 0; i--) {
+        if (relation.getFunctionTimes().get(i) < formula.getConditionList().get(0).getTimeStamp()) {
+          relation.remove(i);
+        }
       }
       
       // substitute the >= #!0 condition with < #!0 condition

@@ -13,6 +13,7 @@ import hk.ust.cse.Prevision.Solver.SolverLoader.SOLVER_RESULT;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionOptions;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionResult;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
+import hk.ust.cse.Wala.Jar2IR;
 import hk.ust.cse.Wala.MethodMetaData;
 import hk.ust.cse.Wala.WalaUtils;
 import hk.ust.cse.util.Utils;
@@ -30,8 +31,11 @@ import java.util.Stack;
 import javax.naming.TimeLimitExceededException;
 
 import com.ibm.wala.cfg.Util;
+import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.shrikeBT.IInvokeInstruction;
+import com.ibm.wala.shrikeBT.IInvokeInstruction.IDispatch;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSACFG;
@@ -43,6 +47,23 @@ import com.ibm.wala.types.MethodReference;
 
 public class BackwardExecutor extends AbstractExecutor {
 
+  private static class SSAInvokeClInitInstruction extends SSAInvokeInstruction {
+    private static class StaticCall extends CallSiteReference {
+      protected StaticCall(MethodReference declaredTarget) {
+        super(0, declaredTarget);
+      }
+
+      @Override
+      public IDispatch getInvocationCode() {
+        return IInvokeInstruction.Dispatch.STATIC;
+      }
+    }
+    
+    protected SSAInvokeClInitInstruction(MethodReference declaredTarget) {
+      super(null, -1, new StaticCall(declaredTarget));
+    }
+  }
+  
   public BackwardExecutor(String appJar, String pseudoImplJarFile, AbstractHandler instHandler, SMTChecker smtChecker) throws Exception {
     
     super(appJar, pseudoImplJarFile, instHandler, smtChecker, false);
@@ -73,7 +94,7 @@ public class BackwardExecutor extends AbstractExecutor {
       m_execResult = null;
 
       // for heuristic backtracking
-      m_heuristicBacktrack = new HeuristicBacktrack(m_smtChecker);
+      m_heuristicBacktrack = new HeuristicBacktrack(m_smtChecker, m_walaAnalyzer, m_defAnalyzer);
       
       // set global start time
       m_globalStartTime = start;
@@ -200,7 +221,7 @@ public class BackwardExecutor extends AbstractExecutor {
         inclLine = execOptions.inclInnerMostLine;
       }
       starting[0] = starting[0] || (infoItem.startingBB && startLine > 0);
-
+      
       int lineNo = methData.getLineNumber(infoItem.currentBB);
       System.out.println("Computing BB" + infoItem.currentBB.getNumber() + (lineNo >= 0 ? (" @ line " + lineNo) : ""));
       
@@ -234,7 +255,9 @@ public class BackwardExecutor extends AbstractExecutor {
       precond.setVisitedRecord(precond.getVisitedRecord(), infoItem, m_forward);
 
       // re-push if can't pop: a new workList created for this BB has not yet finished
-      if (infoItem.workList != null && !infoItem.workList.empty()) {
+      if (infoItem.invokeInstData != null && 
+          infoItem.invokeInstData.workList != null && 
+         !infoItem.invokeInstData.workList.empty()) {
         workList.push(infoItem);
         
         // add to watch list
@@ -359,7 +382,7 @@ public class BackwardExecutor extends AbstractExecutor {
                 // save the skip to bb info
                 skipToCondBBInfo = new BBorInstInfo(skipToCondBB, false, true, infoItem.formula, 
                     infoItem.formula4BB, infoItem.controlType, infoItem.currentBB, infoItem, 
-                    infoItem.methData, infoItem.callSites, infoItem.workList, infoItem.executor);
+                    infoItem.methData, infoItem.callSites, infoItem.invokeInstData, infoItem.executor);
               }
               else {
                 List<Object[]> condBBToPush = new ArrayList<Object[]>();
@@ -370,9 +393,9 @@ public class BackwardExecutor extends AbstractExecutor {
                 BBorInstInfo newInfoItem = new BBorInstInfo(currentBB, infoItem.startingBB, 
                     infoItem.skipToBB, infoItem.formula, infoItem.formula4BB, 
                     infoItem.controlType, infoItem.previousBB, infoItem.previousInfo, 
-                    infoItem.methData, infoItem.callSites, infoItem.workList, infoItem.executor);
-                pushChildrenBlocks(condBBToPush, false, false, newInfoItem, methData,
-                    Formula.NORMAL_SUCCESSOR, workList, execOptions.maxLoop, callSites, starting[0]);
+                    infoItem.methData, infoItem.callSites, infoItem.invokeInstData, infoItem.executor);
+                pushChildrenBlocks(condBBToPush, false, false, newInfoItem, methData,Formula.NORMAL_SUCCESSOR, 
+                    workList, callStack, curInvokeDepth, execOptions.maxLoop, callSites, starting[0]);
               }
               totalSkipped++;
             }
@@ -392,8 +415,8 @@ public class BackwardExecutor extends AbstractExecutor {
         }
         
         // iterate all normal predecessors
-        pushChildrenBlocks(bbPreConds, false, false, infoItem, methData,
-            Formula.NORMAL_SUCCESSOR, workList, execOptions.maxLoop, callSites, starting[0]);
+        pushChildrenBlocks(bbPreConds, false, false, infoItem, methData, Formula.NORMAL_SUCCESSOR, 
+            workList, callStack, curInvokeDepth, execOptions.maxLoop, callSites, starting[0]);
       }
       else if (execOptions.isEnteringCallStack()) {
         // at method entry, cannot find the proper invocation to enter call stack
@@ -498,7 +521,7 @@ public class BackwardExecutor extends AbstractExecutor {
             infoItem, callStack, curInvokeDepth);
       }
     }
-
+    
     // handle normal instructions
     boolean lastInst   = true;
     // for skipToBB, the last instruction is always conditional branch, skip!
@@ -515,9 +538,10 @@ public class BackwardExecutor extends AbstractExecutor {
         if (inst instanceof SSAInvokeInstruction && (infoItem.target == null || !infoItem.target[0].equals(inst))) {
           SSAInvokeInstruction invokeInst = (SSAInvokeInstruction) inst;
           MethodReference mr = invokeInst.getDeclaredTarget();
-
+          String declClass = mr.getDeclaringClass().getName().toString();
+          
           if (!execOptions.isEnteringCallStack() && execOptions.maxDispatchTargets < Integer.MAX_VALUE && 
-              mr.getDeclaringClass().getName().toString().equals("Ljava/lang/Object")) {
+              declClass.equals("Ljava/lang/Object")) {
             // since there are so many possible implementations for Object's virtual methods such
             // as Object.hashCode(), Object.clone(), Object.equals(), etc, there is little chance 
             // that we could get the correct one with a limited maxDispatchTargets. And it can 
@@ -537,6 +561,17 @@ public class BackwardExecutor extends AbstractExecutor {
             targetIRs   = (IR[]) ret[0];
             targetNodes = (CGNode[]) ret[1];
             
+            if (useSubClassHack) {
+              if ((declClass.equals("Ljava/util/Set") || declClass.equals("Ljava/util/Iterator"))) {
+                // peek if there is any entrySet() or keySet() so that we can concretize the current method
+                IR targetIR = peekEntryOrKeySet(allInsts, currInstIndex, invokeInst);
+                if (targetIR != null) {
+                  targetIRs   = new IR[] {targetIR};
+                  targetNodes = new CGNode[] {null};
+                }
+              }
+            }
+            
             // if found new targets, add them
             if (targetIRs != null && targetIRs.length > 0 && targetIRs[0] != null) {
               IMethod firstTarget = targetIRs[0].getMethod();
@@ -544,31 +579,39 @@ public class BackwardExecutor extends AbstractExecutor {
               if (!firstTarget.getSignature().equals(mr.getSignature()) /* new target */) {
 
                 // add each target
+                boolean pushed = false;
                 System.out.println("Multiple invocation targets: " + (targetIRs.length) + " target(s)!");
                 for (int i = targetNodes.length - 1; i >= 0; i--) {
                   if (!execOptions.isEnteringCallStack() || 
                       sameOrChildMethod(targetIRs[i].getMethod().getReference(), nextFrameSig)) {
                     pushInvocationTarget(workList, infoItem, invokeInst, targetIRs[i], targetNodes[i]);
+                    pushed = true;
                     if (execOptions.isEnteringCallStack()) {
                       break; // only push the one matching the next call stack frame
                     }
                   }
                 }
-                return infoItem.formula;
+                if (pushed) {
+                  return infoItem.formula; 
+                }
               }
               else if (execOptions.isEnteringCallStack()) {
                 // it is a concrete method, but not the next frame method
                 if (!sameOrChildMethod(firstTarget.getReference(), nextFrameSig)) {
                   IR[] overrides = WalaUtils.getOverrides(m_walaAnalyzer, mr, Integer.MAX_VALUE);
 
+                  boolean pushed = false;
                   System.out.println("Multiple invocation targets: " + (targetIRs.length) + " target(s)!");                  
                   for (IR override : overrides) {
                     if (sameOrChildMethod(override.getMethod().getReference(), nextFrameSig)) {
                       pushInvocationTarget(workList, infoItem, invokeInst, override, null);
+                      pushed = true;
                       break; // only push the one matching the next call stack frame
                     }
                   }
-                  return infoItem.formula;
+                  if (pushed) {
+                    return infoItem.formula; 
+                  }
                 }
                 else {
                   infoItem.target = new Object[] {invokeInst, targetIRs[0], targetNodes[0]};
@@ -610,6 +653,11 @@ public class BackwardExecutor extends AbstractExecutor {
               inst = null;
             }
           }
+          else if (callStack.getNextMethodNameOrSign().endsWith("<clinit>")) {
+            IR staticCtor = Jar2IR.getIR(m_walaAnalyzer, callStack.getNextMethodNameOrSign(), callStack.getNextLineNo());
+            inst = new SSAInvokeClInitInstruction(staticCtor.getMethod().getReference());
+            currInstIndex = 0;
+          }
           else {
             // if we cannot enter call stack correctly, no need to continue
             String msg = "Failed to enter next frame: " + nextFrame + " at " + currFrame;
@@ -621,18 +669,29 @@ public class BackwardExecutor extends AbstractExecutor {
             workList.clear();
           }
         }
+        else {
+          if (infoItem.invokeInstData != null && infoItem.invokeInstData.curInvokeDepth == 0 && 
+              infoItem.invokeInstData.callStack.getCurMethodNameOrSign().endsWith("<clinit>")) {
+            IR staticCtor = Jar2IR.getIR(m_walaAnalyzer, 
+                infoItem.invokeInstData.callStack.getCurMethodNameOrSign(), infoItem.invokeInstData.callStack.getCurLineNo());
+            inst = new SSAInvokeClInitInstruction(staticCtor.getMethod().getReference());
+            currInstIndex = 0;
+          }
+        }
         
         if (inst != null) {
-          // starting finished, compute the crash precondition
-          if (infoItem.startingBB && starting[0] && currLine < startLine) {
+          if (starting[0] && currLine < startLine) {
             // already passed the startLine, no need to limit the currLine anymore
             starting[0] = false;
             
-            // create the preconditions according to crash type
-            List<Formula> initFormulas = prepInitFormulas(preCond, methData, execOptions, infoItem, moreInfoItems);
-            
-            // use this preCond to continue computation
-            preCond = initFormulas.size() > 0 ? initFormulas.get(0) : null;
+            // starting finished at the innermost frame, compute the crash precondition
+            if (infoItem.startingBB) {
+              // create the preconditions according to crash type
+              List<Formula> initFormulas = prepInitFormulas(preCond, methData, execOptions, infoItem, moreInfoItems);
+              
+              // use this preCond to continue computation
+              preCond = initFormulas.size() > 0 ? initFormulas.get(0) : null;
+            }
           }
           
           // if it is at the inner most frame, start from the starting index
@@ -641,7 +700,7 @@ public class BackwardExecutor extends AbstractExecutor {
             // get precond for this instruction
             BBorInstInfo instInfo = lastInst ? infoItem : new BBorInstInfo(infoItem.currentBB, 
                 infoItem.startingBB, infoItem.skipToBB, preCond, infoItem.formula4BB, Formula.NORMAL_SUCCESSOR, 
-                infoItem.previousBB, infoItem.previousInfo, methData, callSites, infoItem.workList, this);
+                infoItem.previousBB, infoItem.previousInfo, methData, callSites, infoItem.invokeInstData, this);
             preCond = m_instHandler.handle(execOptions, cgNode, preCond, inst, 
                 instInfo, callStack, curInvokeDepth);
           }
@@ -691,6 +750,44 @@ public class BackwardExecutor extends AbstractExecutor {
         targetReference.getDeclaringClass().getName() + "." + targetReference.getName()));
   }
   
+  private IR peekEntryOrKeySet(SSAInstruction[] allInsts, int currIndex, SSAInvokeInstruction invokeInst) {
+    IR ret = null;
+
+    String declClass      = invokeInst.getDeclaredTarget().getDeclaringClass().getName().toString();
+    String methodSelector = invokeInst.getDeclaredTarget().getSignature().substring(
+                            invokeInst.getDeclaredTarget().getSignature().lastIndexOf('.'));
+    for (int i = currIndex - 1; i >= 0 && ret == null; i--) {
+      SSAInstruction inst = allInsts[i];
+      if (inst instanceof SSAInvokeInstruction && ((SSAInvokeInstruction) inst).getNumberOfParameters() == 1) {
+        String methodName = ((SSAInvokeInstruction) inst).getDeclaredTarget().getName().toString();
+        
+        String newMethodSig = null;
+        if (methodName.equals("entrySet")) {
+          if (declClass.endsWith("Iterator")) {
+            newMethodSig = "java.util.HashMap$EntryIterator" + methodSelector;
+          }
+          else if (declClass.endsWith("Set")) {
+            newMethodSig = "java.util.HashMap$EntrySet" + methodSelector;
+          }
+        }
+        else if (methodName.equals("keySet")) {
+          if (declClass.endsWith("Iterator")) {
+            newMethodSig = "java.util.HashMap$KeyIterator" + methodSelector;
+          }
+          else if (declClass.endsWith("Set")) {
+            newMethodSig = "java.util.HashMap$KeySet" + methodSelector;
+          }
+        }
+        
+        if (newMethodSig != null) {
+          ret = Jar2IR.getIR(m_walaAnalyzer, newMethodSig);
+        }
+      }
+    }
+    
+    return ret;
+  }
+  
   private List<Formula> prepInitFormulas(Formula preCond, MethodMetaData methData, ExecutionOptions execOptions, 
       BBorInstInfo infoItem, List<BBorInstInfo> moreInfoItems) {
     
@@ -700,11 +797,11 @@ public class BackwardExecutor extends AbstractExecutor {
       // remove those identical to the computed ones
       for (int i = 0; i < initFormulas.size(); i++) {
         String conditionListStr = initFormulas.get(i).getConditionList().toString();
-        if (m_computedInitPrep.contains(conditionListStr)) {
+        if (m_computedInitPrep.contains(conditionListStr + " towards BB" + infoItem.currentBB.getNumber())) {
           initFormulas.remove(i--);
         }
         else {
-          m_computedInitPrep.add(conditionListStr);
+          m_computedInitPrep.add(conditionListStr + " towards BB" + infoItem.currentBB.getNumber());
         }
       }
     }

@@ -1,11 +1,14 @@
 package hk.ust.cse.Prevision.InstructionHandlers;
 
+import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Formula;
+import hk.ust.cse.Prevision.PathCondition.TypeConditionTerm;
 import hk.ust.cse.Prevision.VirtualMachine.Instance;
 import hk.ust.cse.Prevision.VirtualMachine.Reference;
 import hk.ust.cse.Wala.MethodMetaData;
+import hk.ust.cse.util.Utils;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -16,6 +19,7 @@ import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 
+import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SymbolTable;
 
 
@@ -103,6 +107,29 @@ public abstract class AbstractBackwardHandler extends AbstractHandler {
   protected final boolean containsFieldName(String fieldName, Formula formula) {
     HashSet<String> allFieldNames = findAllFieldNames(formula);
     return allFieldNames.contains(fieldName);
+  }
+  
+  // for v27 = Class.forName(v11, ...), look for v27.newInstance() instanceof someClassName, 
+  // and then add a condition of v11 == ##someClassName
+  protected final void handleClassForName(String def, String classNameParam, Formula postCond, 
+      Hashtable<String, Hashtable<String, Reference>> refMap, String callSites, ISSABasicBlock currentBB) {
+    
+    String forNameNewInstance = def + ".newInstance()";
+    for (int i = 0, size = postCond.getConditionList().size(); i < size; i++) {
+      TypeConditionTerm typeTerm = postCond.getConditionList().get(i).getOnlyTypeTerm();
+      if (typeTerm != null && typeTerm.getInstance1().toString().equals(forNameNewInstance)) {
+        String typeName = Utils.getClassTypeJavaStr(typeTerm.getTypeString());
+        Instance typeNameInstance = new Instance("##" + typeName, "Ljava/lang/String", currentBB);
+        Reference classNameRef = findOrCreateReference(classNameParam, "Ljava/lang/String", callSites, currentBB, postCond);
+        
+        BinaryConditionTerm classNameTerm = new BinaryConditionTerm(
+            classNameRef.getInstance(), BinaryConditionTerm.Comparator.OP_EQUAL, typeNameInstance);
+        postCond.getConditionList().add(new Condition(classNameTerm));
+        // add new references to refMap
+        addRefToRefMap(refMap, classNameRef);
+        break;
+      }
+    }
   }
   
   private HashSet<String> findAllFieldNames(Formula formula) {

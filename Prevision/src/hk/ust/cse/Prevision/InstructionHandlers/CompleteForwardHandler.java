@@ -1188,17 +1188,16 @@ public class CompleteForwardHandler extends AbstractForwardHandler {
       conditionList.add(new Condition(conditionTerms));
       
       // assign initial values to array elements, XXX currently only works for constant size array
-      if (valSize.startsWith("#!")) {
-        TypeReference elemType = newInst.getConcreteType().getArrayElementType();
-        String val = elemType.isPrimitiveType() ? "#!0" /* number or boolean(false) */ : "null";
-        Reference valRef = findOrCreateReference(val, elemType.getName().toString(), "", currentBB, preCond);
-        
-        int size = Integer.parseInt(valSize.substring(2));
-        for (int i = 0; i < size; i++) {
-          Reference indexRef = findOrCreateReference("#!" + i, "I", "", currentBB, preCond);
-          Relation relation = preCond.getRelation("@@array");
-          relation.update(new Instance[] {defRef.getInstance(), indexRef.getInstance()}, valRef.getInstance());
-        }
+      int size = valSize.startsWith("#!") ? Integer.parseInt(valSize.substring(2)) : 3;
+      size = size > 10 ? 10 : size; // avoid large number of array stores which causes performance problem in solver
+      
+      TypeReference elemType = newInst.getConcreteType().getArrayElementType();
+      String val = elemType.isPrimitiveType() ? "#!0" /* number or boolean(false) */ : "null";
+      Reference valRef = findOrCreateReference(val, elemType.getName().toString(), "", currentBB, preCond);
+      for (int i = 0; i < size; i++) {
+        Reference indexRef = findOrCreateReference("#!" + i, "I", "", currentBB, preCond);
+        Relation relation = preCond.getRelation("@@array");
+        relation.update(new Instance[] {defRef.getInstance(), indexRef.getInstance()}, valRef.getInstance());
       }
     }
 //    // initialize the default values of each member fields // done in the entry block of <init> already

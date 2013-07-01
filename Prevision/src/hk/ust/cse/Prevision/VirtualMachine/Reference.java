@@ -473,7 +473,12 @@ public class Reference {
     // m_type, m_value
     reference.m_type = type;
     reference.m_name = name;
-
+    if (reference.m_name.startsWith("read_")) {
+      int index = reference.m_name.lastIndexOf('_');
+      reference.m_readRelName = reference.m_name.substring(5, index);
+      reference.m_readRelTime = Long.parseLong(reference.m_name.substring(index + 1));
+    }
+    
     // lifetimes
     Hashtable<Instance, Long[]> lifeTimesTable = new Hashtable<Instance, Long[]>();
     reference.m_lifeTimes = lifeTimesTable;

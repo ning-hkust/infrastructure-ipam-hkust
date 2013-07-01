@@ -201,7 +201,10 @@ public class Formula {
         }
         else {
           if (previousLine > 0 && currentLine > 0 && previousLine < currentLine) {
-            count++;
+            if (!newlyVisited.methData.getIR().getMethod().isInit() || 
+                 newlyVisited.methData.getLineNumber(0) != currentLine) { // assigning initial field values may go back and forth, but it is not in a loop
+              count++;
+            }
           }
           else if (previousLine <= 0 || currentLine <= 0 || previousLine == currentLine) {
             if (newlyVisited.previousBB.getNumber() < newlyVisited.currentBB.getNumber()) {

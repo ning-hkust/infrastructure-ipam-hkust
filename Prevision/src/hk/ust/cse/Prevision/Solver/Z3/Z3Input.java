@@ -126,33 +126,44 @@ public class Z3Input extends SolverInput {
       }
       else { // array store
         DefineArrayStore defineArrayStore = (DefineArrayStore) defineArray;
+        
         ArrayExpr fromArray = findArrayExpr(defineArrayStore.getStoreFromArrayName());
-        
-        // define a new array constant: f@2
-        String newArrayName = defineArrayStore.getStoreToArrayName();
-        ArrayExpr array = m_ctx.mkArrayConst(newArrayName, domainsSort, rangeSort);
-        m_definedArrays.put(newArrayName, array);
-        m_arrayMapping.put(array, defineArrayStore);
-
-        // create expression: (store f domains newValue)
-        Expr tuple      = domainsSort.mkDecl().apply(findConstantExprs(defineArrayStore.domains));
-        Expr rangeValue = findConstantExpr(defineArrayStore.value);
-        
-        ArrayExpr storedArray = null;
         if (fromArray == null && !m_neutralInput.keepUnboundField()) {
           throw new Exception("Could not create solver input due to the removal of %%UnboundField%%. Good to go on!");
         }
+
+        // get Expr for domains and range
+        Expr rangeValue = findConstantExpr(defineArrayStore.value);
+        Expr tuple      = domainsSort.mkDecl().apply(findConstantExprs(defineArrayStore.domains));
+        
+        // define the new array
+        ArrayExpr toArray = null;
+        if (defineArrayStore.arrayName.matches("@@array[@0-9]*") && 
+            defineArrayStore.domains[0].value.matches("##.*\\.value")) { // use assertion instead because array store is expensive
+
+          toArray = fromArray;
+          
+          // (assert (= (select array@2 ##str.value 0) 115))
+          m_assertionExprs.add(m_ctx.mkEq(m_ctx.mkSelect(fromArray, tuple), rangeValue));
+        }
         else {
-          storedArray = m_ctx.mkStore(fromArray, tuple, rangeValue);
+          // define a new array constant: f@2
+          toArray = m_ctx.mkArrayConst(defineArrayStore.getStoreToArrayName(), domainsSort, rangeSort);
+
+          // create expression: (store f domains newValue)
+          ArrayExpr storedArray = m_ctx.mkStore(fromArray, tuple, rangeValue);
+          
+          // (assert (= f@2 (store f domains newValue)))
+          m_assertionExprs.add(m_ctx.mkEq(toArray, storedArray));
         }
         
-        // (assert (= f@2 (store f domains newValue)))
-        m_assertionExprs.add(m_ctx.mkEq(array, storedArray));
+        m_definedArrays.put(defineArrayStore.getStoreToArrayName(), toArray);
+        m_arrayMapping.put(toArray, defineArrayStore);
       }
     }
   }
   
-  private void createAssertionExprs() throws Z3Exception {
+  private void createAssertionExprs() throws Exception {
     for (Assertion assertion : m_neutralInput.getAssertions()) {
       BoolExpr expr = createAssertionExpr((Assertion) assertion);
       m_assertionExprs.add(expr);
@@ -161,7 +172,7 @@ public class Z3Input extends SolverInput {
     }
   }
   
-  private void createHelperAssertionExprs() throws Z3Exception {
+  private void createHelperAssertionExprs() throws Exception {
     Hashtable<Expression, Expression> helperMapping = m_neutralInput.getHelperMapping();
     Enumeration<Expression> keys = helperMapping.keys();
     while (keys.hasMoreElements()) {
@@ -179,7 +190,7 @@ public class Z3Input extends SolverInput {
     }
   }
   
-  private BoolExpr createAssertionExpr(Assertion assertion) throws Z3Exception {
+  private BoolExpr createAssertionExpr(Assertion assertion) throws Exception {
     BoolExpr assertionExpr = null;
     
     if (assertion instanceof AtomicAssertion) {
@@ -200,7 +211,7 @@ public class Z3Input extends SolverInput {
     return assertionExpr;
   }
   
-  private BoolExpr createAssertionExpr(AtomicAssertion assertion) throws Z3Exception {
+  private BoolExpr createAssertionExpr(AtomicAssertion assertion) throws Exception {
     if (assertion.value.equals("true")) {
       return m_ctx.mkTrue();
     }
@@ -209,7 +220,7 @@ public class Z3Input extends SolverInput {
     }
   }
   
-  private BoolExpr createAssertionExpr(BinaryAssertion assertion) throws Z3Exception {
+  private BoolExpr createAssertionExpr(BinaryAssertion assertion) throws Exception {
     BoolExpr assertionExpr = null;
 
     ArithExpr expr1 = (ArithExpr) findConstantExpr(assertion.expr1);
@@ -240,7 +251,7 @@ public class Z3Input extends SolverInput {
     return assertionExpr;
   }
   
-  private BoolExpr createAssertionExpr(TypeAssertion assertion) throws Z3Exception {
+  private BoolExpr createAssertionExpr(TypeAssertion assertion) throws Exception {
     BoolExpr assertionExpr = null;
 
     ArithExpr expr = (ArithExpr) findConstantExpr(assertion.expr);
@@ -269,7 +280,7 @@ public class Z3Input extends SolverInput {
     return assertionExpr;
   }
   
-  private BoolExpr createAssertionExpr(MultiAssertion assertion) throws Z3Exception {
+  private BoolExpr createAssertionExpr(MultiAssertion assertion) throws Exception {
     BoolExpr assertionExpr = null;
     
     BoolExpr[] subExprs = new BoolExpr[assertion.assertions.length];
@@ -348,7 +359,7 @@ public class Z3Input extends SolverInput {
     return m_definedSorts.get(typeName);
   }
 
-  private Expr[] findConstantExprs(Expression[] constants) throws Z3Exception {
+  private Expr[] findConstantExprs(Expression[] constants) throws Exception {
     Expr[] exprs = new Expr[constants.length];
     for (int i = 0; i < constants.length; i++) {
       exprs[i] = findConstantExpr(constants[i]);
@@ -356,7 +367,7 @@ public class Z3Input extends SolverInput {
     return exprs;
   }
   
-  private Expr findConstantExpr(Expression constant) throws Z3Exception {
+  private Expr findConstantExpr(Expression constant) throws Exception {
     Expr expr = null;
     
     if (constant instanceof NormalExpr) {
@@ -400,7 +411,7 @@ public class Z3Input extends SolverInput {
     return expr;
   }
   
-  private Expr findConstantExpr(ArithmeticExpr constant) throws Z3Exception {
+  private Expr findConstantExpr(ArithmeticExpr constant) throws Exception {
     Expr expr = null;
 
     ArithExpr left  = (ArithExpr) findConstantExpr(constant.left);
@@ -429,7 +440,7 @@ public class Z3Input extends SolverInput {
     return expr;
   }
   
-  private Expr findConstantExpr(BVArithmeticExpr constant) throws Z3Exception {
+  private Expr findConstantExpr(BVArithmeticExpr constant) throws Exception {
     Expr expr = null;
     
     BitVecExpr left  = (BitVecExpr) findConstantExpr(constant.left);
@@ -460,13 +471,17 @@ public class Z3Input extends SolverInput {
     return expr;
   }
   
-  private Expr findConstantExpr(ReadArrayExpr constant) throws Z3Exception {
+  private Expr findConstantExpr(ReadArrayExpr constant) throws Exception {
     Expr arraySelect = m_arraySelectCache.get(constant.toString());
     if (arraySelect != null) {
       return arraySelect;
     }
 
     ArrayExpr array = m_definedArrays.get(constant.getReadAtArrayName());
+    if (array == null && !m_neutralInput.keepUnboundField()) {
+      throw new Exception("Could not create solver input due to the removal of %%UnboundField%%. Good to go on!");
+    }
+    
     DatatypeSort domainsSort = (DatatypeSort) ((ArraySort) array.getSort()).getDomain();
     Expr tuple = domainsSort.getConstructors()[0].apply(findConstantExprs(constant.domains));
     arraySelect = m_ctx.mkSelect(array, tuple);

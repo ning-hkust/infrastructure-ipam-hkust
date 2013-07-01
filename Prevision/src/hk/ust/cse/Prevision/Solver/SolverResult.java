@@ -1,6 +1,7 @@
 package hk.ust.cse.Prevision.Solver;
 
 import hk.ust.cse.Prevision.PathCondition.BinaryConditionTerm;
+import hk.ust.cse.Prevision.PathCondition.Condition;
 import hk.ust.cse.Prevision.PathCondition.ConditionTerm;
 import hk.ust.cse.Prevision.PathCondition.Formula;
 import hk.ust.cse.Prevision.Solver.SolverLoader.SOLVER_RESULT;
@@ -15,7 +16,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public abstract class SolverResult {
-  
+
   public boolean isSatisfactory() {
     return m_result.equals(SOLVER_RESULT.SAT);
   }
@@ -32,15 +33,19 @@ public abstract class SolverResult {
     return m_solverInput;
   }
   
-  public List<Integer> getUnsatCoreIds() {
-    return m_unsatCoreIds;
+  public List<List<Condition>> getUnsatCore() {
+    return m_unsatCore;
   }
   
   public List<ConditionTerm> getSatModel() {
     return m_satModel;
   }
   
-  public String getSatModelString(Formula satisfiable) {
+  public void setSatModel(List<ConditionTerm> newSatModel) {
+    m_satModel = newSatModel;
+  }
+  
+  public String convSatModelToString(Formula satisfiable) {
     List<String> modelLines = new ArrayList<String>();
     
     // create assignedValueMap for array index
@@ -56,7 +61,7 @@ public abstract class SolverResult {
     for (ConditionTerm modelTerm : m_satModel) {
       // if modelLine contains read_@@array_, replace them
       String modelLine = modelTerm.toString();
-      modelLine = replaceArrayRead(modelLine, satisfiable, assignedValueMap);
+      modelLine = replaceArrayRead(modelLine, satisfiable.getRelation("@@array"), assignedValueMap);
       modelLines.add(modelLine);
     }
     modelLines = Utils.deleteRedundents(modelLines);
@@ -65,9 +70,7 @@ public abstract class SolverResult {
   
   // translate occurrences of read_@@array_ into obj[index] format
   private static final Pattern s_readArrayPattern = Pattern.compile("read_@@array_([0-9]+)");
-  protected String replaceArrayRead(String str, Formula satisfiable, Hashtable<String, String> assignedValueMap) {
-    Relation arrayRel = satisfiable.getRelation("@@array");
-    
+  protected static String replaceArrayRead(String str, Relation arrayRel, Hashtable<String, String> assignedValueMap) {    
     Matcher matcher = null;
     while ((matcher = s_readArrayPattern.matcher(str)).find()) {
       String readTime = matcher.group(1);
@@ -89,7 +92,7 @@ public abstract class SolverResult {
           refValue2 = refValue2 == null ? refName2 : refValue2;
           String valueIndex2 = replaceArrayIndex(arrayRel.getDomainValues().get(i)[1], assignedValueMap);
           if (refName.equals(refName2) && valueIndex.equals(valueIndex2)) {
-            arrayRead = replaceArrayRead(arrayRel.getRangeValues().get(i).toString(), satisfiable, assignedValueMap);
+            arrayRead = replaceArrayRead(arrayRel.getRangeValues().get(i).toString(), arrayRel, assignedValueMap);
             break;
           }
         }
@@ -101,7 +104,7 @@ public abstract class SolverResult {
   }
   
   // try to replace indexInstance with a concrete numeric value
-  protected String replaceArrayIndex(Instance indexInstance, Hashtable<String, String> assignedValueMap) {
+  protected static String replaceArrayIndex(Instance indexInstance, Hashtable<String, String> assignedValueMap) {
     String translated = indexInstance.toString();
     if (indexInstance.isBounded()) { // (v1.all.length - #!1)
       try {
@@ -158,11 +161,11 @@ public abstract class SolverResult {
     return translated;
   }
 
-  protected SOLVER_RESULT      m_result;
-  protected Object              m_output;
-  protected SolverInput         m_solverInput;
-  protected List<Integer>       m_unsatCoreIds;
-  protected List<ConditionTerm> m_satModel;
+  protected SOLVER_RESULT       m_result;
+  protected Object                m_output;
+  protected SolverInput           m_solverInput;
+  protected List<List<Condition>> m_unsatCore;
+  protected List<ConditionTerm>   m_satModel;
   
   protected static final String LINE_SEPARATOR = System.getProperty("line.separator");
 }

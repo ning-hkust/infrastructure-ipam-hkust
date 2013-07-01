@@ -5,8 +5,8 @@ import hk.ust.cse.Prevision.InstructionHandlers.CompleteForwardHandler;
 import hk.ust.cse.Prevision.Misc.CallStack;
 import hk.ust.cse.Prevision.Misc.InvalidStackTraceException;
 import hk.ust.cse.Prevision.PathCondition.Formula;
-import hk.ust.cse.Prevision.Solver.SolverLoader.SOLVER_RESULT;
 import hk.ust.cse.Prevision.Solver.SMTChecker;
+import hk.ust.cse.Prevision.Solver.SolverLoader.SOLVER_RESULT;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionOptions;
 import hk.ust.cse.Prevision.VirtualMachine.ExecutionResult;
 import hk.ust.cse.Wala.MethodMetaData;
@@ -168,7 +168,9 @@ public class ForwardExecutor extends AbstractExecutor {
         postCond.setVisitedRecord(postCond.getVisitedRecord(), infoItem, m_forward);
 
         // re-push if can't pop: a new workList created for this BB has not yet finished
-        if (infoItem.workList != null && !infoItem.workList.empty()) {
+        if (infoItem.invokeInstData != null && 
+            infoItem.invokeInstData.workList != null && 
+           !infoItem.invokeInstData.workList.empty()) {
           workList.push(infoItem);
         }
 
@@ -232,8 +234,8 @@ public class ForwardExecutor extends AbstractExecutor {
 //          }
           
           // iterate all normal successors
-          pushChildrenBlocks(bbPostConds, false, true, infoItem, methData,
-              Formula.NORMAL_SUCCESSOR, workList, execOptions.maxLoop, callSites, false);
+          pushChildrenBlocks(bbPostConds, false, true, infoItem, methData, Formula.NORMAL_SUCCESSOR, 
+              workList, callStack, curInvokeDepth, execOptions.maxLoop, callSites, false);
           // iterate all exception successors
         }
         else if (execOptions.isEnteringCallStack()) {
@@ -314,7 +316,7 @@ public class ForwardExecutor extends AbstractExecutor {
 
     return execResult;
   }
-
+  
   private Formula computeBB(ExecutionOptions execOptions, CGNode cgNode, MethodMetaData methData, BBorInstInfo infoItem, 
       CallStack callStack, int curInvokeDepth, String callSites, Stack<BBorInstInfo> workList) throws InvalidStackTraceException {
     
@@ -386,7 +388,7 @@ public class ForwardExecutor extends AbstractExecutor {
         // get postcond for this instruction
         BBorInstInfo instInfo = firstInst ? infoItem : new BBorInstInfo(infoItem.currentBB, 
             infoItem.startingBB, infoItem.skipToBB, postCond, infoItem.formula4BB, Formula.NORMAL_SUCCESSOR, 
-            infoItem.previousBB, infoItem.previousInfo, methData, callSites, infoItem.workList, this);
+            infoItem.previousBB, infoItem.previousInfo, methData, callSites, infoItem.invokeInstData, this);
         postCond = m_instHandler.handle(execOptions, cgNode, postCond, inst, 
             instInfo, callStack, curInvokeDepth);
       }
