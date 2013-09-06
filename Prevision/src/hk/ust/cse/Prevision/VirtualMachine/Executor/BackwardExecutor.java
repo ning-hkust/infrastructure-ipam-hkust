@@ -18,7 +18,7 @@ import hk.ust.cse.Wala.MethodMetaData;
 import hk.ust.cse.Wala.WalaUtils;
 import hk.ust.cse.util.Utils;
 
-import java.lang.reflect.Method;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Enumeration;
@@ -46,7 +46,7 @@ import com.ibm.wala.ssa.SSAPiInstruction;
 import com.ibm.wala.types.MethodReference;
 
 public class BackwardExecutor extends AbstractExecutor {
-
+  
   private static class SSAInvokeClInitInstruction extends SSAInvokeInstruction {
     private static class StaticCall extends CallSiteReference {
       protected StaticCall(MethodReference declaredTarget) {
@@ -146,10 +146,18 @@ public class BackwardExecutor extends AbstractExecutor {
       if (execOptions.clearSatNonSolverData) {
         m_execResult.clearAllSatNonSolverData();
       }
+      
+      // print global statistics
+      System.out.println("Total paths considered: " + m_pathsChecked);
+      System.out.println("Total SMT checks: " + m_allSMTChecks);
+      System.out.println("Total blocks met: " + m_blocksMet);
+      System.out.println("Total blocks skipped: " + m_blocksSkipped + 
+          " (" + new DecimalFormat("##.###").format(((double) m_blocksSkipped / (double) m_blocksMet)) + ")");
+      System.out.println(); 
 
       // end timing
       long end = System.currentTimeMillis();
-      System.out.println("Total elapsed: " + (end - start) + "ms!");
+      System.out.println("Total elapsed: " + (end - start) + "ms!\n");
     }
     
     if (timeExceeded) {
@@ -167,8 +175,8 @@ public class BackwardExecutor extends AbstractExecutor {
     long start = System.currentTimeMillis();
 
     // counters
-    int smtChecked   = 0;
-    int satRetrieved = 0;
+    int satRetrieved   = 0;
+    int finalSMTChecks = 0;
     
     // get cfg for later use
     SSACFG cfg = methData.getcfg();
@@ -289,16 +297,15 @@ public class BackwardExecutor extends AbstractExecutor {
                 precond, false, false, false, false, execOptions.heuristicBacktrack, true);
             precond.setSolverResult(m_smtChecker);
             
-            // trigger callbacks
-            for (Object[] m : execOptions.getAfterOnTheFlyCheckCallback()) {
-              try {
-                ((Method) m[0]).invoke(m[1], precond);
-              } catch (Exception e) {e.printStackTrace();}
-            }
+            // statistics
+            m_allSMTChecks++;
             
             if (smtResult == SOLVER_RESULT.UNSAT) {
               System.out.println("Inner contradiction developed, discard block.");
               
+              // statistics
+              m_pathsChecked++;
+
               // once smt check failed, we track back heuristically
               if (execOptions.heuristicBacktrack) {
                 m_heuristicBacktrack.backtrack(workList, curInvokeDepth, execOptions.maxInvokeDepth);
@@ -350,6 +357,11 @@ public class BackwardExecutor extends AbstractExecutor {
           for (ISSABasicBlock normPred : normPredBB) {
             phiedPreConds.put(normPred, precond);
           }
+        }
+        
+        // statistics
+        if (phiedPreConds.size() > 1) {
+          m_blocksMet ++;
         }
         
         // try to skip branches
@@ -410,6 +422,9 @@ public class BackwardExecutor extends AbstractExecutor {
         if (totalSkipped > 0) {
           System.out.println(totalSkipped + " branches skipped!");
           
+          // statistics
+          m_blocksSkipped++;
+          
           // we now switch the current bb to the skip to bb
           infoItem = skipToCondBBInfo != null ? skipToCondBBInfo : infoItem;
         }
@@ -431,7 +446,7 @@ public class BackwardExecutor extends AbstractExecutor {
         break; // return to InstHandler
       }
       else { // for entry block, no need to go further
-        System.out.println("Performing " + (smtChecked + 1) + "th SMT Check...");
+        System.out.println("Performing " + (finalSMTChecks + 1) + "th SMT Check...");
         
         // output propagation path
         printPropagationPath(infoItem);
@@ -441,16 +456,13 @@ public class BackwardExecutor extends AbstractExecutor {
             precond, false, true, false, true, execOptions.heuristicBacktrack, true);
         precond.setSolverResult(m_smtChecker);
         
-        // trigger callbacks
-        for (Object[] m : execOptions.getAfterSmtCheckCallbacks()) {
-          try {
-            ((Method) m[0]).invoke(m[1], precond);
-          } catch (Exception e) {e.printStackTrace();}
-        }
+        // statistics
+        m_pathsChecked++;
+        m_allSMTChecks++;
         
         // limit maximum smt checks
         boolean canBreak = false;
-        if (execOptions.maxSmtCheck > 0 && ++smtChecked >= execOptions.maxSmtCheck) {
+        if (execOptions.maxSmtCheck > 0 && ++finalSMTChecks >= execOptions.maxSmtCheck) {
           execResult.setOverLimit(true);
           System.out.println("Reached Maximum SMT Check Limit!");
           canBreak = true;
@@ -974,4 +986,10 @@ public class BackwardExecutor extends AbstractExecutor {
   private final DefAnalyzerWrapper  m_defAnalyzer;
   private HashSet<String>           m_computedInitPrep;
   private HeuristicBacktrack        m_heuristicBacktrack;
+  
+  // global statistics
+  private int m_pathsChecked  = 0; // failed intermediate checks + final checks
+  private int m_allSMTChecks  = 0; // both intermediate and final checks
+  private int m_blocksMet     = 0; // all conditional blocks encountered
+  private int m_blocksSkipped = 0; // all non-contributive conditional blocks which have been skipped
 }
