@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
 	<classpathentry excluding="**/.svn/**" kind="src" path="src"/>
+	<classpathentry excluding="**/.svn/**" kind="src" path="test"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.7"/>
 	<classpathentry kind="lib" path="wala-properties"/>
 	<classpathentry kind="lib" path="lib/org.eclipse.core.jobs_3.4.100.v20090429-1800.jar"/>
@@ -12,6 +13,8 @@
 	<classpathentry kind="lib" path="lib/com.ibm.wala.core.jar" sourcepath="D:/Projects/SnuggleBug/wala_trunk/trunk"/>
 	<classpathentry kind="lib" path="lib/com.ibm.wala.core.tests.jar"/>
 	<classpathentry kind="lib" path="lib/com.microsoft.z3.jar"/>
+	<classpathentry kind="lib" path="lib-test/junit-4.8.2.jar"/>
+	<classpathentry kind="lib" path="lib-test/sqlitejdbc-v056.jar"/>
 	<classpathentry kind="lib" path="/WalaUtils/bin" sourcepath="/WalaUtils"/>
 	<classpathentry kind="lib" path="/Util/bin" sourcepath="/Util"/>
 	<classpathentry kind="lib" path="/StaticAnalysis/bin" sourcepath="/StaticAnalysis"/>
