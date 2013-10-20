@@ -327,10 +327,13 @@ public class NeutralInput {
     public final String      connector;
   }
   
-  public NeutralInput(Formula formula, boolean keepUnboundField, boolean retrieveModel, boolean retrieveUnsatCore) {
+  public NeutralInput(Formula formula, boolean keepUnboundField, boolean retrieveModel, 
+      boolean retrieveUnsatCore, boolean preferGeneralType, boolean preferSmallerValue) {
     m_keepUnboundField      = keepUnboundField;
     m_retrieveModel         = retrieveModel;
     m_retrieveUnsatCore     = retrieveUnsatCore;
+    m_preferGeneralType     = preferGeneralType;
+    m_preferSmallerValue    = preferSmallerValue;
     m_basicTypes            = new Hashtable<String, long[]>();
     m_otherTypes            = new Hashtable<String, long[]>();
     m_typeRanges            = new Hashtable<String, List<long[]>>();
@@ -356,6 +359,8 @@ public class NeutralInput {
     m_keepUnboundField      = origInput.m_keepUnboundField;
     m_retrieveModel         = origInput.m_retrieveModel;
     m_retrieveUnsatCore     = origInput.m_retrieveUnsatCore;
+    m_preferGeneralType     = origInput.m_preferGeneralType;
+    m_preferSmallerValue    = origInput.m_preferSmallerValue;
     m_basicTypes            = origInput.m_basicTypes;
     m_otherTypes            = origInput.m_otherTypes;
     m_typeRanges            = origInput.m_typeRanges;
@@ -1495,7 +1500,14 @@ public class NeutralInput {
     return m_retrieveUnsatCore;
   }
 
-
+  public boolean preferGeneralType() {
+    return m_preferGeneralType;
+  }
+  
+  public boolean preferSmallerValue() {
+    return m_preferSmallerValue;
+  }
+  
   public Hashtable<String, long[]> getBasicTypes() {
     return m_basicTypes;
   }
@@ -1555,6 +1567,8 @@ public class NeutralInput {
   private final boolean                            m_keepUnboundField;
   private final boolean                            m_retrieveModel;
   private final boolean                            m_retrieveUnsatCore;
+  private final boolean                            m_preferGeneralType;
+  private final boolean                            m_preferSmallerValue;
   private final Hashtable<String, long[]>          m_basicTypes;
   private final Hashtable<String, long[]>          m_otherTypes;
   private final Hashtable<String, List<long[]>>    m_typeRanges;
