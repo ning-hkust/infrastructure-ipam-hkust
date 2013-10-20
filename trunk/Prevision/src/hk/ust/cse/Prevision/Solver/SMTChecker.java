@@ -63,7 +63,10 @@ public class SMTChecker {
       }
 
       // generate a neutral input first
-      m_lastNeutralInput = new NeutralInput(formula, keepUnboundField, retrieveModel, retrieveUnsatCore);
+      boolean preferGeneralType  = retrieveModel;
+      boolean preferSmallerValue = retrieveModel;
+      m_lastNeutralInput = new NeutralInput(formula, keepUnboundField, 
+          retrieveModel, retrieveUnsatCore, preferGeneralType, preferSmallerValue);
       
       // start checking: 1) simple check, 2) full check
       boolean finishedChecking = false;
@@ -132,7 +135,10 @@ public class SMTChecker {
       }
 
       // generate a neutral input first
-      m_lastNeutralInput = new NeutralInput(ctxFormula, keepUnboundField, retrieveModel, retrieveUnsatCore);
+      boolean preferGeneralType  = retrieveModel;
+      boolean preferSmallerValue = retrieveModel;
+      m_lastNeutralInput = new NeutralInput(ctxFormula, keepUnboundField, 
+          retrieveModel, retrieveUnsatCore, preferGeneralType, preferSmallerValue);
       
       // generate a solver input from neutral input
       m_lastSolverInput = createNewSolverInput(ctxStorage, m_lastNeutralInput);
