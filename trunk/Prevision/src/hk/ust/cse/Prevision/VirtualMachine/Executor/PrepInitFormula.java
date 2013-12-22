@@ -96,11 +96,13 @@ public class PrepInitFormula {
       
       // substitute the != null condition with = null condition
       BinaryConditionTerm binaryTerm = (BinaryConditionTerm) formula.getConditionList().get(0).getConditionTerms().get(0);
-      BinaryConditionTerm nullTerm = new BinaryConditionTerm(
-          binaryTerm.getInstance1(), BinaryConditionTerm.Comparator.OP_EQUAL, binaryTerm.getInstance2());
-      formula.getConditionList().remove(0);
-      formula.getConditionList().add(0, new Condition(nullTerm));
-      prepFormulas.add(formula);
+      if (!binaryTerm.getInstance1().isFreshInstance()) { // FreshInstance == null is not feasible
+        BinaryConditionTerm nullTerm = new BinaryConditionTerm(
+            binaryTerm.getInstance1(), BinaryConditionTerm.Comparator.OP_EQUAL, binaryTerm.getInstance2());
+        formula.getConditionList().remove(0);
+        formula.getConditionList().add(0, new Condition(nullTerm));
+        prepFormulas.add(formula);
+      }
     }
     
     return prepFormulas;
