@@ -126,6 +126,11 @@ public class PseudoImplMap {
       String integerParse2    = "hk.ust.cse.Prevision_PseudoImpl.Integer2.parseInt(Lhk/ust/cse/Prevision_PseudoImpl/String2;I)I";
       String fileStreamInit1  = "hk.ust.cse.Prevision_PseudoImpl.FileOutputStream.<init>(Ljava/lang/String;Z)V";
       String fileStreamInit2  = "hk.ust.cse.Prevision_PseudoImpl.FileOutputStream.<init>(Ljava/io/File;Z)V";
+      String fileInit1        = "hk.ust.cse.Prevision_PseudoImpl.File.<init>(Ljava/io/File;Ljava/lang/String;)V";
+      String fileIsDirectory  = "hk.ust.cse.Prevision_PseudoImpl.File.isDirectory()Z";
+      String fileListFiles    = "hk.ust.cse.Prevision_PseudoImpl.File.listFiles()[Ljava/io/File;";
+      String fileGetName      = "hk.ust.cse.Prevision_PseudoImpl.File.getName()Ljava/lang/String;";
+      String fileGetParentFile = "hk.ust.cse.Prevision_PseudoImpl.File.getParentFile()Ljava/io/File;";
       String noEffect         = "hk.ust.cse.Prevision_PseudoImpl.NoEffect.noEffect()V";
       String listAddAll       = "hk.ust.cse.Prevision_PseudoImpl.List.addAll(Ljava/util/Collection;)Z";
       String listToArray      = "hk.ust.cse.Prevision_PseudoImpl.List.toArray()[Ljava/lang/Object;";
@@ -206,6 +211,11 @@ public class PseudoImplMap {
       s_map1.add(objectClone);
       s_map1.add(fileStreamInit1);
       s_map1.add(fileStreamInit2);
+      s_map1.add(fileInit1);
+      s_map1.add(fileIsDirectory);
+      s_map1.add(fileListFiles);
+      s_map1.add(fileGetName);
+      s_map1.add(fileGetParentFile);
       s_map1.add(integerParse1);
       s_map1.add(integerParse2);
       s_map1.add(noEffect);
@@ -322,6 +332,11 @@ public class PseudoImplMap {
       
       s_map2.put("java\\.io\\.FileOutputStream\\.<init>\\(Ljava/lang/String;Z\\)V", fileStreamInit1);
       s_map2.put("java\\.io\\.FileOutputStream\\.<init>\\(Ljava/io/File;Z\\)V", fileStreamInit2);
+      s_map2.put("java\\.io\\.File\\.<init>\\(Ljava/io/File;Ljava/lang/String;\\)V", fileInit1);
+      s_map2.put("java\\.io\\.File\\.isDirectory\\(\\)Z", fileIsDirectory);
+      s_map2.put("java\\.io\\.File\\.listFiles\\([\\S]*\\)\\[Ljava/io/File;", fileListFiles);
+      s_map2.put("java\\.io\\.File\\.getName\\(\\)Ljava/lang/String;", fileGetName);
+      s_map2.put("java\\.io\\.File\\.getParentFile\\(\\)Ljava/io/File;", fileGetParentFile);
       
       s_map2.put("java\\.lang\\.Integer\\.parseInt\\(Ljava/lang/String;\\)I", integerParse1);
       s_map2.put("java\\.lang\\.Integer\\.parseInt\\(Ljava/lang/String;I\\)I", integerParse2);
@@ -333,6 +348,7 @@ public class PseudoImplMap {
       s_map2.put("java\\.lang\\.Throwable\\.[\\S]*\\([\\S]*\\)V", noEffect);
       s_map2.put("java\\.util\\.[\\S]+\\.ensureCapacity\\(I\\)V", noEffect);
       
+      // help candidate method selection according to field defs
       s_map3.put("[\\S]+Hash[\\S]+Map.size", "hk.ust.cse.Prevision_PseudoImpl.Map.size");
       s_map3.put("java\\.util\\.Hashtable\\.count", "hk.ust.cse.Prevision_PseudoImpl.Table.count");
       s_map3.put("java\\.lang\\.String\\.offset", "hk.ust.cse.Prevision_PseudoImpl.String2.offset");
@@ -342,6 +358,10 @@ public class PseudoImplMap {
       s_map3.put("java\\.lang\\.StringBuilder\\.count", "hk.ust.cse.Prevision_PseudoImpl.StringBuffer.count");
       s_map3.put("java\\.lang\\.StringBuffer\\.value", "hk.ust.cse.Prevision_PseudoImpl.StringBuffer.value");
       s_map3.put("java\\.lang\\.StringBuilder\\.value", "hk.ust.cse.Prevision_PseudoImpl.StringBuffer.value");
+      s_map3.put("java\\.io\\.File.__prop__name__", "hk.ust.cse.Prevision_PseudoImpl.File.__prop__name__");
+      s_map3.put("java\\.io\\.File.__prop__parentFile__", "hk.ust.cse.Prevision_PseudoImpl.File.__prop__parentFile__");
+      s_map3.put("java\\.io\\.File.__state__dir__", "hk.ust.cse.Prevision_PseudoImpl.File.__state__dir__");
+      s_map3.put("java\\.io\\.File.__state__exist__", "hk.ust.cse.Prevision_PseudoImpl.File.__state__exist__");
     }
   }
 
