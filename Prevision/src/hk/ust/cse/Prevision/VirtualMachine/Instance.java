@@ -393,6 +393,10 @@ public class Instance {
     return m_value != null && m_value.startsWith("##");
   }
   
+  public boolean isFreshInstance() {
+    return m_value != null && m_value.startsWith("FreshInstanceOf(");
+  }
+  
   public boolean hasDeclaringInstance() {
     return getLastReference() != null && 
            getLastReference().getDeclaringInstance() != null;
@@ -707,7 +711,11 @@ public class Instance {
   }
   
   public Instance replaceInstances(Hashtable<Instance, Instance> replaceMap) {
-    Instance replace = replaceMap.get(this);
+    return replaceInstances(replaceMap, false);
+  }
+  
+  public Instance replaceInstances(Hashtable<Instance, Instance> replaceMap, boolean replaceInnerOnly) {
+    Instance replace = replaceInnerOnly ? null : replaceMap.get(this);
     if (replace != null) {
       return replace;
     }

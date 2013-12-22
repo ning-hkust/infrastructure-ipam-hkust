@@ -247,14 +247,9 @@ public class Z3Loader extends SolverLoader {
     
     // add soft assertions
     for (int i = 0, size = softAssertions.size(); i < size; i++) {
-      if (input.getNeutralInput().retrieveUnsatCore()) {
-        BoolExpr tracker = input.getContext().mkBoolConst("tracker_" + (trackerIdFrom + hardTrackers.size() + i));
-        solver.add(input.getContext().mkImplies(tracker, softAssertions.get(i)));
-        softTrackers.add(tracker);
-      }
-      else {
-        solver.add(softAssertions.get(i));
-      }
+      BoolExpr tracker = input.getContext().mkBoolConst("tracker_" + (trackerIdFrom + hardTrackers.size() + i));
+      solver.add(input.getContext().mkImplies(tracker, softAssertions.get(i)));
+      softTrackers.add(tracker);
     }
     return solver;
   }
